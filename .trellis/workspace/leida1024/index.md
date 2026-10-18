@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
+- **Total Sessions**: 5
 - **Last Active**: 2026-10-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~138 | Active |
+| `journal-1.md` | ~171 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-10-18 | Synthetic unsubscribe acceptance | `3924eaf` | `develop` |
 | 4 | 2026-10-18 | Synthetic owned-folder deletion acceptance | `0d3a754` | `develop` |
 | 3 | 2026-10-18 | Read-only inventory and statistics | `28a4c30` | `develop` |
 | 2 | 2026-10-18 | Panel and diagnostic acceptance | 5fb6a82 | `develop` |

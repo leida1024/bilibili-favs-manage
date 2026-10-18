@@ -136,3 +136,36 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Synthetic unsubscribe acceptance
+
+**Date**: 2026-10-18
+**Task**: Synthetic unsubscribe acceptance
+**Branch**: `develop`
+
+### Summary
+
+44 tests/build passed; fictional narrow preview verified confirmations and unknown-stop. Live mutations remain pending designated targets. Usability follow-up requested; no push.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3924eaf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

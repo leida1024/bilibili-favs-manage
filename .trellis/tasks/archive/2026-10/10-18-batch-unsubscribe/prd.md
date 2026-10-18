@@ -24,4 +24,4 @@ Follow UI/logs, stable inventory discovery, and the shared operation-result safe
 
 ## Scope and authorization
 
-Planning entry only; design.md and implement.md are required before activation. The current request does not authorize cancellation of any real subscriptions. No Greasy Fork release.
+Stage 4 implementation and synthetic testing authorized; design.md resolves platform types and safeguards. No real subscriptions are authorized for cancellation. Local commits only, no push or Greasy Fork release.
