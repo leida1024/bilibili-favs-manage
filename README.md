@@ -1,10 +1,6 @@
 # Bilibili 收藏夹批量管理工具
 
-QQ群：[524764959（扫码加入）](docs/assets/qq-group.jpg) · 邮箱：[ljx.1024@outlook.com](mailto:ljx.1024@outlook.com)
-
-<a href="docs/assets/qq-group.jpg"><img src="docs/assets/qq-group.jpg" width="220" alt="Bilibili 收藏夹管理 QQ 群二维码，群号 524764959"></a>
-
-使用 QQ 扫码加入，点击图片可放大；也可在 QQ 搜索群号。问题反馈可提交 [GitHub Issue](https://github.com/junxian-li-hpc/bilibili-favs-manage/issues)。
+QQ群：[524764959（扫码加入）](#交流群) · 邮箱：[ljx.1024@outlook.com](mailto:ljx.1024@outlook.com) · [问题反馈](https://github.com/junxian-li-hpc/bilibili-favs-manage/issues)
 
 批量把自己或他人公开收藏夹的视频复制到自己的收藏夹，适配旧版个人空间与新版 VUI 收藏页。
 
@@ -47,3 +43,9 @@ QQ群：[524764959（扫码加入）](docs/assets/qq-group.jpg) · 邮箱：[ljx
 | 查看版本变化 | [更新日志](CHANGELOG.md) |
 
 开发从 `src/` 开始，构建后的可安装脚本在 `dist/`。本项目使用 [MIT License](LICENSE)。
+
+## 交流群
+
+使用 QQ 扫码加入，或搜索群号 **524764959**。点击图片可查看完整大图。
+
+<a href="docs/assets/qq-group.jpg"><img src="docs/assets/qq-group.jpg" width="180" alt="Bilibili 收藏夹管理 QQ 群二维码，群号 524764959"></a>
