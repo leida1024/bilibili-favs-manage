@@ -1,6 +1,6 @@
 # Bilibili 收藏夹批量管理工具
 
-QQ群：[524764959（扫码加入）](#交流群) · 邮箱：[ljx.1024@outlook.com](mailto:ljx.1024@outlook.com) · [问题反馈](https://github.com/leida1024/bilibili-favs-manage/issues)
+QQ群：[524764959（扫码加入）](#qq-group) · 邮箱：[ljx.1024@outlook.com](mailto:ljx.1024@outlook.com) · [问题反馈](https://github.com/leida1024/bilibili-favs-manage/issues)
 
 批量把自己或他人公开收藏夹的视频复制到自己的收藏夹，适配旧版个人空间与新版 VUI 收藏页。
 
@@ -45,7 +45,7 @@ QQ群：[524764959（扫码加入）](#交流群) · 邮箱：[ljx.1024@outlook.
 
 开发从 `src/` 开始，构建后的可安装脚本在 `dist/`。本项目使用 [MIT License](https://github.com/leida1024/bilibili-favs-manage/blob/master/LICENSE)。
 
-<a name="交流群"></a>
+<a name="qq-group"></a>
 
 ## 交流群
 
