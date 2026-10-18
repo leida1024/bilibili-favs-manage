@@ -1731,6 +1731,11 @@
 
       checkboxDiv.appendChild(checkbox);
       checkboxDiv.appendChild(label);
+      const direction = document.createElement('span');
+      direction.className = 'bf-direction';
+      direction.textContent = '→';
+      direction.setAttribute('aria-hidden', 'true');
+      checkboxDiv.appendChild(direction);
       checkboxDiv.appendChild(inputText);
 
       checkboxContainer.appendChild(checkboxDiv);
@@ -2007,42 +2012,91 @@
   }
 
   const panelStyles = `
-.bili-favs-manage-panel { position:fixed; top:40px; left:40px; width:860px; height:680px; max-width:calc(100vw - 16px); max-height:calc(100vh - 16px); min-width:280px; min-height:64px; z-index:99999; background:#fff; color:#24364b; border:1px solid #d6dfe9; border-radius:14px; box-shadow:0 16px 60px #18314a30; font:14px/1.55 system-ui,"Microsoft YaHei",sans-serif; overflow:hidden; resize:both; display:flex; flex-direction:column; text-align:left; }
+.bili-favs-manage-panel { --bf-ink:#203344; --bf-blue:#007fa8; --bf-line:#dae5ec; position:fixed; top:36px; left:36px; width:800px; height:640px; max-width:calc(100vw - 16px); max-height:calc(100dvh - 16px); min-width:280px; min-height:64px; z-index:99999; background:#fff; color:var(--bf-ink); border:1px solid var(--bf-line); border-radius:10px; box-shadow:0 12px 42px #20334424; font:14px/1.5 "Microsoft YaHei UI","PingFang SC","Noto Sans CJK SC",sans-serif; overflow:hidden; resize:both; display:flex; flex-direction:column; text-align:left; container-type:inline-size; }
 .bili-favs-manage-panel * { box-sizing:border-box; }
 .bili-favs-manage-panel [hidden] { display:none !important; }
-.bili-favs-manage-panel h3 { font-size:15px; font-weight:650; margin:0 0 8px; }
+.bili-favs-manage-panel h2 { color:var(--bf-ink); font-family:inherit; font-size:18px; line-height:1.4; font-weight:700; margin:0 0 6px; }
+.bili-favs-manage-panel h3 { color:var(--bf-ink); font-size:15px; font-weight:600; margin:0 0 6px; }
 .bili-favs-manage-panel p { margin:6px 0; overflow-wrap:anywhere; }
-.bili-favs-manage-panel .bf-header { display:flex; align-items:center; gap:8px; padding:12px 16px; background:#f5f9fc; border-bottom:1px solid #e2eaf1; cursor:move; flex-shrink:0; }
-.bili-favs-manage-panel .bf-header strong { flex:1; font-size:17px; }
-.bili-favs-manage-panel button,.bili-favs-manage-panel select { width:auto; min-height:34px; margin:0; padding:6px 12px; border:1px solid #cbd7e3; border-radius:7px; background:#fff; color:#24364b; cursor:pointer; font:inherit; }
+.bili-favs-manage-panel .bf-header { display:flex; align-items:center; gap:6px; padding:10px 16px; background:#fff; cursor:move; flex-shrink:0; }
+.bili-favs-manage-panel .bf-header strong { flex:1; font-size:16px; letter-spacing:.03em; }
+.bili-favs-manage-panel button,.bili-favs-manage-panel select { width:auto; min-height:34px; margin:0; padding:6px 12px; border:1px solid #b7c9d5; border-radius:5px; background:#fff; color:var(--bf-ink); cursor:pointer; font:inherit; line-height:1.4; }
+.bili-favs-manage-panel button:hover:not(:disabled) { border-color:var(--bf-blue); background:#f2faff; }
 .bili-favs-manage-panel button:disabled { opacity:.5; cursor:default; }
-.bili-favs-manage-panel :focus-visible { outline:3px solid #289cce; outline-offset:2px; }
-.bili-favs-manage-panel .bf-primary { background:#007eaa; color:white; border-color:#007eaa; margin-top:12px; }
-.bili-favs-manage-panel .bf-content { overflow:auto; padding:16px; min-height:0; }
-.bili-favs-manage-panel .bf-muted { color:#62758a; font-size:12px; }
-.bili-favs-manage-panel .bf-workspace { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:20px; margin-top:14px; }
-.bili-favs-manage-panel .fav-panel { max-height:245px; overflow:auto; margin-top:10px; }
-.bili-favs-manage-panel .signal-panel { display:grid; grid-template-columns:20px minmax(0,1fr); gap:5px 8px; border:0; border-bottom:1px solid #e6edf4; padding:10px 0; }
-.bili-favs-manage-panel .signal-panel label { overflow-wrap:anywhere; cursor:pointer; }
-.bili-favs-manage-panel input[type=text] { grid-column:2; width:100%; min-width:0; padding:7px; border:1px solid #cbd7e3; border-radius:6px; background:white; color:#24364b; font:inherit; text-align:left; }
-.bili-favs-manage-panel input[type=checkbox] { accent-color:#007eaa; width:16px; height:16px; margin-top:4px; }
-.bili-favs-manage-panel .bf-selection { max-height:245px; overflow:auto; padding:10px; background:#f5f9fc; border-radius:8px; }
-.bili-favs-manage-panel .bf-status { margin-top:18px; padding:12px; background:#edf7fc; border-left:3px solid #0089b9; border-radius:6px; }
-.bili-favs-manage-panel .bf-status[data-status=failed] { background:#fff3ef; border-color:#bc4527; }
-.bili-favs-manage-panel .bf-status[data-status=completed] { background:#eef8f1; border-color:#268552; }
-.bili-favs-manage-panel .bf-diagnostics { margin-top:16px; border-top:1px solid #e2eaf1; padding-top:12px; }
-.bili-favs-manage-panel summary { cursor:pointer; padding:4px 0; font-weight:600; }
-.bili-favs-manage-panel .bf-tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:10px 0; }
-.bili-favs-manage-panel .bf-tools label { display:flex; align-items:center; gap:4px; }
-.bili-favs-manage-panel .bf-folder-row { display:flex; align-items:flex-start; gap:8px; padding:8px 0; border-bottom:1px solid #e2eaf1; overflow-wrap:anywhere; }
-.bili-favs-manage-panel .bf-folder-row input { flex-shrink:0; }
-.bili-favs-manage-panel .output-text-box { white-space:pre-wrap; overflow-wrap:anywhere; max-height:200px; overflow:auto; background:#f5f8fb; padding:10px; font:12px/1.7 ui-monospace,monospace; }
-.bili-favs-manage-panel .bf-log-error { color:#ad361e; }
-.bili-favs-manage-panel .bf-log-warn { color:#875900; }
-.bili-favs-manage-panel .bf-log-debug { color:#666; }
-.bili-favs-manage-panel .bf-export { margin-top:14px; padding:12px; border:1px solid #cbd7e3; border-radius:8px; }
-.bili-favs-manage-panel textarea { display:block; width:100%; min-height:160px; margin:10px 0; font:12px/1.5 monospace; }
-@media(max-width:650px) { .bili-favs-manage-panel { top:8px; left:8px; } .bili-favs-manage-panel .bf-workspace { grid-template-columns:minmax(0,1fr); gap:12px; } .bili-favs-manage-panel .fav-panel { max-height:200px; } }
+.bili-favs-manage-panel :focus-visible { outline:3px solid #178cb3; outline-offset:2px; }
+.bili-favs-manage-panel .bf-header button { font-size:12px; min-height:30px; padding:5px 8px; border-color:transparent; }
+.bili-favs-manage-panel .bf-header button:hover { background:#edf6fa; }
+.bili-favs-manage-panel .bf-navigation { display:flex; gap:20px; padding:0 20px; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
+.bili-favs-manage-panel .bf-navigation button { border:0; border-bottom:3px solid transparent; border-radius:0; padding:10px 2px; background:none; color:#526879; }
+.bili-favs-manage-panel .bf-navigation button[aria-pressed=true] { color:var(--bf-blue); font-weight:700; border-bottom-color:var(--bf-blue); }
+.bili-favs-manage-panel .bf-content { overflow-y:auto; overflow-x:hidden; padding:18px 20px; min-height:0; flex:1; scrollbar-width:thin; scrollbar-color:#a1b6c3 transparent; }
+.bili-favs-manage-panel .bf-muted { color:#526879; font-size:12px; }
+.bili-favs-manage-panel .bf-intro { color:#40596c; max-width:70ch; margin-bottom:6px; }
+.bili-favs-manage-panel .bf-help { font-size:12px; color:#526879; margin:6px 0 10px; max-width:75ch; }
+.bili-favs-manage-panel summary { cursor:pointer; padding:4px 0; }
+.bili-favs-manage-panel .bf-help summary { color:var(--bf-blue); }
+.bili-favs-manage-panel .bf-copy-columns,.bili-favs-manage-panel .signal-panel { display:grid; grid-template-columns:40px minmax(0,1fr) 24px minmax(0,1fr); align-items:center; gap:8px; }
+.bili-favs-manage-panel .bf-copy-columns { padding:7px 0; font-size:12px; color:#526879; border-bottom:1px solid #bbceda; }
+.bili-favs-manage-panel .bf-copy-columns button { padding:5px 1px; min-height:28px; font-size:11px; border-color:transparent; color:var(--bf-blue); }
+.bili-favs-manage-panel .fav-panel { margin:0; }
+.bili-favs-manage-panel .signal-panel { padding:8px 0; border-bottom:1px solid var(--bf-line); }
+.bili-favs-manage-panel .fav-panel>[data-selected=true] { background:#eaf7fc; }
+.bili-favs-manage-panel .signal-panel label { overflow-wrap:anywhere; min-width:0; cursor:pointer; }
+.bili-favs-manage-panel .bf-direction { text-align:center; color:#6d8999; }
+.bili-favs-manage-panel input[type=text] { width:100%; min-width:0; min-height:36px; padding:7px 9px; border:1px solid #b7c9d5; border-radius:5px; background:#fff; color:var(--bf-ink); font:inherit; }
+.bili-favs-manage-panel input[aria-invalid=true] { border-color:#aa4332; }
+.bili-favs-manage-panel input[type=checkbox] { accent-color:var(--bf-blue); width:17px; height:17px; margin:2px 0; flex-shrink:0; cursor:pointer; }
+.bili-favs-manage-panel .signal-panel input[type=checkbox] { justify-self:center; }
+.bili-favs-manage-panel .bf-footer { border-top:1px solid var(--bf-line); background:#fff; padding:10px 20px; flex-shrink:0; }
+.bili-favs-manage-panel .bf-action-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.bili-favs-manage-panel .bf-selection-count { flex:1; color:#526879; min-width:90px; font-size:13px; }
+.bili-favs-manage-panel .bf-primary { background:var(--bf-blue); border-color:var(--bf-blue); color:white; font-weight:600; }
+.bili-favs-manage-panel .bf-primary:hover:not(:disabled) { background:#006989; color:#fff; }
+.bili-favs-manage-panel .bf-danger { background:#aa4332; border-color:#aa4332; color:white; }
+.bili-favs-manage-panel .bf-status { padding:0 0 10px; margin-bottom:10px; border-bottom:1px solid var(--bf-line); font-size:12px; }
+.bili-favs-manage-panel .bf-status strong { display:block; font-size:13px; }
+.bili-favs-manage-panel .bf-status>span { color:#526879; }
+.bili-favs-manage-panel .bf-status[data-status=failed] strong,.bili-favs-manage-panel .bf-status[data-status=interrupted] strong { color:#aa4332; }
+.bili-favs-manage-panel .bf-status[data-status=completed] strong { color:#24734b; }
+.bili-favs-manage-panel .bf-status-message { color:#8d382a; }
+.bili-favs-manage-panel .bf-progress-detail { display:inline; margin-left:12px; }
+.bili-favs-manage-panel .bf-progress-detail summary { display:inline; color:var(--bf-blue); }
+.bili-favs-manage-panel .bf-progress-detail[open] { display:block; margin:0; }
+.bili-favs-manage-panel .bf-progress-detail p { max-width:75ch; }
+.bili-favs-manage-panel .bf-tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.bili-favs-manage-panel .bf-tools select { min-width:0; max-width:100%; }
+.bili-favs-manage-panel .bf-tools label { display:flex; align-items:center; gap:6px; }
+.bili-favs-manage-panel .bf-empty { padding:28px 12px; text-align:center; color:#526879; line-height:1.8; }
+.bili-favs-manage-panel .bf-folder-item { border-bottom:1px solid var(--bf-line); padding:10px 0; }
+.bili-favs-manage-panel .bf-folder-row { display:flex; align-items:flex-start; gap:10px; overflow-wrap:anywhere; }
+.bili-favs-manage-panel .bf-folder-text { min-width:0; flex:1; }
+.bili-favs-manage-panel .bf-folder-text strong { display:block; font-weight:600; }
+.bili-favs-manage-panel .bf-folder-text small { color:#526879; display:block; font-size:12px; margin-top:3px; }
+.bili-favs-manage-panel .bf-object-details { margin-left:27px; font-size:12px; color:#526879; }
+.bili-favs-manage-panel .bf-object-details summary { padding:3px 0 0; }
+.bili-favs-manage-panel .bf-inventory-result:not(:empty) { margin-top:16px; padding:12px 0; border-top:1px solid var(--bf-line); }
+.bili-favs-manage-panel .bf-mutation-review:not(:empty) { border-left:3px solid #aa4332; padding:12px; margin:16px 0; background:#fff6f3; }
+.bili-favs-manage-panel .bf-show-logs { overflow:hidden; display:flex; flex-direction:column; }
+.bili-favs-manage-panel .bf-diagnostics { display:flex; flex-direction:column; flex:1; min-height:0; }
+.bili-favs-manage-panel .output-text-box { flex:1; min-height:0; white-space:pre-wrap; overflow-wrap:anywhere; overflow:auto; padding:12px; border:1px solid var(--bf-line); font-size:12px; line-height:1.8; scrollbar-width:thin; }
+.bili-favs-manage-panel .bf-log-error { color:#aa4332; }
+.bili-favs-manage-panel .bf-log-warn { color:#805500; }
+.bili-favs-manage-panel .bf-log-debug { color:#526879; }
+.bili-favs-manage-panel .bf-export { position:absolute; inset:0; background:#fff; z-index:2; padding:20px; display:flex; align-content:flex-start; flex-wrap:wrap; gap:10px; overflow:auto; }
+.bili-favs-manage-panel .bf-export h3,.bili-favs-manage-panel .bf-export p { width:100%; }
+.bili-favs-manage-panel textarea { display:block; width:100%; height:55%; min-height:140px; resize:vertical; padding:10px; margin:0; border:1px solid #b7c9d5; color:var(--bf-ink); background:#fff; font:12px/1.6 monospace; }
+@container (max-width:500px) {
+ .bili-favs-manage-panel .bf-header { padding:9px 12px; gap:1px; }
+ .bili-favs-manage-panel .bf-header strong { font-size:15px; }
+ .bili-favs-manage-panel .bf-navigation { padding:0 14px; gap:20px; }
+ .bili-favs-manage-panel .bf-content { padding:14px; }
+ .bili-favs-manage-panel .bf-footer { padding:10px 14px; }
+ .bili-favs-manage-panel .bf-copy-columns,.bili-favs-manage-panel .signal-panel { grid-template-columns:28px minmax(0,1fr) 14px minmax(0,1fr); gap:5px; }
+ .bili-favs-manage-panel .bf-copy-columns { font-size:11px; }
+ .bili-favs-manage-panel input[type=text] { font-size:13px; padding:7px 5px; }
+ .bili-favs-manage-panel .bf-action-bar button { padding:7px 9px; font-size:13px; }
+}
+@media(max-width:650px) { .bili-favs-manage-panel { top:8px; left:8px; } }
 `;
 
   function element(tag, className = '', text = '') {
@@ -2059,6 +2113,19 @@
     return node;
   }
 
+  /** Quiet list row; exact identifiers remain available without overwhelming selection. */
+  function folderRow(folder, input, reason = '') {
+    const row = element('div', 'bf-folder-item');
+    const label = element('label', 'bf-folder-row');
+    const text = element('span', 'bf-folder-text');
+    text.append(element('strong', '', folder.name), element('small', '', `${folder.count == null ? '数量未知' : `${folder.count} 条内容`}${reason ? `；不可选：${reason}` : ''}`));
+    label.append(input, text);
+    const details = element('details', 'bf-object-details');
+    details.append(element('summary', '', 'ID 与所有者'), element('p', '', `ID ${folder.id}；所有者 ${folder.ownerId || '未知'}`));
+    row.append(label, details);
+    return row;
+  }
+
   const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
   const descriptions = {
     delete: { verb: '删除', title: '删除自己创建的收藏夹',
@@ -2072,13 +2139,13 @@
   class MutationPanel {
     constructor(inventoryUI, engine) {
       this.inventoryUI = inventoryUI; this.panel = inventoryUI.panel; this.engine = engine; this.rows = []; this.action = 'delete';
-      this.root = element('section', 'bf-diagnostics bf-mutations');
+      this.root = element('section', 'bf-mutations');
       this.heading = element('h3', '', descriptions.delete.title);
       this.explanation = element('p', 'bf-muted', descriptions.delete.detail);
       this.root.append(this.heading, this.explanation);
-      this.list = element('div', 'bf-selection');
+      this.list = element('div', 'bf-folder-list');
       this.previewButton = button('预览删除目标', () => this.preview());
-      this.review = element('section');
+      this.review = element('section', 'bf-mutation-review');
       this.results = element('div'); this.results.setAttribute('role', 'status');
       this.root.append(this.list, this.previewButton, this.review, this.results);
       this.updateBusy();
@@ -2093,13 +2160,12 @@
       this.heading.textContent = description.title; this.explanation.textContent = description.detail;
       this.previewButton.textContent = `预览${description.verb}目标`;
       const { actor, pageOwner } = this.engine.context();
+      if (!folders.length) this.list.append(element('p', 'bf-empty', '加载列表后，在这里选择要管理的收藏夹。默认不会勾选任何项目。'));
       for (const folder of folders) {
         const reason = eligibility(this.action, folder, actor, pageOwner);
         const input = element('input'); input.type = 'checkbox';
-        const label = element('label', 'bf-folder-row');
-        label.append(input, element('span', '', `${folder.name} · ID ${folder.id} · 所有者 ${folder.ownerId || '未知'} · ${folder.count ?? '未知'} 条${reason ? ` · 不可选：${reason}` : ''}`));
-        input.addEventListener('change', () => { this.invalidate(); this.updateBusy(); });
-        this.list.append(label); this.rows.push({ folder, input, reason });
+        input.addEventListener('change', () => { this.invalidate(); this.inventoryUI.updateBusy(); });
+        this.list.append(folderRow(folder, input, reason)); this.rows.push({ folder, input, reason });
       }
       this.updateBusy();
     }
@@ -2126,7 +2192,10 @@
         const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', description.agreement));
         this.agreement.addEventListener('change', () => this.updateBusy());
         this.confirmButton = button(`确认${description.verb}以上目标`, () => this.execute());
-        this.review.append(label, this.confirmButton, button('放弃本次操作', () => this.invalidate()));
+        this.confirmButton.classList.add('bf-danger');
+        const actions = element('div', 'bf-tools'); actions.append(this.confirmButton, button('放弃本次操作', () => this.invalidate()));
+        this.review.append(label, actions);
+        this.review.scrollIntoView?.({ block: 'nearest', behavior: 'instant' });
         this.updateBusy(); this.agreement.focus();
       } catch (err) { this.results.textContent = err.message; }
     }
@@ -2152,28 +2221,54 @@
   class InventoryPanel {
     constructor(panel, service) {
       this.panel = panel; this.service = service; this.folders = []; this.rows = [];
-      this.root = element('details', 'bf-diagnostics bf-inventory');
-      this.root.append(element('summary', '', '只读统计与收藏夹管理'));
-      this.root.append(element('p', 'bf-muted', '主动加载列表后选择收藏夹。仅扫描所选内容，每次请求间隔 400ms；每夹最多 100 页，总计最多 10000 条。扫描期间列表可能变化。合集暂不支持。'));
+      this.mode = 'statistics';
+      this.root = element('section', 'bf-inventory');
+      this.heading = element('h2', '', '查看收藏夹统计');
+      this.intro = element('p', 'bf-intro', '加载列表并勾选收藏夹，查看视频数量、重复项和时长。不会修改收藏。');
+      const help = element('details', 'bf-help');
+      help.append(element('summary', '', '统计范围与限制'), element('p', '', '只扫描选中的收藏夹，每次请求间隔 400ms；每夹最多 100 页，总计最多 10000 条。完整扫描仅表示所选范围；列表变化、读取失败或取消都会标明。缺失信息保留为未知，合集暂不支持。'));
+      this.root.append(this.heading, this.intro, help); this.help = help;
       this.kind = element('select'); this.kind.setAttribute('aria-label', '加载范围');
       for (const [value, label] of [['created', '当前空间创建的收藏夹'], ['subscribed', '我的收藏夹订阅']]) {
         const option = element('option', '', label); option.value = value; this.kind.append(option);
       }
       this.loadButton = button('加载列表（只读）', () => this.load());
       this.scanButton = button('统计选中收藏夹', () => this.scan());
-      this.cancelButton = button('取消后续请求', () => this.controller?.abort());
+      this.cancelButton = button('停止后续操作', () => { this.controller?.abort(); this.updateBusy(); });
       this.exportButton = button('检查并导出统计', () => { if (this.report) panel.reviewExport(JSON.stringify(this.report, null, 2), 'bili-inventory.json'); });
-      const tools = element('div', 'bf-tools'); tools.append(this.kind, this.loadButton, this.scanButton, this.cancelButton, this.exportButton);
-      this.list = element('div', 'bf-selection');
-      this.result = element('div'); this.result.setAttribute('role', 'status');
+      const tools = element('div', 'bf-tools'); tools.append(this.kind, this.loadButton);
+      this.selectionCount = element('p', 'bf-selection-count', '尚未选择收藏夹');
+      this.actions = element('div', 'bf-action-bar');
+      this.actions.append(this.selectionCount, this.exportButton, this.scanButton, this.cancelButton);
+      this.scanButton.classList.add('bf-primary');
+      this.list = element('div', 'bf-folder-list');
+      this.list.append(element('p', 'bf-empty', '点击“加载列表”，读取当前选择的范围。不会自动扫描。'));
+      this.result = element('div', 'bf-inventory-result'); this.result.setAttribute('role', 'status');
       this.root.append(tools, this.list, this.result);
       if (panel.manager.batchOperations) {
         this.mutations = new MutationPanel(this, panel.manager.batchOperations);
         this.root.append(this.mutations.root);
+        this.actions.insertBefore(this.mutations.previewButton, this.cancelButton);
       }
       this.kind.addEventListener('change', () => {
         this.folders = []; this.rows = []; this.list.replaceChildren(); this.mutations?.setCatalog([], this.kind.value); this.updateBusy();
       });
+      this.updateBusy();
+    }
+
+    setMode(mode) {
+      if (this.mode !== mode) {
+        this.mutations?.invalidate();
+        for (const row of this.rows) row.input.checked = false;
+        for (const row of this.mutations?.rows || []) row.input.checked = false;
+      }
+      this.mode = mode;
+      const manage = mode === 'manage';
+      this.heading.textContent = manage ? '管理我的收藏夹' : '查看收藏夹统计';
+      this.intro.textContent = manage ? '先加载列表，再选择要删除的收藏夹或要取消的订阅。执行前会逐项确认。' : '加载列表并勾选收藏夹，查看视频数量、重复项和时长。不会修改收藏。';
+      this.help.hidden = manage;
+      this.list.hidden = manage; this.result.hidden = manage;
+      if (this.mutations) this.mutations.root.hidden = !manage;
       this.updateBusy();
     }
 
@@ -2183,6 +2278,13 @@
       this.scanButton.disabled = busy || !this.selected().length;
       this.cancelButton.disabled = !busy || !this.controller || this.controller.signal.aborted;
       this.exportButton.disabled = busy || !this.report;
+      const manage = this.mode === 'manage';
+      this.scanButton.hidden = manage || busy;
+      this.exportButton.hidden = manage || !this.report || busy;
+      this.cancelButton.hidden = !this.controller;
+      if (this.mutations) this.mutations.previewButton.hidden = !manage || busy;
+      const selected = manage ? this.mutations?.selected().length || 0 : this.selected().length;
+      this.selectionCount.textContent = busy ? '操作中，请保持页面打开' : `已选 ${selected} 个收藏夹`;
       for (const row of this.rows) row.input.disabled = busy || row.folder.kind === 'unsupported';
       this.mutations?.updateBusy();
     }
@@ -2214,12 +2316,11 @@
         this.folders = folders; this.catalogOwner = owner; this.catalogKind = kind;
         this.mutations?.setCatalog(folders, kind);
         for (const folder of folders) {
-          const label = element('label', 'bf-folder-row');
           const input = element('input'); input.type = 'checkbox'; input.disabled = folder.kind === 'unsupported';
           input.addEventListener('change', () => this.updateBusy());
-          label.append(input, element('span', '', `${folder.name} · ID ${folder.id} · 所有者 ${folder.ownerId || '未知'} · ${folder.count ?? '未知'} 条${folder.protected ? ' · 受保护' : ''}${folder.kind === 'unsupported' ? ' · 类型暂不支持' : ''}`));
-          this.list.append(label); this.rows.push({ input, folder });
+          this.list.append(folderRow(folder, input, folder.kind === 'unsupported' ? '合集暂不支持' : '')); this.rows.push({ input, folder });
         }
+        if (!folders.length) this.list.append(element('p', 'bf-empty', '这个范围没有可读取的收藏夹。可以更换范围后重新加载。'));
         this.result.textContent = `列表读取完成：${folders.length} 项；尚未选择或扫描。`;
         this.panel.operation.finish('completed', this.result.textContent);
       });
@@ -2258,6 +2359,8 @@
       this.scrollTopEnabled = true;
       this.minW = 280;
       this.minH = 64;
+      this.activeView = 'copy';
+      this.previousView = 'copy';
     }
 
     init() {
@@ -2269,36 +2372,50 @@
       this.floatingPanel = root;
       this.header = element('header', 'bf-header');
       this.header.append(element('strong', '', '收藏夹管理'));
+      this.logsButton = button('记录', () => this.showView(this.activeView === 'logs' ? this.previousView : 'logs'), 'bf-quiet');
+      this.logsButton.setAttribute('aria-label', '查看操作记录');
       this.minimizeButton = button('最小化', () => this.toggleMinimize());
       this.dismissButton = button('关闭', () => { this.onDismiss?.(); this.destroy(); });
-      this.header.append(this.minimizeButton, this.dismissButton);
+      this.header.append(this.logsButton, this.minimizeButton, this.dismissButton);
+      this.navigation = element('nav', 'bf-navigation');
+      this.navigation.setAttribute('aria-label', '管理功能');
+      this.viewButtons = new Map();
+      for (const [view, label] of [['copy', '复制收藏夹'], ['statistics', '统计'], ['manage', '管理']]) {
+        if (view !== 'copy' && !this.manager.inventory) continue;
+        const control = button(label, () => this.showView(view));
+        this.viewButtons.set(view, control); this.navigation.append(control);
+      }
       this.content = element('div', 'bf-content');
       this.scope = element('p', 'bf-muted');
-      this.content.append(this.scope);
-      this.workspace = element('div', 'bf-workspace');
+      this.workspace = element('section', 'bf-workspace');
+      this.workspace.append(element('h2', '', '复制到我的收藏夹'), element('p', 'bf-intro', '勾选来源，在同一行填写目标名称。复制后，来源内容仍会保留。'), this.scope);
+      const help = element('details', 'bf-help');
+      help.append(element('summary', '', '目标同名或不存在时会怎样？'), element('p', '', '在我的空间中，已有同名收藏夹会直接复用，不存在的会新建。名称首尾空白会去掉，内部空格保留。从他人空间复制时，需要跳转到我的空间准备目标，再返回继续；请保持页面打开。'));
+      this.workspace.append(help);
       this.leftPanel = element('section', 'bf-sources');
-      this.leftPanel.append(element('h3', '', '1. 选择来源与目标'));
-      this.leftPanel.append(element('p', 'bf-muted', '复制会保留源收藏；同名目标会复用，缺少的目标会新建。跨页复制可能需要自动跳转。'));
-      this.selectAllButton = button('全选来源', () => this.toggleSelectAll());
-      this.leftPanel.append(this.selectAllButton, this.createFavPanel());
-      this.rightPanel = element('section', 'bf-review');
-      this.rightPanel.append(element('h3', '', '2. 检查复制任务'));
-      this.selectionReview = element('div', 'bf-selection');
-      this.rightPanel.append(this.selectionReview);
+      this.selectAllButton = button('全选', () => this.toggleSelectAll());
+      const columns = element('div', 'bf-copy-columns');
+      this.sourceColumn = element('span', '', '来源收藏夹');
+      columns.append(this.selectAllButton, this.sourceColumn, element('span', 'bf-direction', ''), element('span', '', '目标收藏夹（我的）'));
+      this.leftPanel.append(columns, this.createFavPanel());
+      this.selectionReview = element('p', 'bf-selection-count');
       this.startBatchTransferButton = button('开始批量复制', () => this.startBatchTransfer(), 'bf-primary');
-      this.rightPanel.append(this.startBatchTransferButton);
-      this.workspace.append(this.leftPanel, this.rightPanel);
+      this.copyActions = element('div', 'bf-action-bar');
+      this.copyActions.append(this.selectionReview, this.startBatchTransferButton);
+      this.workspace.append(this.leftPanel);
       this.content.append(this.workspace);
       this.statusBox = element('section', 'bf-status');
       this.statusBox.setAttribute('role', 'status');
       this.statusBox.setAttribute('aria-live', 'polite');
-      this.content.append(this.statusBox);
       if (this.manager.inventory) {
         this.inventoryPanel = new InventoryPanel(this, this.manager.inventory);
         this.content.append(this.inventoryPanel.root);
       }
       this.createDiagnostics();
-      root.append(style, this.header, this.content);
+      this.footer = element('footer', 'bf-footer');
+      this.footer.append(this.statusBox, this.copyActions);
+      if (this.inventoryPanel) this.footer.append(this.inventoryPanel.actions);
+      root.append(style, this.header, this.navigation, this.content, this.footer);
       document.body.append(root);
       this.unsubscribe = this.operation.subscribe(state => this.renderOperation(state));
       this.onBodyMove = event => {
@@ -2315,13 +2432,40 @@
       this.updateSelectionReview();
       this.showPageTypeIndicator();
       this.appendLog('面板已就绪。诊断记录仅保存在当前页面，最多 500 条。');
+      this.showView('copy');
+    }
+
+    showView(view) {
+      if (!['copy', 'statistics', 'manage', 'logs'].includes(view) || (this.busy && view !== 'logs' && view !== this.previousView && view !== this.activeView)) return;
+      if ((view === 'statistics' || view === 'manage') && !this.inventoryPanel) return;
+      if (view === 'logs') { if (this.activeView !== 'logs') this.previousView = this.activeView; }
+      else {
+        if (view !== this.previousView || this.activeView !== 'logs') this.inventoryPanel?.mutations?.invalidate();
+        this.previousView = view;
+      }
+      this.activeView = view;
+      this.workspace.hidden = view !== 'copy';
+      if (this.inventoryPanel) {
+        this.inventoryPanel.root.hidden = !['statistics', 'manage'].includes(view);
+        if (view === 'statistics' || view === 'manage') this.inventoryPanel.setMode(view);
+        this.inventoryPanel.actions.hidden = !['statistics', 'manage'].includes(view);
+      }
+      this.diagnostics.hidden = view !== 'logs';
+      this.copyActions.hidden = view !== 'copy';
+      this.content.classList.toggle('bf-show-logs', view === 'logs');
+      this.content.scrollTop = 0;
+      for (const [name, control] of this.viewButtons) control.setAttribute('aria-pressed', String(name === (view === 'logs' ? this.previousView : view)));
+      this.logsButton.textContent = view === 'logs' ? '返回' : '记录';
+      this.logsButton.setAttribute('aria-label', view === 'logs' ? '返回当前功能' : '查看操作记录');
+      if (view === 'logs') this.renderLogs();
     }
 
     showPageTypeIndicator() {
       const pageUID = PageDetector.getCurrentPageUID();
       const loginUID = PageDetector.getLoginUserUID();
-      this.scope.textContent = !pageUID ? '虚构数据预览 · 不连接真实账号' :
-        `当前空间：${!loginUID ? '身份未确认' : pageUID === loginUID ? '我的空间' : '他人空间'} · 来源为页面已加载的创建收藏夹，未包含订阅。`;
+      this.scope.textContent = !pageUID ? '虚构数据预览，不连接真实账号。' :
+        `来源：${pageUID === loginUID ? '我的空间' : '当前浏览的空间'}已加载的创建收藏夹。目标：${loginUID ? '我的空间' : '登录后可复制到我的空间'}。`;
+      this.sourceColumn.textContent = pageUID && pageUID === loginUID ? '来源（我的空间）' : '来源（当前空间）';
     }
 
     createFavPanel() {
@@ -2332,7 +2476,7 @@
         list.append(item.checkboxContainer);
         return item;
       });
-      if (!this.favorites.length) list.append(element('p', 'bf-muted', '尚未发现来源。请等待侧栏加载，或切换到支持的收藏夹页。'));
+      if (!this.favorites.length) list.append(element('div', 'bf-empty', '还没有读到来源收藏夹。请等待页面侧栏加载；列表出现后会自动更新。'));
       return list;
     }
 
@@ -2361,10 +2505,16 @@
 
     updateSelectionReview() {
       const tasks = this.getSelectedTasks();
-      this.selectionReview.replaceChildren(element('p', '', `已选择 ${tasks.length} 个来源`));
-      for (const task of tasks) this.selectionReview.append(element('p', '', `${task.source} → ${task.target.trim() || '（请填写目标名称）'}`));
-      this.selectAllButton.textContent = tasks.length && tasks.length === this.favorites.length ? '取消全选' : '全选来源';
-      this.startBatchTransferButton.disabled = this.busy || !tasks.length;
+      const missing = tasks.some(task => !task.target.trim());
+      this.selectionReview.textContent = missing ? '请填好已选来源的目标名称' : `已选 ${tasks.length} / ${this.favorites.length} 个收藏夹`;
+      for (const item of this.favCheckboxItemList) {
+        item.checkboxContainer.dataset.selected = String(item.checkbox.checked);
+        item.inputText.setAttribute('aria-invalid', String(item.checkbox.checked && !item.inputText.value.trim()));
+      }
+      this.selectAllButton.textContent = tasks.length && tasks.length === this.favorites.length ? '清除' : '全选';
+      this.selectAllButton.setAttribute('aria-label', tasks.length && tasks.length === this.favorites.length ? '取消全选来源' : '全选来源收藏夹');
+      this.startBatchTransferButton.textContent = this.busy ? '操作中…' : tasks.length ? `复制 ${tasks.length} 个收藏夹` : '开始复制';
+      this.startBatchTransferButton.disabled = this.busy || !tasks.length || missing;
     }
 
     setBusy(busy) {
@@ -2372,6 +2522,7 @@
       this.floatingPanel?.setAttribute('aria-busy', String(busy));
       this.selectAllButton.disabled = busy;
       this.dismissButton.disabled = busy;
+      for (const control of this.viewButtons.values()) control.disabled = busy;
       for (const item of this.favCheckboxItemList) { item.checkbox.disabled = busy; item.inputText.disabled = busy; }
       this.startBatchTransferButton.textContent = busy ? '操作中…' : '开始批量复制';
       this.updateSelectionReview();
@@ -2380,10 +2531,14 @@
     }
 
     renderOperation(state) {
+      this.statusBox.hidden = state.status === 'idle';
       this.statusBox.dataset.status = state.status;
-      this.statusBox.replaceChildren(element('strong', '', `${statusNames[state.status]}${state.action ? ` · ${state.action}` : ''}`),
-        element('p', '', `已确认 ${state.confirmed}${state.total === null ? ' 项（总数未知）' : ` / ${state.total} 项`}`),
-        element('p', '', `最后确认：${state.lastConfirmed || '尚无已确认步骤'}`), element('p', '', state.detail));
+      const details = element('details', 'bf-progress-detail');
+      details.append(element('summary', '', '查看进度详情'), element('p', '', `最后确认：${state.lastConfirmed || '尚无已确认步骤'}`), element('p', '', state.detail));
+      this.statusBox.replaceChildren(element('strong', '', `${statusNames[state.status]}${state.action ? `：${state.action}` : ''}`),
+        element('span', '', `已确认 ${state.confirmed}${state.total === null ? ' 项，总数未知' : ` / ${state.total} 项`}`));
+      if (state.status === 'failed' || state.status === 'interrupted') this.statusBox.append(element('p', 'bf-status-message', state.detail));
+      this.statusBox.append(details);
     }
 
     async startBatchTransfer() {
@@ -2400,8 +2555,9 @@
     }
 
     createDiagnostics() {
-      const details = element('details', 'bf-diagnostics');
-      details.append(element('summary', '', '诊断记录'));
+      const details = element('section', 'bf-diagnostics');
+      this.diagnostics = details;
+      details.append(element('h2', '', '操作记录'));
       const tools = element('div', 'bf-tools');
       this.logFilter = element('select');
       this.logFilter.setAttribute('aria-label', '日志级别');
@@ -2444,23 +2600,41 @@
     reviewExport(text, filename) {
       this.exportReview?.remove();
       const section = element('section', 'bf-export');
+      section.setAttribute('role', 'dialog'); section.setAttribute('aria-label', '导出前检查'); section.setAttribute('aria-modal', 'true');
       section.append(element('h3', '', '导出前检查'), element('p', '', '仅下载到本机，不会上传。内容可能含收藏夹名称、ID 和作者信息；分享前请自行删去。'));
       const area = element('textarea'); area.value = text; area.setAttribute('aria-label', '可编辑的导出内容');
+      const previousFocus = document.activeElement;
+      const close = () => {
+        section.remove(); this.exportReview = null;
+        this.content.inert = false; this.navigation.inert = false; this.footer.inert = false; this.header.inert = false;
+        previousFocus?.focus();
+      };
       section.append(area, button('下载此内容', () => {
         const url = URL.createObjectURL(new Blob([area.value], { type: 'application/json' }));
         const link = element('a'); link.href = url; link.download = filename; link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-      }), button('关闭预览', () => section.remove()));
-      this.content.append(section); this.exportReview = section; area.focus();
+      }), button('关闭预览', close));
+      section.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { event.preventDefault(); close(); }
+        if (event.key === 'Tab') {
+          const focusable = [...section.querySelectorAll('textarea,button')];
+          if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1).focus(); }
+          else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0].focus(); }
+        }
+      });
+      this.floatingPanel.append(section); this.exportReview = section;
+      this.content.inert = true; this.navigation.inert = true; this.footer.inert = true; this.header.inert = true;
+      area.focus();
     }
 
     toggleMinimize() {
       this.minimized = !this.minimized;
       this.content.hidden = this.minimized;
+      this.navigation.hidden = this.minimized; this.footer.hidden = this.minimized;
       this.minimizeButton.textContent = this.minimized ? '恢复面板' : '最小化';
       this.minimizeButton.setAttribute('aria-expanded', String(!this.minimized));
       if (this.minimized) { this.hiddenHeight = this.floatingPanel.style.height; this.floatingPanel.style.height = '64px'; }
-      else { this.floatingPanel.style.height = this.hiddenHeight || '680px'; this.clampToViewport(); }
+      else { this.floatingPanel.style.height = this.hiddenHeight || '640px'; this.clampToViewport(); }
     }
 
     recordPanelSize() { this.clampToViewport(); }

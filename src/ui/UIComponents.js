@@ -126,6 +126,11 @@ export class CheckboxItem {
 
     checkboxDiv.appendChild(checkbox);
     checkboxDiv.appendChild(label);
+    const direction = document.createElement('span');
+    direction.className = 'bf-direction';
+    direction.textContent = '→';
+    direction.setAttribute('aria-hidden', 'true');
+    checkboxDiv.appendChild(direction);
     checkboxDiv.appendChild(inputText);
 
     checkboxContainer.appendChild(checkboxDiv);
