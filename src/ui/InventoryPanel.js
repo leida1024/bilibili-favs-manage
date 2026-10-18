@@ -1,5 +1,6 @@
 import { element, button } from './elements.js';
 import { PageDetector } from '../core/PageDetector.js';
+import { MutationPanel } from './MutationPanel.js';
 
 export class InventoryPanel {
   constructor(panel, service) {
@@ -19,6 +20,13 @@ export class InventoryPanel {
     this.list = element('div', 'bf-selection');
     this.result = element('div'); this.result.setAttribute('role', 'status');
     this.root.append(tools, this.list, this.result);
+    if (panel.manager.batchOperations) {
+      this.mutations = new MutationPanel(this, panel.manager.batchOperations);
+      this.root.append(this.mutations.root);
+    }
+    this.kind.addEventListener('change', () => {
+      this.folders = []; this.rows = []; this.list.replaceChildren(); this.mutations?.setCatalog([]); this.updateBusy();
+    });
     this.updateBusy();
   }
 
@@ -29,6 +37,7 @@ export class InventoryPanel {
     this.cancelButton.disabled = !busy || !this.controller || this.controller.signal.aborted;
     this.exportButton.disabled = busy || !this.report;
     for (const row of this.rows) row.input.disabled = busy || row.folder.kind === 'unsupported';
+    this.mutations?.updateBusy();
   }
 
   selected() { return this.rows.filter(row => row.input.checked).map(row => row.folder); }
@@ -47,11 +56,13 @@ export class InventoryPanel {
   load() {
     return this.run('读取收藏夹列表', async signal => {
       this.folders = []; this.rows = []; this.list.replaceChildren(); this.report = null; this.result.textContent = '';
+      this.mutations?.setCatalog([]);
       const kind = this.kind.value;
       const owner = kind === 'created' ? PageDetector.getCurrentPageUID() : PageDetector.getLoginUserUID();
       const folders = await this.service.client.folders(owner, kind, signal);
       if (signal.aborted) return;
       this.folders = folders; this.catalogOwner = owner; this.catalogKind = kind;
+      this.mutations?.setCatalog(folders);
       for (const folder of folders) {
         const label = element('label', 'bf-folder-row');
         const input = element('input'); input.type = 'checkbox'; input.disabled = folder.kind === 'unsupported';
@@ -78,5 +89,5 @@ export class InventoryPanel {
     });
   }
 
-  destroy() { this.controller?.abort(); }
+  destroy() { this.controller?.abort(); this.mutations?.destroy(); }
 }

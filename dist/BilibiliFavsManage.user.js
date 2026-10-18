@@ -1171,17 +1171,34 @@
     constructor(fetcher = (...args) => fetch(...args)) { this.fetcher = fetcher; }
 
     async request(path, params, signal) {
+      const json = await this.fetchJSON(`${path}?${new URLSearchParams(params)}`, {}, signal);
+      if (json.code !== 0 || !json.data || typeof json.data !== 'object') throw new Error(`读取失败（平台代码 ${Number.isInteger(json.code) ? json.code : '未知'}）`);
+      return json.data;
+    }
+
+    async fetchJSON(path, options, signal) {
       const controller = new AbortController();
       const abort = () => controller.abort();
       if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
       const timer = setTimeout(abort, 15000);
       try {
-        const response = await this.fetcher(`https://api.bilibili.com${path}?${new URLSearchParams(params)}`, { credentials: 'include', signal: controller.signal });
+        const response = await this.fetcher(`https://api.bilibili.com${path}`, { ...options, credentials: 'include', signal: controller.signal });
         if (!response.ok) throw new Error(`读取失败 HTTP ${response.status}`);
-        const json = await response.json();
-        if (json.code !== 0 || !json.data || typeof json.data !== 'object') throw new Error(`读取失败（平台代码 ${Number.isInteger(json.code) ? json.code : '未知'}）`);
-        return json.data;
+        return await response.json();
       } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+    }
+
+    async mutate(action, folder, signal) {
+      if (action !== 'delete' || !stableId(folder.id)) return { status: 'failed', detail: '操作或 ID 无效，未提交' };
+      if (signal?.aborted) return { status: 'not_started', detail: '取消，未提交' };
+      const token = document.cookie.split(';').map(part => part.trim()).find(part => part.startsWith('bili_jct='))?.slice(9);
+      if (!token) return { status: 'failed', detail: '登录校验缺失，未提交；请重新登录后检查' };
+      const body = new URLSearchParams({ media_ids: folder.id, platform: 'web', csrf: token });
+      try {
+        const json = await this.fetchJSON('/x/v3/fav/folder/del', { method: 'POST', body }, signal);
+        if (!json || !Number.isInteger(json.code)) return { status: 'unknown', detail: '响应未识别；请检查平台结果，勿直接重试' };
+        return json.code === 0 ? { status: 'confirmed', detail: '平台已确认成功' } : { status: 'failed', detail: `平台拒绝（代码 ${json.code}），已停止` };
+      } catch { return { status: 'unknown', detail: '请求后未取得明确结果；请检查平台，勿直接重试' }; }
     }
 
     async folders(ownerId, kind, signal, pace = 400) {
@@ -1285,6 +1302,71 @@
     }
   }
 
+  function eligibility(action, folder, actor, pageOwner) {
+    if (!stableId(actor) || !stableId(folder.id) || !stableId(folder.ownerId)) return '身份未确认';
+    if (!folder.available) return '对象不可用';
+    if (action !== 'delete') return '操作类型不支持';
+    if (folder.kind !== 'created') return '不是创建的收藏夹';
+    if (folder.ownerId !== actor || pageOwner !== actor) return '只能管理自己空间的收藏夹';
+    if (folder.protected !== false) return '默认、特殊或保护状态未知的收藏夹';
+    return null;
+  }
+
+  class BatchOperations {
+    constructor(client, context, pace = 400) { this.client = client; this.context = context; this.pace = pace; this.running = false; this.ticket = null; }
+
+    invalidate() { this.ticket = null; }
+
+    prepare(action, folders) {
+      this.invalidate();
+      const { actor, pageOwner } = this.context();
+      if (this.running || !folders.length || new Set(folders.map(f => f.id)).size !== folders.length) throw new Error('请选择有效且不重复的目标');
+      for (const folder of folders) {
+        const reason = eligibility(action, folder, actor, pageOwner);
+        if (reason) throw new Error(reason);
+      }
+      this.ticket = Object.freeze({ action, actor, pageOwner, targets: Object.freeze(folders.map(folder => Object.freeze({ ...folder }))) });
+      return this.ticket;
+    }
+
+    async execute(ticket, { confirmed = false, signal, onResult = () => {} } = {}) {
+      if (!confirmed || !ticket || ticket !== this.ticket || this.running) throw new Error('请重新预览并明确确认本次目标');
+      this.invalidate(); // Consume BEFORE any await or submission. Never persist/replay.
+      this.running = true;
+      const results = ticket.targets.map(target => ({ id: target.id, ownerId: target.ownerId, name: target.name, status: 'not_started', detail: '尚未提交' }));
+      try {
+        for (let index = 0; index < ticket.targets.length; index++) {
+          if (signal?.aborted) break;
+          const target = ticket.targets[index];
+          let result;
+          let submitted = false;
+          try {
+            if (index) await pause(this.pace, signal);
+            const current = this.context();
+            if (current.actor !== ticket.actor || current.pageOwner !== ticket.pageOwner) throw new Error('当前账号或空间变化，请重新预览');
+            const catalog = await this.client.folders(ticket.actor, 'created', signal, this.pace);
+            if (signal?.aborted) break;
+            const fresh = catalog.find(folder => folder.id === target.id);
+            if (!fresh || eligibility(ticket.action, fresh, current.actor, current.pageOwner) ||
+              ['id', 'ownerId', 'name', 'count', 'kind', 'protected', 'available'].some(key => fresh[key] !== target[key])) throw new Error('目标身份、名称、数量或保护状态变化，请重新加载并预览');
+            const latest = this.context();
+            if (latest.actor !== ticket.actor || latest.pageOwner !== ticket.pageOwner) throw new Error('账号或空间变化，未提交');
+            if (signal?.aborted) break;
+            submitted = true;
+            result = await this.client.mutate(ticket.action, target, signal);
+            if (!['confirmed', 'failed', 'unknown', 'not_started'].includes(result?.status)) result = { status: 'unknown', detail: '结果未识别，已停止；请检查平台' };
+          } catch (err) {
+            if (!submitted && signal?.aborted) break;
+            result = submitted ? { status: 'unknown', detail: '提交后未获得明确结果，请检查平台，勿直接重试' } : { status: 'failed', detail: `未提交：${err.message}` };
+          }
+          Object.assign(results[index], result); onResult({ ...results[index] }, index);
+          if (result.status !== 'confirmed') break;
+        }
+        return { action: ticket.action, cancelled: !!signal?.aborted, results, complete: results.every(result => result.status === 'confirmed') };
+      } finally { this.running = false; }
+    }
+  }
+
   /**
    * 收藏夹管理器
    * 负责批量复制收藏夹的核心逻辑
@@ -1297,6 +1379,7 @@
       this.crossPageFlow = new CrossPageFlowManager(this);
       this.operation = new OperationState();
       this.inventory = new InventoryService();
+      this.batchOperations = new BatchOperations(this.inventory.client, () => ({ actor: PageDetector.getLoginUserUID(), pageOwner: PageDetector.getCurrentPageUID() }));
     }
 
     /**
@@ -1962,6 +2045,82 @@
     return node;
   }
 
+  const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
+
+  class MutationPanel {
+    constructor(inventoryUI, engine) {
+      this.inventoryUI = inventoryUI; this.panel = inventoryUI.panel; this.engine = engine; this.rows = [];
+      this.root = element('section', 'bf-diagnostics bf-mutations');
+      this.root.append(element('h3', '', '删除自己创建的收藏夹'));
+      this.root.append(element('p', 'bf-muted', '与统计分开勾选。默认/特殊收藏夹不可选。删除会移除收藏夹及其中的收藏关系，请自行备份；这里不提供撤销。不会删除原作者上传的视频。'));
+      this.list = element('div', 'bf-selection');
+      this.previewButton = button('预览删除目标', () => this.preview());
+      this.review = element('section');
+      this.results = element('div'); this.results.setAttribute('role', 'status');
+      this.root.append(this.list, this.previewButton, this.review, this.results);
+      this.updateBusy();
+    }
+
+    invalidate() { this.engine.invalidate(); this.ticket = null; this.review.replaceChildren(); }
+
+    setCatalog(folders) {
+      this.invalidate(); this.rows = []; this.list.replaceChildren();
+      const { actor, pageOwner } = this.engine.context();
+      for (const folder of folders) {
+        const reason = eligibility('delete', folder, actor, pageOwner);
+        const input = element('input'); input.type = 'checkbox';
+        const label = element('label', 'bf-folder-row');
+        label.append(input, element('span', '', `${folder.name} · ID ${folder.id} · 所有者 ${folder.ownerId || '未知'} · ${folder.count ?? '未知'} 条${reason ? ` · 不可选：${reason}` : ''}`));
+        input.addEventListener('change', () => { this.invalidate(); this.updateBusy(); });
+        this.list.append(label); this.rows.push({ folder, input, reason });
+      }
+      this.updateBusy();
+    }
+
+    selected() { return this.rows.filter(row => row.input.checked && !row.reason).map(row => row.folder); }
+
+    updateBusy() {
+      const busy = this.panel.busy;
+      this.previewButton.disabled = busy || !this.selected().length;
+      for (const row of this.rows) row.input.disabled = busy || !!row.reason;
+      if (this.confirmButton) this.confirmButton.disabled = busy || !this.agreement?.checked || !this.ticket;
+      if (this.agreement) this.agreement.disabled = busy;
+    }
+
+    preview() {
+      if (this.panel.busy) return;
+      this.invalidate();
+      try {
+        this.ticket = this.engine.prepare('delete', this.selected());
+        this.review.append(element('h3', '', `将删除 ${this.ticket.targets.length} 个收藏夹`));
+        for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ID ${target.id} · 所有者 ${target.ownerId} · ${target.count ?? '未知'} 条`));
+        this.agreement = element('input'); this.agreement.type = 'checkbox';
+        const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。'));
+        this.agreement.addEventListener('change', () => this.updateBusy());
+        this.confirmButton = button('确认删除以上目标', () => this.execute());
+        this.review.append(label, this.confirmButton, button('放弃本次操作', () => this.invalidate()));
+        this.updateBusy(); this.agreement.focus();
+      } catch (err) { this.results.textContent = err.message; }
+    }
+
+    execute() {
+      if (this.panel.busy || !this.ticket || !this.agreement?.checked) return;
+      const ticket = this.ticket; this.ticket = null; this.review.replaceChildren();
+      return this.inventoryUI.run('删除收藏夹', async signal => {
+        const report = await this.engine.execute(ticket, { confirmed: true, signal, onResult: result => {
+          if (result.status === 'confirmed') this.panel.operation.confirm(`ID ${result.id}：平台已确认`);
+        } });
+        this.results.replaceChildren(element('p', '', report.complete ? '本次目标均已确认。请刷新平台列表核对。' : report.cancelled ? '已取消后续操作。请核对已提交项目。' : '已停止；请检查下列结果后再决定后续操作。'));
+        for (const result of report.results) this.results.append(element('p', '', `${result.name} · ID ${result.id} · ${statuses[result.status]}：${result.detail}`));
+        this.results.append(button('检查并导出操作结果', () => this.panel.reviewExport(JSON.stringify(report, null, 2), 'bili-operation.json')));
+        this.panel.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : 'failed', '本次确认已用完；再次操作须重新加载列表、选择并确认。未知结果请先在平台核对，勿直接重试。');
+        this.setCatalog([]); this.inventoryUI.folders = []; this.inventoryUI.rows = []; this.inventoryUI.list.replaceChildren();
+      });
+    }
+
+    destroy() { this.invalidate(); }
+  }
+
   class InventoryPanel {
     constructor(panel, service) {
       this.panel = panel; this.service = service; this.folders = []; this.rows = [];
@@ -1980,6 +2139,13 @@
       this.list = element('div', 'bf-selection');
       this.result = element('div'); this.result.setAttribute('role', 'status');
       this.root.append(tools, this.list, this.result);
+      if (panel.manager.batchOperations) {
+        this.mutations = new MutationPanel(this, panel.manager.batchOperations);
+        this.root.append(this.mutations.root);
+      }
+      this.kind.addEventListener('change', () => {
+        this.folders = []; this.rows = []; this.list.replaceChildren(); this.mutations?.setCatalog([]); this.updateBusy();
+      });
       this.updateBusy();
     }
 
@@ -1990,6 +2156,7 @@
       this.cancelButton.disabled = !busy || !this.controller || this.controller.signal.aborted;
       this.exportButton.disabled = busy || !this.report;
       for (const row of this.rows) row.input.disabled = busy || row.folder.kind === 'unsupported';
+      this.mutations?.updateBusy();
     }
 
     selected() { return this.rows.filter(row => row.input.checked).map(row => row.folder); }
@@ -2008,11 +2175,13 @@
     load() {
       return this.run('读取收藏夹列表', async signal => {
         this.folders = []; this.rows = []; this.list.replaceChildren(); this.report = null; this.result.textContent = '';
+        this.mutations?.setCatalog([]);
         const kind = this.kind.value;
         const owner = kind === 'created' ? PageDetector.getCurrentPageUID() : PageDetector.getLoginUserUID();
         const folders = await this.service.client.folders(owner, kind, signal);
         if (signal.aborted) return;
         this.folders = folders; this.catalogOwner = owner; this.catalogKind = kind;
+        this.mutations?.setCatalog(folders);
         for (const folder of folders) {
           const label = element('label', 'bf-folder-row');
           const input = element('input'); input.type = 'checkbox'; input.disabled = folder.kind === 'unsupported';
@@ -2039,7 +2208,7 @@
       });
     }
 
-    destroy() { this.controller?.abort(); }
+    destroy() { this.controller?.abort(); this.mutations?.destroy(); }
   }
 
   const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止 · 请检查', interrupted: '已中断 / 等待继续' };
