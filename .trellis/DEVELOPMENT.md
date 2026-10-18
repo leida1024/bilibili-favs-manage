@@ -15,9 +15,9 @@ Make Bilibili favorites management comfortable and reliable. Work on develop; ke
 | Stage 4: confirmed folder unsubscribe | 3924eaf | [Subscription archive](tasks/archive/2026-10/10-18-batch-unsubscribe/) |
 | Usability: adjacent copy pairs and separate task views | 6883422 | [Usability archive](tasks/archive/2026-10/10-18-panel-usability/) |
 
-All finite roadmap stages have implementation and recorded verification. Mutation acceptance is synthetic only; this is not a production-release or real-account mutation acceptance claim. Final usability checks passed 48/48 tests, build and whitespace. See each task verification.md for evidence and limits.
+All finite roadmap stages have implementation and recorded verification. Mutation acceptance is synthetic only; this is not a production-release or real-account mutation acceptance claim. Final usability checks passed 52/52 tests, build and whitespace. See each task verification.md for evidence and limits.
 
-The panel now defaults to copying, with adjacent source and destination cells and a fixed action footer. Statistics and management are separate views; diagnostics open from the header. Ordinary identity details are expandable, but destructive confirmation exposes exact IDs, owners and counts. Switching operation views invalidates confirmation; busy navigation is locked while records remain accessible.
+The panel now defaults to copying, with adjacent source and destination cells and a fixed action footer. Statistics and management are separate views; diagnostics open from the header. Help, identity and progress information display directly without content expand/collapse controls. Loaded rows align names, counts and identity; records align time, level and message with sticky tools. The compact window follows content height, with one main scroller. Destructive confirmation exposes exact IDs, owners and counts. Switching operation views invalidates confirmation; busy navigation is locked while records remain accessible.
 
 Read-only public smoke found nine folders and completed a selected six-video scan in Stage 2. Final local-injection smoke mounted one panel with nine source rows, default copy view, working minimize/restore and no pending cross-page state. No real copy, delete or unsubscribe was submitted. No push occurred.
 
@@ -48,3 +48,5 @@ Real mutations still require explicitly designated disposable folders/subscripti
 The current deliverable is local and awaiting user review. Archives contain design, implementation and sanitized verification; the journal references work commits. No remote publication is authorized. Do not change master, release metadata or Greasy Fork.
 
 A future explicit release request requires reviewed product-only cherry-picks onto master, release checks and separate push authorization. Never merge all of develop into master. The master baseline for this work is a5bf35de70204ac234147068c7058a3044dbc2f5.
+
+The latest density follow-up is recorded in [the panel-density archive](tasks/archive/2026-10/10-18-panel-density/). It supersedes the earlier expandable-help design. Final tests:52/52; real startup:one panel,nine source rows,zero disclosures,680px width,no horizontal overflow,minimize/restore passed.

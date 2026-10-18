@@ -17,7 +17,7 @@ Read the [development handbook](DEVELOPMENT.md), [workflow](workflow.md), [front
 | 4 | [Unsubscribe](tasks/archive/2026-10/10-18-batch-unsubscribe/) | Folder subscriptions with identity safeguards, synthetic acceptance |
 | Follow-up | [Panel usability](tasks/archive/2026-10/10-18-panel-usability/) | Adjacent copy pairs, separate task views and one task scroller |
 
-The local build passed 48 tests and build. These changes are not released. No real-account mutations or remote pushes were performed. The latest user instruction prohibits pushing until user review. Remaining live/GM/navigation limits are in the handbook and task verification files.
+The local build passed 52 tests and build. These changes are not released. No real-account mutations or remote pushes were performed. The latest user instruction prohibits pushing until user review. Remaining live/GM/navigation limits are in the handbook and task verification files.
 
 ## Records
 
@@ -27,3 +27,5 @@ The local build passed 48 tests and build. These changes are not released. No re
 - scripts/: Trellis runtime, dedicated browser helper and no-cache fictional preview server.
 
 Trellis uses the local 0.6.0-rc.0 setup. Runtime pointers and browser profiles are ignored or outside Git. Do not change global agent settings automatically.
+
+Latest follow-up: [compact direct-information UI](tasks/archive/2026-10/10-18-panel-density/) removes content disclosures and updates all task views.

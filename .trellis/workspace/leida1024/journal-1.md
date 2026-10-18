@@ -202,3 +202,36 @@ Adjacent copy pairs, task navigation, single scrolling body and reviewed export 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: Compact direct-information panel acceptance
+
+**Date**: 2026-10-18
+**Task**: Compact direct-information panel acceptance
+**Branch**: `develop`
+
+### Summary
+
+52 tests/build passed. Removed content disclosures, compacted loaded rows and records, preserved reading position and fixed scope/reset/preview states. Synthetic desktop/narrow and final startup injection passed. No mutations or push.
+
+### Main Changes
+
+Direct information display, compact inventory/log rows and scope/preview state repairs; see panel-density archive.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `847ddb2` | (see git log) |
+
+### Testing
+
+- [OK] 52 tests, build, desktop/narrow synthetic previews and final startup-only injection passed.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
