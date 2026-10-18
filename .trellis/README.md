@@ -17,7 +17,7 @@ Read the [development handbook](DEVELOPMENT.md), [workflow](workflow.md), [front
 | 4 | [Unsubscribe](tasks/archive/2026-10/10-18-batch-unsubscribe/) | Folder subscriptions with identity safeguards, synthetic acceptance |
 | Follow-up | [Panel usability](tasks/archive/2026-10/10-18-panel-usability/) | Adjacent copy pairs, separate task views and one task scroller |
 
-The latest local build 2.2.1 passed 67 tests and build. These changes are not released. No real-account mutations or remote pushes were performed. The latest user instruction prohibits pushing until user review. Remaining live/GM/navigation limits are in the handbook and task verification files.
+The latest local build 2.2.2 passed82 tests and build. These changes are not released. No real-account mutations or remote pushes were performed. The latest user instruction prohibits pushing until user review. Remaining live/GM/navigation limits are in the handbook and task verification files.
 
 ## Records
 
@@ -29,3 +29,5 @@ The latest local build 2.2.1 passed 67 tests and build. These changes are not re
 Trellis uses the local 0.6.0-rc.0 setup. Runtime pointers and browser profiles are ignored or outside Git. Do not change global agent settings automatically.
 
 Previous follow-up: [compact workspace](tasks/archive/2026-10/10-18-compact-workbench/), product commit `4fc2007`, established side logs and shared selection. Current design: [scenario workspace](tasks/archive/2026-10/10-19-scenario-workspace/), product commit `1861bbf`:600×500, about326px left workspace, direct scope buttons and function-owned status/records. Cross-page copy carries task ID and diagnostic snapshot; uncertain submissions are 待核对. Boolean playlist flags normalize correctly:own-space read-only28 folders→27 eligible/1 protected; foreign-space deletion stays disabled. 67 tests/build,75 fictional browser scenarios and visual checks passed. Numeric version2.2.1 is local only; published Greasy Fork remains2.1.2. No real writes or push. GM sandbox and automatic full navigation remain unverified.
+
+Latest local follow-up: refresh continuity and independent transports2.2.2, with fourth Settings panel, persistent logs/geometry, collapse preserving task size and resize recovery. Read-only230 subscription name-multiset parity and66-video reader parity; unavailable seasons permit API unsubscribe with stable membership/ID. See owning archived refresh-native-unsubscribe task for exact evidence and limitations. No real writes, remote push or publication.

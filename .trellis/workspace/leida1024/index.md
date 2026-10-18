@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
+- **Total Sessions**: 11
 - **Last Active**: 2026-10-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~336 | Active |
+| `journal-1.md` | ~369 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-10-19 | 2.2.2 continuity, transports and unavailable subscriptions | `944884f` | `develop` |
 | 10 | 2026-10-19 | Scenario workspace and cross-page diagnostics | `1861bbf` | `develop` |
 | 9 | 2026-10-18 | Compact workspace and consistent selection | `4fc2007` | `develop` |
 | 8 | 2026-10-18 | Rethink panel workflow and prioritize dynamic content | `7717c06` | `develop` |

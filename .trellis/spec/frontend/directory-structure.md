@@ -12,3 +12,6 @@
 - `dist/`: tracked Rollup output, generated rather than manually maintained.
 
 Classes use PascalCase filenames; shared helpers use camelCase. Keep the current ES-module layout. Search existing consumers before introducing new utilities or dependencies. Development planning belongs in `.trellis/tasks/`, not new root-level planning documents.
+
+- FolderClient owns HTTP only; WebFolderClient/nativeControls own DOM discovery and operations; neither falls back to the other. TransportClient captures reader/writer choices. ApiCopyFlow owns HTTP copy orchestration independently of the legacy DOM flow.
+- PanelLayout owns geometry/collapse persistence. utils/preferences.js validates inert UI preferences; LogStore owns bounded account/tab diagnostics. Never store executable tickets in these stores.

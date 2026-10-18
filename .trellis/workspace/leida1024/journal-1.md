@@ -334,3 +334,36 @@ Documented autonomous scenario decisions and implemented numeric version 2.2.1; 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: 2.2.2 continuity, transports and unavailable subscriptions
+
+**Date**: 2026-10-19
+**Task**: 2.2.2 continuity, transports and unavailable subscriptions
+**Branch**: `develop`
+
+### Summary
+
+Completed refresh-native-unsubscribe: persistent tab/account logs and geometry, fourth Settings panel, independent DOM/API paths, resize recovery and minimize tooltips, exact-ID unavailable-season API unsubscribe. Build and82 tests passed;75 fictional browser scenarios, collapse/refresh/mouse checks, read-only230-name catalog and66-video parity. Added bounded GitHub/Greasy Fork research. No real writes, push or release; product commit944884f.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `944884f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
