@@ -235,3 +235,36 @@ Direct information display, compact inventory/log rows and scope/preview state r
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Rethink panel workflow and prioritize dynamic content
+
+**Date**: 2026-10-18
+**Task**: Rethink panel workflow and prioritize dynamic content
+**Branch**: `develop`
+
+### Summary
+
+Records now stay beside the task; unified typography, compact help/status after screenshot feedback, independent selection/scroll and stale report fixes. Verified 57 tests/build, 81 fictional browser cases, contrast/reduced-motion/keyboard and read-only live startup. No real mutations or pushes; evidence in panel-design-rethink archive.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7717c06` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
