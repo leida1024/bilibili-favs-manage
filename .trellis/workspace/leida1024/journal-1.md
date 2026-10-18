@@ -57,7 +57,40 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 
 | Hash | Message |
 |------|---------|
-| `HEAD` | (see git log) |
+| `5fb6a82` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 3: Read-only inventory and statistics
+
+**Date**: 2026-10-18
+**Task**: Read-only inventory and statistics
+**Branch**: `develop`
+
+### Summary
+
+29 tests/build passed. Public read-only sample: 9 folders, selected scan 6 unique complete. API limits and injection limits recorded; no mutations/push.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `28a4c30` | (see git log) |
 
 ### Testing
 

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 2
+- **Total Sessions**: 3
 - **Last Active**: 2026-10-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~72 | Active |
+| `journal-1.md` | ~105 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,7 +29,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
-| 2 | 2026-10-18 | Panel and diagnostic acceptance | HEAD | `develop` |
+| 3 | 2026-10-18 | Read-only inventory and statistics | `28a4c30` | `develop` |
+| 2 | 2026-10-18 | Panel and diagnostic acceptance | 5fb6a82 | `develop` |
 | 1 | 2026-10-18 | Bootstrap browser acceptance | `409bb91` | `develop` |
 <!-- @@@/auto:session-history -->
 

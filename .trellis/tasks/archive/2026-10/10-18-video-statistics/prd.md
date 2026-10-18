@@ -24,4 +24,4 @@ After UI/logs, investigate stable folder/video IDs, legacy/VUI pagination, dupli
 
 ## Scope and authorization
 
-Planning entry only; data availability and MVP fields must be resolved in design.md and implement.md before activation. Account-wide background crawling and cloud analytics are out of scope. No Greasy Fork publication.
+Authorized Stage 2 implementation; design.md resolves discovery and the MVP. Local commits only, no push. Account-wide background crawling and cloud analytics are out of scope. No Greasy Fork publication.
