@@ -12,6 +12,7 @@ import { CONFIG } from '../config/config.js';
 import { normalizeFavoriteName, normalizeCopyTasks } from '../utils/favoriteNames.js';
 import { OperationState } from './OperationState.js';
 import { InventoryService } from './InventoryService.js';
+import { BatchOperations } from './BatchOperations.js';
 
 export class FavoriteManager {
   constructor() {
@@ -19,6 +20,7 @@ export class FavoriteManager {
     this.crossPageFlow = new CrossPageFlowManager(this);
     this.operation = new OperationState();
     this.inventory = new InventoryService();
+    this.batchOperations = new BatchOperations(this.inventory.client, () => ({ actor: PageDetector.getLoginUserUID(), pageOwner: PageDetector.getCurrentPageUID() }));
   }
 
   /**
