@@ -13,14 +13,14 @@ QQ群：[524764959（扫码加入）](#交流群) · 邮箱：[ljx.1024@outlook.
 ## 安装
 
 1. 安装并启用 [Tampermonkey（篡改猴）](https://www.tampermonkey.net/)。
-2. 从 [Greasy Fork 安装脚本](https://greasyfork.org/zh-CN/scripts/487232-bilibili-%E6%94%B6%E8%97%8F%E5%A4%B9%E6%89%B9%E9%87%8F%E5%A4%8D%E5%88%B6)，确认脚本已启用。
+2. 从 [Greasy Fork 安装脚本](https://greasyfork.org/zh-CN/scripts/487232)，确认脚本已启用。
 3. 登录 B 站，打开要复制的用户空间，进入「收藏」。
 
 **2.1.2 已发布到 Greasy Fork**。旧用户可在 Tampermonkey 中检查更新，或通过上方安装链接更新，然后刷新收藏页。请关闭重复安装的旧脚本。
 
 ## 使用
 
-1. 在浮动面板左侧勾选「源收藏夹」。
+1. 在浮动面板左侧勾选一个或多个「源收藏夹」。
 2. 在右侧填写对应的「目标收藏夹」名称，默认与源收藏夹同名。
 3. 点击「开始批量复制」，在面板的「输出信息」中查看进度。
 4. 复制他人的收藏夹时，脚本会先前往自己的收藏页，准备目标收藏夹，再返回源页面复制。等待自动跳转和分页完成。
@@ -29,21 +29,23 @@ QQ群：[524764959（扫码加入）](#交流群) · 邮箱：[ljx.1024@outlook.
 
 面板可以拖动、缩放和最小化；点击「点我销毁」后，可从 Tampermonkey 的脚本菜单选择「显示收藏夹管理面板」重新打开。
 
-遇到不显示面板、复制失败等问题，请看 [常见问题](docs/troubleshooting.md)。
+遇到不显示面板、复制失败等问题，请看 [常见问题](https://github.com/leida1024/bilibili-favs-manage/blob/master/docs/troubleshooting.md)。
 
 ## 开发与文档
 
 | 你想做什么 | 从这里开始 |
 | --- | --- |
-| 排查面板不显示、复制失败 | [常见问题](docs/troubleshooting.md) |
-| 本地开发、构建脚本、运行测试 | [贡献与开发指南](CONTRIBUTING.md) |
-| 发布脚本、配置 GitHub 自动同步 | [开发指南：发布与自动同步](CONTRIBUTING.md#发布与自动同步) |
-| 了解启动检测、跨页面创建和复制流程 | [架构与流程](docs/architecture.md) |
-| 适配 B 站页面改版 | [开发指南：目录与适配器](CONTRIBUTING.md#目录) |
-| 更新模拟截图 | [开发指南：界面预览](CONTRIBUTING.md#界面预览) |
-| 查看版本变化 | [更新日志](CHANGELOG.md) |
+| 排查面板不显示、复制失败 | [常见问题](https://github.com/leida1024/bilibili-favs-manage/blob/master/docs/troubleshooting.md) |
+| 本地开发、构建脚本、运行测试 | [贡献与开发指南](https://github.com/leida1024/bilibili-favs-manage/blob/master/CONTRIBUTING.md) |
+| 发布脚本、配置 GitHub 自动同步 | [开发指南：发布与自动同步](https://github.com/leida1024/bilibili-favs-manage/blob/master/CONTRIBUTING.md#发布与自动同步) |
+| 了解启动检测、跨页面创建和复制流程 | [架构与流程](https://github.com/leida1024/bilibili-favs-manage/blob/master/docs/architecture.md) |
+| 适配 B 站页面改版 | [开发指南：目录与适配器](https://github.com/leida1024/bilibili-favs-manage/blob/master/CONTRIBUTING.md#目录) |
+| 更新模拟截图 | [开发指南：界面预览](https://github.com/leida1024/bilibili-favs-manage/blob/master/CONTRIBUTING.md#界面预览) |
+| 查看版本变化 | [更新日志](https://github.com/leida1024/bilibili-favs-manage/blob/master/CHANGELOG.md) |
 
-开发从 `src/` 开始，构建后的可安装脚本在 `dist/`。本项目使用 [MIT License](LICENSE)。
+开发从 `src/` 开始，构建后的可安装脚本在 `dist/`。本项目使用 [MIT License](https://github.com/leida1024/bilibili-favs-manage/blob/master/LICENSE)。
+
+<a name="交流群"></a>
 
 ## 交流群
 

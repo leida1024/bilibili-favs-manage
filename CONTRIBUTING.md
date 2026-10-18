@@ -26,13 +26,23 @@ https://raw.githubusercontent.com/leida1024/bilibili-favs-manage/master/dist/Bil
 
 首次配置时，在 Greasy Fork 脚本的「管理」中设置上述代码同步地址，再按照账号中的「设置 Webhook」说明配置 GitHub 仓库的 **Settings → Webhooks**：Payload URL 和 Secret 使用 Greasy Fork 提供的值，Content type 选 `application/json`，监听 `push`，保持 Active。Secret 不要提交进仓库。
 
+同一页面的「默认附加信息」同步地址设为以下 README Raw 地址，格式选择 **Markdown**，代码同步方式保持 **Webhook**，然后点击「更新设置并立即同步」：
+
+```text
+https://raw.githubusercontent.com/leida1024/bilibili-favs-manage/master/README.md
+```
+
+README 是 GitHub 与 Greasy Fork 介绍的共同来源，安装、使用、联系方式及开发导航只需在这里维护。介绍内引用 `docs/assets/panel-preview.png` 模拟截图；在 Greasy Fork 的编辑页面移除旧截图附件，避免同时展示过时界面。二维码放在介绍末尾，保持缩略尺寸并链接完整大图。
+
 后续发布：
 
 1. 更新版本号和更新日志，执行 `npm test` 与 `npm run build`。
 2. 将源码及 `dist/BilibiliFavsManage.user.js` 一起提交并推送到 `master`。
 3. 检查 GitHub Webhook 的 Recent Deliveries，以及 Greasy Fork 的同步状态和脚本版本。
 
-Webhook 仅在推送包含脚本文件变更时同步代码；只修改文档无需增加脚本版本号。用户端仍按脚本管理器的更新检查周期获取新版。GitHub 用户名或仓库名改变后，也要更新 Git 远程地址和 Greasy Fork 的同步地址。
+Webhook 根据推送中变更的文件分别更新内容：`dist/BilibiliFavsManage.user.js` 变更时同步脚本，`README.md` 变更时同步介绍。只修改文档无需增加脚本版本号；仅更新同名图片时，页面仍引用同一地址，图片缓存可能延迟刷新。用户端仍按脚本管理器的更新检查周期获取新版。GitHub 用户名或仓库名改变后，也要更新 Git 远程地址、README 中的文档链接，以及 Greasy Fork 的代码和附加信息同步地址。
+
+README 中的文档链接使用 GitHub 的完整 `blob/master/` 地址，避免 Greasy Fork 将它们解析为 Raw 文本；图片保留相对路径，由 Greasy Fork 根据同步地址解析。更改介绍后，除检查 Webhook 返回状态外，还应打开公开页面核对文案、图片加载、二维码尺寸和开发文档链接。
 
 ## 目录
 
