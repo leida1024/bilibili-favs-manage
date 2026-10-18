@@ -106,6 +106,7 @@ test('product requires distinct mutation selection, preview and agreement; refre
   assert.equal(ui.confirmButton.disabled, true); await ui.execute(); assert.deepEqual(f.calls, []);
   ui.agreement.checked = true; ui.updateBusy(); await ui.execute();
   assert.deepEqual(f.calls, ['100']); assert.equal(panel.busy, false); assert.match(ui.results.textContent, /已确认/);
+  assert.equal(panel.inventoryPanel.operation.state.total, 1, 'selected target count is known before submission');
   assert.equal(f.engine.ticket, null); assert.equal(ui.rows.length, 0);
   const freshPanel = new FloatingPanel({ inventory, batchOperations: new BatchOperations(f.client, () => ({ actor: '50', pageOwner: '50' }), 0), getAllFavoriteNames: () => [] });
   freshPanel.init(); assert.equal(freshPanel.inventoryPanel.mutations.selected().length, 0); freshPanel.destroy();

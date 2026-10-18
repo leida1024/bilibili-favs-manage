@@ -6,7 +6,7 @@ import { SelectionToolbar } from './SelectionToolbar.js';
 const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
 const descriptions = {
   delete: { verb: '删除', title: '删除自己创建的收藏夹',
-    detail: '删除收藏夹及收藏关系，无法撤销；原视频保留。',
+    detail: '删除整个收藏夹，无法撤销；原视频保留。',
     agreement: '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。' },
   unsubscribe: { verb: '退订', title: '取消我的收藏夹订阅',
     detail: '取消我的订阅，原作者内容不受影响。',
@@ -94,14 +94,15 @@ export class MutationPanel {
     const ticket = this.ticket; this.ticket = null; this.review.replaceChildren();
     return this.inventoryUI.run(`${descriptions[ticket.action].verb}收藏夹`, async signal => {
       const report = await this.engine.execute(ticket, { confirmed: true, signal, onResult: result => {
-        if (result.status === 'confirmed') this.panel.operation.confirm(`ID ${result.id}：平台已确认`);
+        if (result.status === 'confirmed') this.inventoryUI.operation.confirm(`ID ${result.id}：平台已确认`);
       } });
       this.inventoryUI.resetCatalog('本次操作后列表需要更新，请重新加载。');
       this.results.replaceChildren(element('p', '', report.complete ? '本次目标均已确认。请刷新平台列表核对。' : report.cancelled ? '已取消后续操作。请核对已提交项目。' : '已停止；请检查下列结果后再决定后续操作。'));
       for (const result of report.results) this.results.append(element('p', '', `${result.name} · ID ${result.id} · ${statuses[result.status]}：${result.detail}`));
       this.results.append(button('检查并导出操作结果', () => this.panel.reviewExport(JSON.stringify(report, null, 2), 'bili-operation.json')));
-      this.panel.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : 'failed', '本次确认已用完；再次操作须重新加载列表、选择并确认。未知结果请先在平台核对，勿直接重试。');
-    });
+      this.inventoryUI.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : report.results.some(result => result.status === 'unknown') ? 'unknown' : 'failed',
+        report.complete ? '已完成；再次操作请重新加载、选择并确认。' : '本次确认已用完。请核对结果，再重新加载和确认。');
+    }, ticket.action, ticket.targets.length);
   }
 
   destroy() { this.invalidate(); }

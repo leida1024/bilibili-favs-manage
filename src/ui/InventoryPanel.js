@@ -9,19 +9,21 @@ export class InventoryPanel {
     this.panel = panel; this.service = service; this.folders = []; this.rows = [];
     this.mode = 'statistics';
     this.root = element('section', 'bf-inventory');
-    this.intro = element('p', 'bf-help', '只读统计所选范围，缺失信息记为未知。');
-    this.root.append(this.intro);
-    this.kind = element('select'); this.kind.setAttribute('aria-label', '加载范围');
+    this.kind = element('div', 'bf-scope-switch'); this.kind.setAttribute('role', 'group'); this.kind.setAttribute('aria-label', '列表范围');
+    this.kind.value = 'created'; this.scopeButtons = new Map();
     for (const [value, label] of [['created', '当前空间创建'], ['subscribed', '我的订阅']]) {
-      const option = element('option', '', label); option.value = value; this.kind.append(option);
+      const control = button(label, () => {
+        if (panel.busy || this.kind.value === value) return;
+        this.kind.value = value; this.kind.dispatchEvent(new window.Event('change'));
+      });
+      this.scopeButtons.set(value, control); this.kind.append(control);
     }
     this.loadButton = button('加载列表', () => this.load());
     this.scanButton = button('统计选中收藏夹', () => this.scan());
     this.cancelButton = button('停止后续操作', () => { this.controller?.abort(); this.updateBusy(); });
     this.exportButton = button('检查并导出统计', () => { if (this.report) panel.reviewExport(JSON.stringify(this.report, null, 2), 'bili-inventory.json'); });
     const tools = element('div', 'bf-tools bf-catalog-tools');
-    const scopeLabel = element('label', 'bf-scope-label', '列表范围');
-    scopeLabel.append(this.kind); tools.append(scopeLabel, this.loadButton);
+    tools.append(this.kind, this.loadButton);
     this.selectionTools = new SelectionToolbar({
       rows: () => this.rows.map(row => ({ ...row, name: row.folder.name, eligible: row.folder.kind !== 'unsupported' })),
       busy: () => panel.busy, change: () => this.updateBusy()
@@ -31,7 +33,7 @@ export class InventoryPanel {
     this.actions.append(this.exportButton, this.scanButton, this.cancelButton);
     this.scanButton.classList.add('bf-primary');
     this.list = element('div', 'bf-folder-list');
-    this.list.append(element('p', 'bf-empty', '点击“加载列表”，读取当前选择的范围。不会自动扫描。'));
+    this.list.append(element('p', 'bf-empty', '加载列表后，选择需要统计的收藏夹。'));
     this.result = element('div', 'bf-inventory-result'); this.result.setAttribute('role', 'status');
     this.root.append(tools, this.selectionTools.root, this.list, this.result);
     if (panel.manager.batchOperations) {
@@ -41,13 +43,20 @@ export class InventoryPanel {
     }
     this.kind.addEventListener('change', () => {
       this.resetCatalog('范围已更换，请重新加载列表。'); this.updateBusy();
-      this.panel.operation.update({ status: 'idle', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '' });
+      this.operation.update({ status: 'idle', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '' });
     });
     this.mutations?.setCatalog([], this.kind.value);
     this.updateBusy();
   }
 
+  get operation() { return this.panel.operations[this.mode]; }
+
   resetCatalog(message) {
+    for (const view of ['statistics', 'manage']) {
+      const operation = this.panel.operations[view];
+      if (operation.state.status !== 'running')
+        operation.update({ status: 'idle', action: '', detail: '', confirmed: 0, total: null, lastConfirmed: '' });
+    }
     this.panel.viewScroll.delete('statistics'); this.panel.viewScroll.delete('manage');
     if (this.panel.activeView !== 'copy') this.panel.content.scrollTop = 0;
     this.folders = []; this.rows = []; this.report = null; this.result.replaceChildren();
@@ -62,7 +71,6 @@ export class InventoryPanel {
     }
     this.mode = mode;
     const manage = mode === 'manage';
-    this.intro.hidden = manage;
     this.selectionTools.root.hidden = manage;
     this.list.hidden = manage; this.result.hidden = manage;
     if (this.mutations) this.mutations.root.hidden = !manage;
@@ -72,6 +80,10 @@ export class InventoryPanel {
   updateBusy() {
     const busy = this.panel.busy;
     this.kind.disabled = busy; this.loadButton.disabled = busy;
+    for (const [kind, control] of this.scopeButtons) {
+      control.disabled = busy; control.setAttribute('aria-pressed', String(this.kind.value === kind));
+      control.textContent = this.mode === 'manage' ? kind === 'created' ? '删除收藏夹' : '取消订阅' : kind === 'created' ? '当前空间' : '我的订阅';
+    }
     this.loadButton.textContent = busy ? '操作中…' : this.folders.length ? '重新加载' : '加载列表';
     this.scanButton.disabled = busy || !this.selected().length;
     this.cancelButton.disabled = !busy || !this.controller || this.controller.signal.aborted;
@@ -88,16 +100,15 @@ export class InventoryPanel {
 
   selected() { return this.rows.filter(row => row.input.checked).map(row => row.folder); }
 
-  async run(action, work) {
+  async run(action, work, phase = '', total = null) {
     if (this.panel.busy) return;
     this.controller = new AbortController();
-    this.panel.setBusy(true); this.panel.operation.begin(action);
+    this.panel.setBusy(true); this.operation.begin(action, total, { phase });
     try { await work(this.controller.signal); }
     catch (err) {
-      this.panel.operation.finish(this.controller.signal.aborted ? 'interrupted' : 'failed', this.controller.signal.aborted ? '已取消，请重新选择后开始。' : err.message);
-      (this.mode === 'manage' && this.mutations ? this.mutations.results : this.result).textContent = this.panel.operation.state.detail;
+      this.operation.finish(this.controller.signal.aborted ? 'interrupted' : 'failed', this.controller.signal.aborted ? '已取消，可以重新加载或选择。' : err.message);
     } finally {
-      if (this.controller.signal.aborted && this.panel.operation.state.status === 'running') this.panel.operation.finish('interrupted', '已取消，未继续后续请求。');
+      if (this.controller.signal.aborted && this.operation.state.status === 'running') this.operation.finish('interrupted', '已取消，未继续后续请求。');
       this.controller = null; this.panel.setBusy(false);
     }
   }
@@ -127,22 +138,23 @@ export class InventoryPanel {
         this.list.append(node); this.rows.push({ input, folder, node });
       }
       if (!folders.length) this.list.append(element('p', 'bf-empty', '这个范围没有可读取的收藏夹。可以更换范围后重新加载。'));
-      this.panel.operation.finish('completed', `列表读取完成：${folders.length} 项；尚未选择或扫描。`);
-    });
+      this.operation.finish('completed', `已读取 ${folders.length} 个收藏夹。`);
+      this.operation.update({ status: 'idle' });
+    }, 'loading');
   }
 
   scan() {
     const folders = this.selected();
     return this.run('只读统计', async signal => {
       this.report = null; this.result.replaceChildren();
-      const report = await this.service.scan(folders, { signal, onPage: ({ page, loaded }) => this.panel.operation.confirm(`第 ${page} 页，当前夹已读取 ${loaded} 条`) });
+      const report = await this.service.scan(folders, { signal, onPage: ({ page, loaded }) => this.operation.confirm(`第 ${page} 页，当前夹已读取 ${loaded} 条`) });
       this.report = report;
       this.result.replaceChildren(element('p', '', `${report.complete ? '完整扫描' : report.cancelled ? '已取消 · 部分结果' : '扫描不完整'}：覆盖 ${report.folders.length}/${report.scope.length} 个收藏夹，读取 ${report.entries} 条。`),
         element('p', '', `唯一视频 ${report.uniqueVideos} · 重复出现 ${report.duplicateOccurrences} · 无法识别 ${report.unknownIdentity} · 失效标记 ${report.unavailable}`),
         element('p', '', `已知时长合计 ${report.knownDurationSeconds} 秒（唯一视频；${report.unknownDurations} 个时长未知）· ${report.unknownUploaders} 个作者未知`));
       for (const f of report.folders) this.result.append(element('p', 'bf-muted', `ID ${f.id}：${f.pages} 页 / ${f.loaded} 条 / 预期 ${f.expected ?? '未知'}${f.issue ? ` · ${f.issue}` : ''}`));
-      this.panel.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : 'failed', report.complete ? '已读取所选范围；这是读取时的快照，不代表账号全部收藏。' : '仅保留已读取数据；未完成范围不可当作总数。');
-    });
+      this.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : 'failed', report.complete ? '所选范围统计完成，缺失信息记为未知。' : '仅保留已读取数据；未完成范围不可当作总数。');
+    }, 'scanning');
   }
 
   destroy() { this.controller?.abort(); this.mutations?.destroy(); }

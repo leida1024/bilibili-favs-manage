@@ -25,9 +25,11 @@ test('log retention, level filtering, truncation and export omit credentials/URL
   const exported = store.export();
   assert.equal(store.dropped, 1); assert.equal(store.entries.length, 3);
   assert.equal(store.filter('error').length, 1);
+  assert.equal(store.filter('normal').some(entry => entry.level === 'debug'), false);
   assert.equal(store.entries[1].message.length, 2000);
-  assert.doesNotMatch(exported, /abc|def|ghi|https:/);
-  assert.deepEqual(Object.keys(JSON.parse(exported).entries[0]), ['time', 'level', 'message']);
+  assert.doesNotMatch(JSON.stringify(JSON.parse(exported).entries.map(entry => entry.message)), /abc|def|ghi|https:/);
+  assert.equal(JSON.parse(exported).schemaVersion, 2);
+  assert.deepEqual(Object.keys(JSON.parse(exported).entries[0]), ['id', 'time', 'level', 'view', 'operationId', 'phase', 'message']);
   store.clear(); assert.equal(store.entries.length, 0);
 });
 

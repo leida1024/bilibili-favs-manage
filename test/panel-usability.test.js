@@ -153,7 +153,7 @@ test('records preserve reading position across navigation and hidden arrivals; f
   panel.toggleLogs(); assert.equal(panel.outputTextBox.scrollTop, 80);
   assert.match(panel.outputTextBox.textContent, /Hidden fictional arrival/);
   panel.logFilter.value = 'error'; panel.logFilter.dispatchEvent(new window.Event('change'));
-  assert.match(panel.outputTextBox.textContent, /此级别没有记录/);
+  assert.match(panel.outputTextBox.textContent, /此级别没有当前范围的记录/);
   panel.logs.clear(); panel.renderLogs(); assert.match(panel.outputTextBox.textContent, /暂无记录/);
 });
 
@@ -171,7 +171,8 @@ test('scope reset clears stale statistics and tickets; preview action returns on
   assert.equal(ui.exportButton.disabled, true); assert.equal(ui.selected().length, 0);
   assert.deepEqual(counts(), { reads: 1, mutations: 0 });
   await ui.run('Fictional failure', async () => { throw new Error('Visible management failure'); });
-  assert.match(m.results.textContent, /Visible management failure/);
+  assert.match(panel.progressMessage.textContent, /Visible management failure/);
+  assert.equal(m.results.textContent, '', 'failure is shown once in the current task status');
   assert.equal(panel.busy, false);
 });
 
@@ -199,7 +200,7 @@ test('failed or cancelled catalog load leaves recovery guidance instead of a per
   ui.service.client.folders = async () => { throw new Error('Fictional connection error'); };
   await ui.load();
   assert.doesNotMatch(ui.list.textContent, /正在读取/); assert.match(ui.list.textContent, /重新加载/);
-  assert.match(ui.result.textContent, /Fictional connection error/); assert.equal(panel.busy, false);
+  assert.match(panel.progressMessage.textContent, /Fictional connection error/); assert.equal(panel.busy, false);
   ui.service.client.folders = async () => { ui.controller.abort(); return []; };
   await ui.load();
   assert.match(ui.list.textContent, /已停止读取/); assert.equal(panel.operation.state.status, 'interrupted');

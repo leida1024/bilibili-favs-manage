@@ -13,12 +13,14 @@ import { normalizeFavoriteName, normalizeCopyTasks } from '../utils/favoriteName
 import { OperationState } from './OperationState.js';
 import { InventoryService } from './InventoryService.js';
 import { BatchOperations } from './BatchOperations.js';
+import { LogStore } from '../utils/logStore.js';
 
 export class FavoriteManager {
   constructor() {
     this.api = BilibiliAPI;
     this.crossPageFlow = new CrossPageFlowManager(this);
     this.operation = new OperationState();
+    this.logs = new LogStore();
     this.inventory = new InventoryService();
     this.batchOperations = new BatchOperations(this.inventory.client, () => ({ actor: PageDetector.getLoginUserUID(), pageOwner: PageDetector.getCurrentPageUID() }));
   }
@@ -61,6 +63,7 @@ export class FavoriteManager {
     targetFavName = normalizeFavoriteName(targetFavName);
     if (!sourceFavName || !targetFavName) return false;
     log(`开始复制收藏夹 [${sourceFavName}] 到 [${targetFavName}]`);
+    this.copyStep = '打开来源收藏夹';
 
     // 1. 点击源收藏夹
     const clickSuccess = await this.api.clickFavorite(sourceFavName);
@@ -72,7 +75,8 @@ export class FavoriteManager {
 
     // 2. 获取当前收藏夹信息
     const currentName = this.api.getCurrentFavoriteName();
-    if (!currentName) {
+    if (normalizeFavoriteName(currentName || '') !== sourceFavName) {
+      error('来源收藏夹未切换到预期名称，未提交复制');
       return false;
     }
 
@@ -80,6 +84,7 @@ export class FavoriteManager {
     log(`收藏夹 [${currentName}] 共 ${totalPages} 页`);
 
     // 3. 进入批量操作模式
+    this.copyStep = '进入批量模式';
     const batchSuccess = await this.api.ensureBatchModeActive();
     if (!batchSuccess) {
       error('无法进入批量操作模式');
@@ -89,16 +94,17 @@ export class FavoriteManager {
     // 4. 逐页复制
     for (let page = 1; page <= totalPages; page++) {
       log(`正在处理第 ${page}/${totalPages} 页`);
-      this.operation.update({ detail: `正在复制第 ${page} 页；页数来自当前页面，${totalPages === 1 ? '未检测到更多分页' : `检测到 ${totalPages} 页`}。` });
+      this.copyPage = page;
+      this.operation.update({ detail: `正在复制第 ${page} / ${totalPages} 页。` });
 
       const pageSuccess = await this.copyOnePage(targetFavName);
       if (!pageSuccess) {
-        error(`第 ${page} 页复制失败`);
         return false;
       }
 
       // 如果不是最后一页，点击下一页
       if (page < totalPages) {
+        this.copyStep = '前往下一页';
         const nextSuccess = await this.api.clickNextPage();
         if (!nextSuccess) {
           warn(`无法跳转到第 ${page + 1} 页`);
@@ -119,6 +125,7 @@ export class FavoriteManager {
   async copyOnePage(targetFavName) {
     targetFavName = normalizeFavoriteName(targetFavName);
     if (!targetFavName) return false;
+    this.copyStep = '进入批量模式';
     // 0. 确保批量模式激活
     const batchActive = await this.api.ensureBatchModeActive();
     if (!batchActive) {
@@ -127,12 +134,14 @@ export class FavoriteManager {
     }
 
     // 1. 全选
+    this.copyStep = '选择当前页视频';
     if (!this.api.clickSelectAll()) {
       return false;
     }
     await delay(CONFIG.DELAY.SHORT);
 
     // 2. 点击复制按钮
+    this.copyStep = '打开复制对话框';
     if (!await this.api.clickCopyButton()) {
       return false;
     }
@@ -162,10 +171,11 @@ export class FavoriteManager {
 
       // 在自己页面，直接创建
       log(`目标收藏夹 [${targetFavName}] 不存在，尝试创建`);
+      this.copyStep = '准备目标收藏夹';
       const createSuccess = await this.createNewFavorite(dialog, targetFavName);
       if (!createSuccess) {
-        error('创建收藏夹失败');
-        return false;
+        const err = new Error('目标准备未确认，请先检查是否已创建收藏夹。');
+        err.outcome = 'unknown'; throw err;
       }
       // 创建后组件可能重渲染，不能继续操作已脱离页面的旧节点。
       dialog = await this.api.waitForDialog();
@@ -174,13 +184,20 @@ export class FavoriteManager {
 
     // 5. 选择目标收藏夹
     await delay(CONFIG.DELAY.SHORT);
+    this.copyStep = '选择目标收藏夹';
     if (!this.api.selectFavoriteInDialog(dialog, targetFavName)) {
       return false;
     }
 
     // 6. 点击确定
     await delay(CONFIG.DELAY.SHORT);
-    return await this.api.clickConfirmButton(dialog);
+    this.copyStep = '确认复制结果';
+    const confirmed = await this.api.clickConfirmButton(dialog);
+    if (!confirmed && this.api.copySubmission?.status === 'unknown') {
+      const err = new Error(this.api.copySubmission.detail);
+      err.outcome = 'unknown'; throw err;
+    }
+    return confirmed;
   }
 
   /**
@@ -224,7 +241,9 @@ export class FavoriteManager {
   async batchCopy(copyList, options = {}) {
     copyList = normalizeCopyTasks(copyList);
     const { skipCrossPage = false } = options;
-    this.operation.begin('批量复制', copyList.length);
+    if (!options.operationId || this.operation.state.operationId !== options.operationId || this.operation.state.status !== 'running')
+      this.operation.begin('批量复制', copyList.length, { operationId: options.operationId, phase: 'copying' });
+    this.logs.setContext({ view: 'copy', operationId: this.operation.state.operationId, phase: this.operation.state.phase });
     try {
     log('开始批量复制，共', copyList.length, '个任务');
 
@@ -236,7 +255,7 @@ export class FavoriteManager {
         // 由「自己页面」阶段再对比并创建缺失的收藏夹
         log('检测到在别人页面，启动跨页面流程...');
         await this.crossPageFlow.startCrossPageFlow(copyList);
-        this.operation.finish('interrupted', '已交接跨页面流程。等待目的页面继续；当前页面没有确认复制完成。');
+        this.operation.finish('waiting', '已交接跨页任务，等待目的页面继续。');
         return { status: 'handoff' }; // A navigation is not a completed copy.
       }
     }
@@ -244,10 +263,11 @@ export class FavoriteManager {
     // 正常复制流程
     for (let i = 0; i < copyList.length; i++) {
       const { source, target } = copyList[i];
-      log(`\n[${i + 1}/${copyList.length}] ${source} → ${target}`);
+      this.copyStep = '开始当前收藏夹'; this.copyPage = null;
+      log(`[${i + 1}/${copyList.length}] ${source} → ${target}`);
 
       if (!await this.copyFavorite(source, target)) {
-        throw new Error(`收藏夹 [${source}] → [${target}] 复制失败，已停止后续任务，请检查页面结果后重试`);
+        throw new Error(`复制失败：${source} → ${target}；步骤：${this.copyStep}${this.copyPage ? `（第 ${this.copyPage} 页）` : ''}。后续任务未执行，请先核对页面结果。`);
       }
       this.operation.confirm(`${source} → ${target}`);
 
@@ -261,7 +281,9 @@ export class FavoriteManager {
     this.operation.finish('completed', '所选任务已完成。可检查目标收藏夹。');
     return { status: 'completed' };
     } catch (err) {
-      this.operation.finish('failed', `${err.message} 请先检查页面结果，不要直接重复提交。`);
+      const unknown = err.outcome === 'unknown';
+      const detail = unknown ? `${err.message} 步骤：${this.copyStep}${this.copyPage ? `（第 ${this.copyPage} 页）` : ''}；后续任务已停止，请先核对目标，勿直接重试。` : err.message;
+      this.operation.finish(unknown ? 'unknown' : 'failed', detail);
       throw err;
     }
   }

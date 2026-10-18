@@ -1,8 +1,10 @@
+import { newOperationId } from '../utils/logStore.js';
+
 /** Ephemeral progress; confirmed counts must represent observed outcomes. */
 export class OperationState {
   constructor() {
     this.listeners = new Set();
-    this.state = { status: 'idle', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '选择来源并检查目标后开始。' };
+    this.state = { status: 'idle', operationId: '', phase: '', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '' };
   }
 
   subscribe(listener) {
@@ -16,8 +18,8 @@ export class OperationState {
     for (const listener of this.listeners) listener({ ...this.state });
   }
 
-  begin(action, total = null) {
-    this.update({ status: 'running', action, total, confirmed: 0, lastConfirmed: '', detail: '正在准备，请勿重复提交。' });
+  begin(action, total = null, { operationId = newOperationId(), phase = '' } = {}) {
+    this.update({ status: 'running', operationId, phase, action, total, confirmed: 0, lastConfirmed: '', detail: '正在准备…' });
   }
 
   confirm(step) {
@@ -25,7 +27,7 @@ export class OperationState {
   }
 
   finish(status, detail) {
-    if (!['completed', 'failed', 'interrupted'].includes(status)) throw new Error('Invalid terminal operation status');
+    if (!['completed', 'failed', 'interrupted', 'unknown', 'waiting'].includes(status)) throw new Error('Invalid terminal operation status');
     this.update({ status, detail });
   }
 }

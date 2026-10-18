@@ -4,9 +4,13 @@ export const knownCount = value => Number.isSafeInteger(value) && value >= 0 ? v
 export function normalizeFolder(raw, kind, index = 0) {
   const id = stableId(raw.id);
   const ownerId = stableId(raw.upper?.mid ?? raw.mid);
+  const protectionReason = kind !== 'created' ? null : index === 0 ? 'default' :
+    [true, 1].includes(raw.is_kid_playlist) || (raw.type !== undefined && raw.type !== 11) ? 'special' :
+      [false, 0].includes(raw.is_kid_playlist) ? null : 'unknown';
   return Object.freeze({ id, ownerId, kind: kind === 'created' ? 'created' : raw.type === 11 ? 'subscribed' : 'unsupported',
     name: typeof raw.title === 'string' ? raw.title : '（名称未知）', count: knownCount(raw.media_count),
-    protected: kind === 'created' && (index === 0 || raw.is_kid_playlist !== 0 || (raw.type !== undefined && raw.type !== 11)),
+    // Current API uses booleans; older responses used 0/1. Missing stays protected.
+    protected: protectionReason !== null, protectionReason,
     available: (kind === 'created' ? raw.state === undefined || raw.state === 0 : raw.state === 0) &&
       !(stableId(raw.mid) && stableId(raw.upper?.mid) && stableId(raw.mid) !== stableId(raw.upper.mid)), subscribed: raw.fav_state === 1 });
 }
