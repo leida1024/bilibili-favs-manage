@@ -321,18 +321,29 @@ export class BilibiliAPI {
     }
 
     log('点击确定');
-    confirmBtn.click();
-    await delay(CONFIG.DELAY.LONG);
-
-    // 检查是否有成功提示
-    const toast = document.querySelector(SELECTORS.TOAST);
-    if (toast && toast.textContent.includes(BUTTON_TEXTS.SUCCESS)) {
+    // Only a newly rendered success message can confirm this submission.
+    let confirmed = false;
+    const observer = new window.MutationObserver(records => {
+      for (const record of records) {
+        const nodes = record.type === 'childList' ? [...record.addedNodes] : [record.target];
+        for (const node of nodes) {
+          const el = node.nodeType === 1 ? node : node.parentElement;
+          const toast = el?.closest(SELECTORS.TOAST) || el?.querySelector?.(SELECTORS.TOAST);
+          if (toast?.textContent.includes(BUTTON_TEXTS.SUCCESS)) confirmed = true;
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    try { confirmBtn.click(); await delay(CONFIG.DELAY.LONG); }
+    finally { observer.disconnect(); }
+    if (confirmed) {
       log('✓ 复制成功');
+      return true;
     } else {
-      log('复制请求已发送，请检查结果');
+      warn('复制请求已发送，但未确认结果；已停止，请先检查目标收藏夹');
     }
 
-    return true;
+    return false;
   }
 
   /**

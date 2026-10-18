@@ -55,6 +55,7 @@ export function warn(...args) {
  */
 export function debug(...args) {
   console.debug(LOG_PREFIX, ...args);
+  globalPanel?.appendLog(args.join(' '), globalPanel.debugCode);
 }
 
 /**

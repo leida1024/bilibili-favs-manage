@@ -10,11 +10,13 @@ import { delay } from '../utils/dom.js';
 import { log, error, warn } from '../utils/logger.js';
 import { CONFIG } from '../config/config.js';
 import { normalizeFavoriteName, normalizeCopyTasks } from '../utils/favoriteNames.js';
+import { OperationState } from './OperationState.js';
 
 export class FavoriteManager {
   constructor() {
     this.api = BilibiliAPI;
     this.crossPageFlow = new CrossPageFlowManager(this);
+    this.operation = new OperationState();
   }
 
   /**
@@ -83,6 +85,7 @@ export class FavoriteManager {
     // 4. 逐页复制
     for (let page = 1; page <= totalPages; page++) {
       log(`正在处理第 ${page}/${totalPages} 页`);
+      this.operation.update({ detail: `正在复制第 ${page} 页；页数来自当前页面，${totalPages === 1 ? '未检测到更多分页' : `检测到 ${totalPages} 页`}。` });
 
       const pageSuccess = await this.copyOnePage(targetFavName);
       if (!pageSuccess) {
@@ -95,7 +98,7 @@ export class FavoriteManager {
         const nextSuccess = await this.api.clickNextPage();
         if (!nextSuccess) {
           warn(`无法跳转到第 ${page + 1} 页`);
-          break;
+          return false;
         }
       }
     }
@@ -217,6 +220,8 @@ export class FavoriteManager {
   async batchCopy(copyList, options = {}) {
     copyList = normalizeCopyTasks(copyList);
     const { skipCrossPage = false } = options;
+    this.operation.begin('批量复制', copyList.length);
+    try {
     log('开始批量复制，共', copyList.length, '个任务');
 
     // 检测是否需要跨页面创建收藏夹（copying 阶段恢复时跳过，避免重复触发跳转）
@@ -227,7 +232,8 @@ export class FavoriteManager {
         // 由「自己页面」阶段再对比并创建缺失的收藏夹
         log('检测到在别人页面，启动跨页面流程...');
         await this.crossPageFlow.startCrossPageFlow(copyList);
-        return; // 跳转后中断当前流程
+        this.operation.finish('interrupted', '已交接跨页面流程。等待目的页面继续；当前页面没有确认复制完成。');
+        return { status: 'handoff' }; // A navigation is not a completed copy.
       }
     }
 
@@ -239,6 +245,7 @@ export class FavoriteManager {
       if (!await this.copyFavorite(source, target)) {
         throw new Error(`收藏夹 [${source}] → [${target}] 复制失败，已停止后续任务，请检查页面结果后重试`);
       }
+      this.operation.confirm(`${source} → ${target}`);
 
       // 任务间延迟
       if (i < copyList.length - 1) {
@@ -247,5 +254,11 @@ export class FavoriteManager {
     }
 
     log('\n批量复制完成！');
+    this.operation.finish('completed', '所选任务已完成。可检查目标收藏夹。');
+    return { status: 'completed' };
+    } catch (err) {
+      this.operation.finish('failed', `${err.message} 请先检查页面结果，不要直接重复提交。`);
+      throw err;
+    }
   }
 }
