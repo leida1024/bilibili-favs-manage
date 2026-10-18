@@ -1,16 +1,17 @@
-import { FolderClient, knownCount, stableId, pause } from './FolderClient.js';
+import { FolderClient, knownCount, stableId, pause, folderKey } from './FolderClient.js';
 
 export class InventoryService {
   constructor(client = new FolderClient(), pace = 400) { this.client = client; this.pace = pace; this.running = false; }
 
   async scan(folders, { signal, onPage = () => {}, maxPages = 100, maxEntries = 10000 } = {}) {
     if (this.running) throw new Error('已有扫描正在进行');
-    if (!folders.length || folders.some(f => !stableId(f.id) || f.kind === 'unsupported') || new Set(folders.map(f => f.id)).size !== folders.length) throw new Error('请选择有效的收藏夹');
+    if (!folders.length || folders.some(f => !stableId(f.id) || f.kind === 'unsupported') || new Set(folders.map(folderKey)).size !== folders.length) throw new Error('请选择有效的收藏夹');
     this.running = true;
     const report = { scope: folders.map(f => ({ id: f.id, ownerId: f.ownerId, name: f.name })), complete: false, cancelled: false, folders: [], entries: 0,
       occurrences: 0, uniqueVideos: 0, duplicateOccurrences: 0, unknownIdentity: 0, unavailable: 0, knownDurationSeconds: 0, unknownDurations: 0, unknownUploaders: 0, videos: [] };
     const videos = new Map();
     let requests = 0;
+    const client = this.client.capture?.() || this.client;
     try {
       for (const folder of folders) {
         const coverage = { id: folder.id, pages: 0, loaded: 0, expected: null, complete: false, issue: null };
@@ -20,10 +21,10 @@ export class InventoryService {
           for (let pn = 1; pn <= maxPages; pn++) {
             if (requests++) await pause(this.pace, signal);
             if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
-            const data = await this.client.videos(folder.id, pn, signal);
+            const data = await client.videos(folder.id, pn, signal, folder);
             if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
             if (!Array.isArray(data.medias) || data.medias.some(item => !item || typeof item !== 'object') || typeof data.has_more !== 'boolean' || stableId(data.info?.id) !== folder.id) throw new Error('分页格式或收藏夹身份未确认');
-            const signature = JSON.stringify(data.medias.map(v => [v.type, v.id]));
+            const signature = JSON.stringify(data.medias.map(v => [v.type, v.id, v.bvid]));
             if (data.medias.length && pageSignatures.has(signature)) throw new Error('分页重复，扫描已停止');
             pageSignatures.add(signature);
             if (report.entries + data.medias.length > maxEntries) throw new Error('达到条目上限');
@@ -35,12 +36,14 @@ export class InventoryService {
               const unavailable = Number.isInteger(raw.attr) && !!(raw.attr & 1);
               if (unavailable) report.unavailable++;
               const id = raw.type === 2 ? stableId(raw.id) : null;
-              if (!id) { report.unknownIdentity++; continue; }
+              const bvid = raw.type === 2 && /^BV[0-9A-Za-z]{10}$/.test(raw.bvid) ? raw.bvid : null;
+              const identity = id || bvid;
+              if (!identity) { report.unknownIdentity++; continue; }
               report.occurrences++;
-              if (videos.has(id)) continue;
+              if (videos.has(identity)) continue;
               const duration = unavailable ? null : knownCount(raw.duration);
               const uploaderId = stableId(raw.upper?.mid);
-              videos.set(id, { id, bvid: typeof raw.bvid === 'string' ? raw.bvid : null, duration, uploaderId });
+              videos.set(identity, { id, bvid, duration, uploaderId });
               if (duration === null) report.unknownDurations++; else report.knownDurationSeconds += duration;
               if (!uploaderId) report.unknownUploaders++;
             }

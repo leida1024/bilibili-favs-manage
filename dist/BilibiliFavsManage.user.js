@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.2.1
+// @version      2.2.2
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       leida1024
 // @match        https://space.bilibili.com/*
@@ -202,13 +202,13 @@
       LEFT_WIDTH_PERCENT: '35%',
       RIGHT_WIDTH_PERCENT: '63%',
       MIN_OUTPUT_WIDTH: 300,
-      RESIZE_BORDER_SIZE: 15,
+      RESIZE_BORDER_SIZE: 4,
       Z_INDEX: 99999
     },
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.2.1',
+      VERSION: '2.2.2',
       NAME: 'BiliBili 收藏夹批量管理',
       DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
     }
@@ -547,7 +547,7 @@
      * @param {string} favName - 收藏夹名称
      * @returns {Promise<boolean|null>}
      */
-    static async createFavoriteViaSidebar(favName) {
+    static async createFavoriteViaSidebar(favName, guard = () => true) {
       favName = normalizeFavoriteName(favName);
       if (!favName) return false;
       if (this.getAllFavorites().some(item => this.getFavoriteName(item) === favName)) return true;
@@ -581,6 +581,7 @@
 
       // 输入名称并点击创建
       if (!await this.inputFavoriteName(favName)) return false;
+      if (!guard()) return false;
       if (!await this.clickCreateButton()) return false;
 
       const confirmed = await this.waitForFavorite(favName);
@@ -909,47 +910,56 @@
   });
 
   class LogStore {
-    constructor(limit = 500) {
+    constructor(limit = 500, storage = null) {
       this.limit = Math.max(1, limit);
       this.entries = [];
       this.dropped = 0;
+      this.clearedAt = 0;
       this.context = contextOf();
+      this.storage = storage;
+      try { if (storage) this.restore(storage.read()); } catch { /* memory-only */ }
     }
 
     setContext(context) { this.context = contextOf(context); }
 
     add(message, level = 'info', context = this.context) {
-      this.entries.push({ id: newOperationId(), time: new Date().toISOString(),
+      this.entries.push({ id: newOperationId(), time: new Date(Math.max(Date.now(), this.clearedAt + 1)).toISOString(),
         level: ['info', 'warn', 'error', 'debug'].includes(level) ? level : 'info',
         ...contextOf(context), message: sanitizeLog(message).trim() });
       this.trim();
+      this.persist();
     }
 
     trim() {
       while (this.entries.length > this.limit) { this.entries.shift(); this.dropped++; }
     }
 
-    clear() { this.entries = []; this.dropped = 0; }
+    persist() { try { this.storage?.write(this.snapshot()); } catch { /* diagnostics stay usable */ } }
+    clear() { this.entries = []; this.dropped = 0; this.clearedAt = Date.now(); this.persist(); }
     filter(level = 'all', view = 'all') {
       return this.entries.filter(entry => (level === 'all' || (level === 'normal' ? entry.level !== 'debug' : entry.level === level)) &&
         (view === 'all' || entry.view === view || entry.view === 'system'));
     }
     snapshot(operationId) {
-      return { schemaVersion: 2, dropped: this.dropped,
+      return { schemaVersion: 2, dropped: this.dropped, clearedAt: this.clearedAt,
         entries: this.entries.filter(entry => !operationId || entry.operationId === operationId).map(entry => ({ ...entry })) };
     }
     restore(snapshot) {
       if (snapshot?.schemaVersion !== 2 || !Array.isArray(snapshot.entries)) return;
-      const entries = new Map(this.entries.map(entry => [entry.id, entry]));
+      const clearedAt = Number.isSafeInteger(snapshot.clearedAt) && snapshot.clearedAt >= 0 && snapshot.clearedAt <= Date.now() ? snapshot.clearedAt : 0;
+      if (clearedAt > this.clearedAt) this.dropped = 0;
+      this.clearedAt = Math.max(this.clearedAt, clearedAt);
+      const entries = new Map(this.entries.filter(entry => Date.parse(entry.time) > this.clearedAt).map(entry => [entry.id, entry]));
       for (const raw of snapshot.entries.slice(-this.limit)) {
         if (!identifier(raw?.id) || typeof raw.time !== 'string' || !Number.isFinite(Date.parse(raw.time)) ||
-            typeof raw.message !== 'string' || !['info', 'warn', 'error', 'debug'].includes(raw.level)) continue;
+            typeof raw.message !== 'string' || !['info', 'warn', 'error', 'debug'].includes(raw.level) || Date.parse(raw.time) <= this.clearedAt) continue;
         entries.set(raw.id, { id: raw.id, time: new Date(raw.time).toISOString(), level: raw.level,
           ...contextOf(raw), message: sanitizeLog(raw.message) });
       }
       this.entries = [...entries.values()].sort((a, b) => a.time.localeCompare(b.time));
-      this.dropped = Math.max(this.dropped, Number.isSafeInteger(snapshot.dropped) && snapshot.dropped >= 0 ? snapshot.dropped : 0);
+      if (clearedAt === this.clearedAt) this.dropped = Math.max(this.dropped, Number.isSafeInteger(snapshot.dropped) && snapshot.dropped >= 0 ? snapshot.dropped : 0);
       this.trim();
+      this.persist();
     }
     export() { return JSON.stringify(this.snapshot(), null, 2); }
   }
@@ -1218,19 +1228,21 @@
 
   const stableId = value => /^(?:[1-9]\d*)$/.test(String(value)) && Number.isSafeInteger(Number(value)) ? String(value) : null;
   const knownCount = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+  const folderKey = folder => `${folder.kind}:${folder.id}`;
 
-  function normalizeFolder(raw, kind, index = 0) {
+  function normalizeFolder(raw, kind, index = 0, membership = false) {
     const id = stableId(raw.id);
     const ownerId = stableId(raw.upper?.mid ?? raw.mid);
     const protectionReason = kind !== 'created' ? null : index === 0 ? 'default' :
       [true, 1].includes(raw.is_kid_playlist) || (raw.type !== undefined && raw.type !== 11) ? 'special' :
         [false, 0].includes(raw.is_kid_playlist) ? null : 'unknown';
-    return Object.freeze({ id, ownerId, kind: kind === 'created' ? 'created' : raw.type === 11 ? 'subscribed' : 'unsupported',
+    return Object.freeze({ id, ownerId, kind: kind === 'created' ? 'created' : raw.type === 11 ? 'subscribed' : raw.type === 21 ? 'season' : 'unsupported',
+      identityConflict: !!(stableId(raw.mid) && stableId(raw.upper?.mid) && stableId(raw.mid) !== stableId(raw.upper.mid)),
       name: typeof raw.title === 'string' ? raw.title : '（名称未知）', count: knownCount(raw.media_count),
       // Current API uses booleans; older responses used 0/1. Missing stays protected.
       protected: protectionReason !== null, protectionReason,
       available: (kind === 'created' ? raw.state === undefined || raw.state === 0 : raw.state === 0) &&
-        !(stableId(raw.mid) && stableId(raw.upper?.mid) && stableId(raw.mid) !== stableId(raw.upper.mid)), subscribed: raw.fav_state === 1 });
+        !(stableId(raw.mid) && stableId(raw.upper?.mid) && stableId(raw.mid) !== stableId(raw.upper.mid)), subscribed: membership || raw.fav_state === 1 });
   }
 
   function pause(ms, signal) {
@@ -1269,7 +1281,8 @@
       if (!token) return { status: 'failed', detail: '登录校验缺失，未提交；请重新登录后检查' };
       const body = new URLSearchParams({ platform: 'web', csrf: token });
       if (action === 'delete') body.set('media_ids', folder.id);
-      const path = action === 'delete' ? '/x/v3/fav/folder/del' : `/x/v3/fav/folder/unfav?${new URLSearchParams({ media_id: folder.id })}`;
+      const path = action === 'delete' ? '/x/v3/fav/folder/del' : folder.kind === 'season' ?
+        `/x/v3/fav/season/unfav?${new URLSearchParams({ season_id: folder.id, platform: 'web' })}` : `/x/v3/fav/folder/unfav?${new URLSearchParams({ media_id: folder.id })}`;
       try {
         const json = await this.fetchJSON(path, { method: 'POST', body }, signal);
         if (!json || !Number.isInteger(json.code)) return { status: 'unknown', detail: '响应未识别；请检查平台结果，勿直接重试' };
@@ -1286,11 +1299,14 @@
         return this.normalizeList(data.list, kind);
       }
       const rows = [];
+      let expected = null;
       for (let pn = 1; pn <= 100; pn++) {
         if (pn > 1) await pause(pace, signal);
         const data = await this.request('/x/v3/fav/folder/collected/list', { up_mid: ownerId, pn, ps: 20, platform: 'web' }, signal);
         if (data.count === 0 && data.list === null && data.has_more === false) data.list = [];
         if (!Array.isArray(data.list) || typeof data.has_more !== 'boolean') throw new Error('订阅列表格式未识别');
+        if (knownCount(data.count) === null || (expected !== null && expected !== data.count)) throw new Error('订阅总数未知或读取期间变化');
+        expected = data.count;
         rows.push(...data.list);
         if (!data.has_more) {
           if (rows.length !== data.count) throw new Error('订阅列表变化或不完整，请重新加载');
@@ -1302,16 +1318,41 @@
     }
 
     normalizeList(rows, kind) {
-      const result = rows.map((row, index) => normalizeFolder(row, kind, index));
-      if (result.some(row => !row.id) || new Set(result.map(row => row.id)).size !== result.length) throw new Error('收藏夹身份缺失或重复');
+      const result = rows.map((row, index) => normalizeFolder(row, kind, index, kind === 'subscribed'));
+      if (result.some(row => !row.id) || new Set(result.map(folderKey)).size !== result.length) throw new Error('收藏夹身份缺失或重复');
       return result;
     }
 
-    async videos(folderId, pn, signal) {
+    async videos(folderId, pn, signal, folder) {
       if (!stableId(folderId)) throw new Error('收藏夹 ID 无效');
+      if (folder?.kind === 'season') {
+        if (pn !== 1) throw new Error('合集列表未完整返回，不重复请求同一完整列表');
+        const data = await this.request('/x/space/fav/season/list', { season_id: folderId, pn, ps: 20 }, signal);
+        const count = knownCount(data.info?.media_count);
+        if (!Array.isArray(data.medias) || count === null || stableId(data.info?.id) !== folderId) throw new Error('合集分页格式未识别');
+        // This endpoint returns the whole season and ignores pn/ps; count mismatch stays partial.
+        return { ...data, medias: data.medias.map(row => ({ ...row, type: 2 })), has_more: false };
+      }
       const data = await this.request('/x/v3/fav/resource/list', { media_id: folderId, pn, ps: 20, platform: 'web' }, signal);
       if (data.medias === null && data.info?.media_count === 0 && data.has_more === false) data.medias = [];
       return data;
+    }
+
+    async post(path, values, signal) {
+      if (signal?.aborted) return { status: 'not_started', detail: '已取消，未提交' };
+      const csrf = document.cookie.split(';').map(x => x.trim()).find(x => x.startsWith('bili_jct='))?.slice(9);
+      if (!csrf) return { status: 'failed', detail: '登录校验缺失，未提交' };
+      try {
+        const json = await this.fetchJSON(path, { method: 'POST', body: new URLSearchParams({ ...values, csrf, platform: 'web' }) }, signal);
+        if (!Number.isInteger(json?.code)) return { status: 'unknown', detail: '响应未识别，请核对结果，勿直接重试' };
+        return json.code === 0 ? { status: 'confirmed', detail: '平台已确认', data: json.data } : { status: 'failed', detail: `平台拒绝（代码 ${json.code}）` };
+      } catch { return { status: 'unknown', detail: '提交后结果未知，请核对结果，勿直接重试' }; }
+    }
+    create(name, signal) { return this.post('/x/v3/fav/folder/add', { title: name, intro: '', privacy: '1', cover: '' }, signal); }
+    copy(source, target, resources, actor, signal) {
+      if (!stableId(source.id) || !stableId(target.id) || !stableId(actor) || !resources.length || resources.length > 20 || resources.some(id => !stableId(id)))
+        return Promise.resolve({ status: 'failed', detail: '复制身份或批次无效，未提交' });
+      return this.post('/x/v3/fav/resource/copy', { src_media_id: source.id, tar_media_id: target.id, mid: actor, resources: resources.map(id => `${id}:2`).join(',') }, signal);
     }
   }
 
@@ -1320,12 +1361,13 @@
 
     async scan(folders, { signal, onPage = () => {}, maxPages = 100, maxEntries = 10000 } = {}) {
       if (this.running) throw new Error('已有扫描正在进行');
-      if (!folders.length || folders.some(f => !stableId(f.id) || f.kind === 'unsupported') || new Set(folders.map(f => f.id)).size !== folders.length) throw new Error('请选择有效的收藏夹');
+      if (!folders.length || folders.some(f => !stableId(f.id) || f.kind === 'unsupported') || new Set(folders.map(folderKey)).size !== folders.length) throw new Error('请选择有效的收藏夹');
       this.running = true;
       const report = { scope: folders.map(f => ({ id: f.id, ownerId: f.ownerId, name: f.name })), complete: false, cancelled: false, folders: [], entries: 0,
         occurrences: 0, uniqueVideos: 0, duplicateOccurrences: 0, unknownIdentity: 0, unavailable: 0, knownDurationSeconds: 0, unknownDurations: 0, unknownUploaders: 0, videos: [] };
       const videos = new Map();
       let requests = 0;
+      const client = this.client.capture?.() || this.client;
       try {
         for (const folder of folders) {
           const coverage = { id: folder.id, pages: 0, loaded: 0, expected: null, complete: false, issue: null };
@@ -1335,10 +1377,10 @@
             for (let pn = 1; pn <= maxPages; pn++) {
               if (requests++) await pause(this.pace, signal);
               if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
-              const data = await this.client.videos(folder.id, pn, signal);
+              const data = await client.videos(folder.id, pn, signal, folder);
               if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
               if (!Array.isArray(data.medias) || data.medias.some(item => !item || typeof item !== 'object') || typeof data.has_more !== 'boolean' || stableId(data.info?.id) !== folder.id) throw new Error('分页格式或收藏夹身份未确认');
-              const signature = JSON.stringify(data.medias.map(v => [v.type, v.id]));
+              const signature = JSON.stringify(data.medias.map(v => [v.type, v.id, v.bvid]));
               if (data.medias.length && pageSignatures.has(signature)) throw new Error('分页重复，扫描已停止');
               pageSignatures.add(signature);
               if (report.entries + data.medias.length > maxEntries) throw new Error('达到条目上限');
@@ -1350,12 +1392,14 @@
                 const unavailable = Number.isInteger(raw.attr) && !!(raw.attr & 1);
                 if (unavailable) report.unavailable++;
                 const id = raw.type === 2 ? stableId(raw.id) : null;
-                if (!id) { report.unknownIdentity++; continue; }
+                const bvid = raw.type === 2 && /^BV[0-9A-Za-z]{10}$/.test(raw.bvid) ? raw.bvid : null;
+                const identity = id || bvid;
+                if (!identity) { report.unknownIdentity++; continue; }
                 report.occurrences++;
-                if (videos.has(id)) continue;
+                if (videos.has(identity)) continue;
                 const duration = unavailable ? null : knownCount(raw.duration);
                 const uploaderId = stableId(raw.upper?.mid);
-                videos.set(id, { id, bvid: typeof raw.bvid === 'string' ? raw.bvid : null, duration, uploaderId });
+                videos.set(identity, { id, bvid, duration, uploaderId });
                 if (duration === null) report.unknownDurations++; else report.knownDurationSeconds += duration;
                 if (!uploaderId) report.unknownUploaders++;
               }
@@ -1384,15 +1428,17 @@
   }
 
   function eligibility(action, folder, actor, pageOwner) {
-    if (!stableId(actor) || !stableId(folder.id) || !stableId(folder.ownerId)) return '身份未确认';
-    if (!folder.available) return '对象不可用';
+    if (!stableId(actor) || !stableId(folder.id)) return '身份未确认';
+    if (folder.identityConflict) return '身份信息冲突';
     if (action === 'unsubscribe') {
-      if (folder.kind !== 'subscribed') return '仅支持收藏夹订阅，合集暂不支持';
+      if (!['subscribed', 'season'].includes(folder.kind)) return '订阅类型未识别';
       if (folder.ownerId === actor) return '不能将自己的收藏夹当作订阅';
       if (folder.subscribed !== true) return '订阅状态未确认';
       return null;
     }
     if (action !== 'delete') return '操作类型不支持';
+    if (!stableId(folder.ownerId)) return '所有者未确认';
+    if (!folder.available) return '对象不可用';
     if (folder.kind !== 'created') return '不是创建的收藏夹';
     if (folder.ownerId !== actor || pageOwner !== actor) return '只能管理自己空间的收藏夹';
     if (folder.protected !== false) return { default: '默认收藏夹', special: '特殊收藏夹', unknown: '保护状态未确认' }[folder.protectionReason] || '默认、特殊或保护状态未确认';
@@ -1407,12 +1453,12 @@
     prepare(action, folders) {
       this.invalidate();
       const { actor, pageOwner } = this.context();
-      if (this.running || !folders.length || new Set(folders.map(f => f.id)).size !== folders.length) throw new Error('请选择有效且不重复的目标');
+      if (this.running || !folders.length || new Set(folders.map(folderKey)).size !== folders.length) throw new Error('请选择有效且不重复的目标');
       for (const folder of folders) {
         const reason = eligibility(action, folder, actor, pageOwner);
         if (reason) throw new Error(reason);
       }
-      this.ticket = Object.freeze({ action, actor, pageOwner, targets: Object.freeze(folders.map(folder => Object.freeze({ ...folder }))) });
+      this.ticket = Object.freeze({ action, actor, pageOwner, transport: this.client.capture?.(), targets: Object.freeze(folders.map(folder => Object.freeze({ ...folder }))) });
       return this.ticket;
     }
 
@@ -1420,7 +1466,8 @@
       if (!confirmed || !ticket || ticket !== this.ticket || this.running) throw new Error('请重新预览并明确确认本次目标');
       this.invalidate(); // Consume BEFORE any await or submission. Never persist/replay.
       this.running = true;
-      const results = ticket.targets.map(target => ({ id: target.id, ownerId: target.ownerId, name: target.name, status: 'not_started', detail: '尚未提交' }));
+      const results = ticket.targets.map(target => ({ id: target.id, kind: target.kind, ownerId: target.ownerId, name: target.name, status: 'not_started', detail: '尚未提交' }));
+      const client = ticket.transport || this.client;
       try {
         for (let index = 0; index < ticket.targets.length; index++) {
           if (signal?.aborted) break;
@@ -1431,16 +1478,16 @@
             if (index) await pause(this.pace, signal);
             const current = this.context();
             if (current.actor !== ticket.actor || current.pageOwner !== ticket.pageOwner) throw new Error('当前账号或空间变化，请重新预览');
-            const catalog = await this.client.folders(ticket.actor, ticket.action === 'delete' ? 'created' : 'subscribed', signal, this.pace);
+            const catalog = await client.folders(ticket.actor, ticket.action === 'delete' ? 'created' : 'subscribed', signal, this.pace, target);
             if (signal?.aborted) break;
-            const fresh = catalog.find(folder => folder.id === target.id);
+            const fresh = catalog.find(folder => folder.id === target.id && folder.kind === target.kind);
             if (!fresh || eligibility(ticket.action, fresh, current.actor, current.pageOwner) ||
-              ['id', 'ownerId', 'name', 'count', 'kind', 'protected', 'protectionReason', 'available', 'subscribed'].some(key => fresh[key] !== target[key])) throw new Error('目标身份、名称、数量或保护状态变化，请重新加载并预览');
+              ['id', 'ownerId', 'name', 'count', 'kind', 'protected', 'protectionReason', 'available', 'subscribed', 'identityConflict'].some(key => fresh[key] !== target[key])) throw new Error('目标身份、名称、数量或保护状态变化，请重新加载并预览');
             const latest = this.context();
             if (latest.actor !== ticket.actor || latest.pageOwner !== ticket.pageOwner) throw new Error('账号或空间变化，未提交');
             if (signal?.aborted) break;
             submitted = true;
-            result = await this.client.mutate(ticket.action, target, signal);
+            result = await client.mutate(ticket.action, target, signal);
             if (!['confirmed', 'failed', 'unknown', 'not_started'].includes(result?.status)) result = { status: 'unknown', detail: '结果未识别，已停止；请检查平台' };
           } catch (err) {
             if (!submitted && signal?.aborted) break;
@@ -1450,6 +1497,333 @@
           if (result.status !== 'confirmed') break;
         }
         return { action: ticket.action, cancelled: !!signal?.aborted, results, complete: results.every(result => result.status === 'confirmed') };
+      } finally { this.running = false; }
+    }
+  }
+
+  /** Inert UI data only. Failure must never prevent an operation or startup. */
+  function browserStore(area, key) {
+    return {
+      read() { try { return JSON.parse(window[area].getItem(key)); } catch { return null; } },
+      write(value) { try { window[area].setItem(key, JSON.stringify(value)); } catch { /* memory-only */ } }
+    };
+  }
+
+  const defaultModes = Object.freeze({ read: 'api', copy: 'web', create: 'web', manage: 'web' });
+  function validModes(value) {
+    return Object.fromEntries(Object.entries(defaultModes).map(([key, fallback]) =>
+      [key, ['api', 'web'].includes(value?.[key]) ? value[key] : fallback]));
+  }
+
+  function panelPreferences() {
+    const store = browserStore('localStorage', 'bili-favs-panel-v1');
+    const raw = store.read();
+    const geometry = raw?.version === 1 && raw.geometry &&
+      ['width', 'height', 'left', 'top'].every(key => Number.isFinite(raw.geometry[key]) && Math.abs(raw.geometry[key]) <= 20000) &&
+      raw.geometry.width >= 280 && raw.geometry.height >= 64 ? raw.geometry : null;
+    return { store, geometry, logsOpen: raw?.version === 1 ? raw.logsOpen !== false : true,
+      layout: raw?.layout === 'bottom' ? 'bottom' : 'side',
+      auxiliary: Number.isFinite(raw?.auxiliary) && raw.auxiliary > 0 && raw.auxiliary < 20000 ? raw.auxiliary : 0,
+      modes: validModes(raw?.version === 1 ? raw.modes : null) };
+  }
+
+  /** Native page controls, separate from HTTP transport and panel UI. */
+  const nativeControls = {
+    vui: {
+      group: '.favlist-aside .vui_collapse_item', heading: '.vui_collapse_item_header',
+      row: '.fav-sidebar-item', title: '.vui_ellipsis', click: '.vui_sidebar-item', more: '.fav-collapse-more',
+      menu: '.menu-popover', menuItem: '.menu-popover__panel-item',
+      detailTitle: '.favlist-info-detail__title-row', data: '.favlist-info-detail__data', owner: '.favlist-info-detail__data a.link',
+      cards: '.favlist-main .bili-video-card', duration: '.bili-cover-card__stat',
+      dialog: '.vui_dialog--content', confirm: 'button.vui_button--blue',
+      pagination: '.vui_pagenation', page: '.vui_pagenation--btn-num', activePage: '[aria-current="page"]',
+      next: 'button[aria-label="下一页"]'
+    },
+    legacy: {
+      created: '#fav-createdList-container', subscribed: '#fav-collectedList-container', row: '.fav-item',
+      title: 'a.text', click: 'a.text', more: '.more', menu: '.be-dropdown-trigger', menuItem: '.be-dropdown-item',
+      detailTitle: '.favInfo-details .fav-name', data: '.favInfo-details', owner: '.favInfo-details a[href*="space.bilibili.com"]',
+      cards: '.fav-video-list .small-item', duration: '.length', dialog: '.modal', confirm: '.modal-footer .btn',
+      pagination: '.be-pager', page: '.be-pager-item', activePage: '.be-pager-item-active', next: '.be-pager-next'
+    }
+  };
+
+  const text = node => node?.textContent.trim() || '';
+  const numberFrom = value => /^\d+$/.test(value || '') ? Number(value) : null;
+  class WebFolderClient {
+    constructor() { this.identities = new WeakMap(); this.currentFolder = null; }
+    get selectors() { return document.querySelector('.favlist-aside') ? nativeControls.vui : nativeControls.legacy; }
+    async wait(check, signal, timeout = 8000) {
+      const end = Date.now() + timeout;
+      do {
+        if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
+        const result = check(); if (result) return result;
+        await pause(80, signal);
+      } while (Date.now() < end);
+      throw new Error('网页未显示预期结果；请检查页面或切换操作方式');
+    }
+    group(kind) {
+      const s = this.selectors;
+      const group = s.group ? [...document.querySelectorAll(s.group)].find(node =>
+        kind === 'created' ? /^(我|TA)创建的收藏夹$/.test(text(node.querySelector(s.heading))) : /^(我|TA)追的合集\/收藏夹$/.test(text(node.querySelector(s.heading)))) : document.querySelector(s[kind]);
+      if (!group) throw new Error('网页没有这个列表范围，请在对应空间加载，或选择 API 读取');
+      return group;
+    }
+    async rows(kind, signal) {
+      const s = this.selectors, group = this.group(kind);
+      for (let i = 0; i < 100; i++) {
+        const more = [...group.querySelectorAll(s.more)].find(node => /显示剩余\d+个|加载更多|查看更多/.test(text(node)));
+        if (!more) return [...group.querySelectorAll(s.row)];
+        const before = group.querySelectorAll(s.row).length;
+        more.click();
+        await this.wait(() => group.querySelectorAll(s.row).length > before || !more.isConnected, signal);
+      }
+      throw new Error('网页展开超过上限，未将部分列表当作完整结果');
+    }
+    async openMenu(node, signal) {
+      const s = this.selectors, menu = node.querySelector(s.menu);
+      if (!menu) return [];
+      node.dispatchEvent(new window.MouseEvent('mouseenter'));
+      node.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
+      menu.dispatchEvent(new window.MouseEvent('mouseenter'));
+      menu.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
+      menu.click();
+      await this.wait(() => [...document.querySelectorAll(s.menuItem)].some(isElementVisible), signal, 2000);
+      return [...document.querySelectorAll(s.menuItem)].filter(isElementVisible);
+    }
+    closeMenu() { document.body.click(); }
+    async inspect(node, kind, index, signal) {
+      const s = this.selectors, name = normalizeFavoriteName(text(node.querySelector(s.title)));
+      if (!name) throw new Error('网页条目缺少名称');
+      if (node.querySelector('[class*="--disabled"]')) return Object.freeze({ id: null, ownerId: null, kind: 'unsupported', name,
+        count: null, protectionReason: 'unknown', protected: true, available: false, subscribed: kind === 'subscribed' });
+      const old = this.identities.get(node);
+      if (old && old.name === name) return Object.freeze({ ...old, available: !node.querySelector('[class*="--disabled"]') });
+      const pageOwner = PageDetector.getCurrentPageUID();
+      node.querySelector(s.click)?.click();
+      await pause(160, signal);
+      await this.wait(() => normalizeFavoriteName(text(document.querySelector(s.detailTitle))) === name, signal);
+      const url = new URL(window.location.href), id = stableId(url.searchParams.get('fid'));
+      const type = kind === 'created' ? 'created' : url.searchParams.get('ctype') === '21' ? 'season' : url.searchParams.get('ctype') === '11' ? 'subscribed' : 'unsupported';
+      if (!id || PageDetector.getCurrentPageUID() !== pageOwner ||
+        (kind === 'created' ? url.searchParams.get('ftype') !== 'create' : url.searchParams.get('ftype') !== 'collect')) throw new Error('网页未确认条目身份，停止读取');
+      const ownerLink = document.querySelector(s.owner)?.getAttribute('href') || '';
+      const ownerId = kind === 'created' ? pageOwner : stableId(ownerLink.match(/space\.bilibili\.com\/(\d+)/)?.[1]);
+      const count = numberFrom(text(document.querySelector(s.data)).match(/视频数\s*[:：]\s*(\d+)/)?.[1]);
+      let protectionReason = kind === 'created' ? index === 0 ? 'default' : 'unknown' : null;
+      if (kind === 'created' && index > 0) {
+        const items = await this.openMenu(node, signal).catch(() => []);
+        if (items.some(item => text(item) === '删除')) protectionReason = null;
+        this.closeMenu();
+      }
+      const folder = Object.freeze({ id, ownerId, kind: type, name, count, protectionReason, protected: protectionReason !== null,
+        available: !node.querySelector('[class*="--disabled"]'), subscribed: kind === 'subscribed' });
+      this.identities.set(node, folder); return folder;
+    }
+    async folders(owner, kind, signal, pace, revalidateTarget) {
+      if (owner !== PageDetector.getCurrentPageUID()) throw new Error('网页方式需要先打开对应账号的收藏夹页面');
+      const rows = await this.rows(kind, signal), result = [];
+      for (let index = 0; index < rows.length; index++) {
+        if (revalidateTarget && folderKey(this.identities.get(rows[index]) || {}) === folderKey(revalidateTarget)) this.identities.delete(rows[index]);
+        result.push(await this.inspect(rows[index], kind, index, signal));
+      }
+      const identified = result.filter(row => row.id);
+      if (new Set(identified.map(folderKey)).size !== identified.length) throw new Error('网页条目身份重复，请重新加载');
+      return result;
+    }
+    async select(folder, signal) {
+      if (folder.available === false) throw new Error('失效条目的网页不提供可核对 ID；请在设置中选择 API 管理后重新加载，未提交');
+      const kind = folder.kind === 'created' ? 'created' : 'subscribed';
+      const rows = await this.rows(kind, signal);
+      let node = rows.find(row => folderKey(this.identities.get(row) || {}) === folderKey(folder));
+      if (!node) {
+        const matches = rows.filter(row => normalizeFavoriteName(text(row.querySelector(this.selectors.title))) === folder.name);
+        for (const candidate of matches) {
+          const resolved = await this.inspect(candidate, kind, rows.indexOf(candidate), signal);
+          if (folderKey(resolved) === folderKey(folder)) {
+            if (node) throw new Error('网页身份重复，未提交');
+            node = candidate;
+          }
+        }
+        if (!node) throw new Error('网页目标缺失或同名身份不明确，未提交');
+      }
+      // Always verify the actual route and freshly rendered details before a native action.
+      this.identities.delete(node);
+      const fresh = await this.inspect(node, kind, rows.indexOf(node), signal);
+      if (['id', 'kind', 'ownerId', 'name'].some(key => folder[key] !== fresh[key])) throw new Error('网页目标身份变化，未提交');
+      if ((kind === 'created' && !fresh.available) || (folder.count !== null && fresh.count !== null && folder.count !== fresh.count) ||
+        (kind === 'created' && fresh.protected !== folder.protected)) throw new Error('网页目标数量或保护状态变化，未提交');
+      return node;
+    }
+    async mutate(action, folder, signal) {
+      if (!['delete', 'unsubscribe'].includes(action)) return { status: 'failed', detail: '操作类型不支持，未提交' };
+      let submitted = false;
+      try {
+        const actor = PageDetector.getLoginUserUID(), pageOwner = PageDetector.getCurrentPageUID();
+        const node = await this.select(folder, signal);
+        const group = this.group(action === 'delete' ? 'created' : 'subscribed');
+        const originalRows = [...group.querySelectorAll(this.selectors.row)];
+        const sameName = row => normalizeFavoriteName(text(row.querySelector(this.selectors.title))) === folder.name;
+        const originalMatches = originalRows.filter(sameName).length;
+        if (action === 'delete' && (actor !== folder.ownerId || pageOwner !== actor || folder.kind !== 'created' || folder.protected)) throw new Error('删除归属或保护状态未确认');
+        if (action === 'unsubscribe' && (!['subscribed', 'season'].includes(folder.kind) || actor === folder.ownerId || !folder.subscribed)) throw new Error('订阅身份未确认');
+        const items = await this.openMenu(node, signal), label = action === 'delete' ? '删除' : '取消订阅';
+        const choices = items.filter(item => text(item) === label);
+        if (choices.length !== 1 || PageDetector.getLoginUserUID() !== actor || PageDetector.getCurrentPageUID() !== pageOwner) throw new Error('网页操作入口或账号变化');
+        if (signal?.aborted) return { status: 'not_started', detail: '已取消，未提交' };
+        submitted = true; // Menu entries can submit immediately; never click twice.
+        choices[0].click();
+        if (action === 'delete') {
+          const dialog = await this.wait(() => [...document.querySelectorAll(this.selectors.dialog)].find(node => isElementVisible(node) && /删除/.test(text(node))), signal);
+          const controls = [...dialog.querySelectorAll('button, .btn')].filter(node => isElementVisible(node) && /^(确定|确认|删除|确认删除)$/.test(text(node)));
+          if (controls.length !== 1 || PageDetector.getLoginUserUID() !== actor || PageDetector.getCurrentPageUID() !== pageOwner || new URL(window.location.href).searchParams.get('fid') !== folder.id) throw new Error('删除确认未识别，请检查页面');
+          if (signal?.aborted) throw new Error('已停止，请检查网页中的待确认操作');
+          controls[0].click();
+        }
+        await this.wait(() => {
+          if (PageDetector.getLoginUserUID() !== actor || PageDetector.getCurrentPageUID() !== pageOwner || !group.isConnected) return false;
+          const rows = [...group.querySelectorAll(this.selectors.row)];
+          return !node.isConnected && rows.length === originalRows.length - 1 && rows.filter(sameName).length === originalMatches - 1;
+        }, signal);
+        return { status: 'confirmed', detail: '网页已移除刚才核对的目标条目' };
+      } catch (error) {
+        return { status: submitted ? 'unknown' : signal?.aborted ? 'not_started' : 'failed', detail: `${submitted ? '已触发网页操作，结果待核对，勿直接重试' : '未提交'}：${error.message}` };
+      } finally { this.closeMenu(); }
+    }
+    async create(name, signal) {
+      if (!PageDetector.isOwnPage()) return { status: 'failed', detail: '网页创建需在我的空间进行；可选择 API 创建' };
+      if (signal?.aborted) return { status: 'not_started', detail: '已取消' };
+      const actor = PageDetector.getLoginUserUID();
+      const result = await BilibiliAPI.createFavoriteViaSidebar(name, () => !signal?.aborted && PageDetector.getLoginUserUID() === actor && PageDetector.isOwnPage());
+      return result === true ? { status: 'confirmed', detail: '网页已显示目标收藏夹' } : { status: result === null ? 'failed' : 'unknown', detail: '网页创建未确认，请检查页面；没有切换方式重试' };
+    }
+    async videos(id, pn, signal, folder) {
+      if (!folder || folder.id !== id) throw new Error('网页统计缺少目标身份');
+      const s = this.selectors;
+      if (pn === 1) { await this.select(folder, signal); this.currentFolder = folderKey(folder); }
+      if (this.currentFolder !== folderKey(folder)) throw new Error('网页统计目标变化');
+      const pager = document.querySelector(s.pagination);
+      const current = Number(text(pager?.querySelector(s.activePage))) || 1;
+      if (pn !== current) {
+        const signature = () => [...document.querySelectorAll(s.cards)].map(card => card.querySelector('a[href*="/video/"]')?.getAttribute('href')).join('|');
+        const before = signature();
+        const button = [...(pager?.querySelectorAll(s.page) || [])].find(node => text(node) === String(pn));
+        if (!button) throw new Error('网页页码入口未识别，统计不完整');
+        button.click();
+        await this.wait(() => Number(text(document.querySelector(s.pagination)?.querySelector(s.activePage))) === pn && signature() !== before, signal);
+      }
+      const medias = [...document.querySelectorAll(s.cards)].map(card => {
+        const href = card.querySelector('a[href*="/video/"]')?.getAttribute('href') || '';
+        const durationText = [...card.querySelectorAll(s.duration)].map(text).find(t => /^\d{1,3}:\d{2}(?::\d{2})?$/.test(t));
+        const duration = durationText ? durationText.split(':').reduce((a, n) => a * 60 + Number(n), 0) : null;
+        const author = card.querySelector('a[href*="space.bilibili.com"]')?.getAttribute('href')?.match(/space\.bilibili\.com\/(\d+)/)?.[1];
+        return { type: 2, id: stableId(href.match(/\/av(\d+)/)?.[1]), bvid: href.match(/BV[0-9A-Za-z]{10}/)?.[0] || null, duration, upper: { mid: author } };
+      });
+      const next = pager?.querySelector(s.next);
+      if (!medias.length && folder.count !== 0) throw new Error('网页视频条目未识别，不能将空页当成统计结果');
+      return { info: { id, media_count: folder.count }, medias,
+        has_more: !!next && !next.disabled && !/disabled/.test(next.className) };
+    }
+  }
+
+  /** Capture choices once; no retry/fallback between HTTP and native actions. */
+  class TransportClient {
+    constructor(api, web, modes) { this.api = api; this.web = web; this.modes = modes; }
+    capture() {
+      const read = this[this.modes.read], write = this[this.modes.manage];
+      return { folders: (...args) => read.folders(...args), videos: (...args) => read.videos(...args), mutate: (...args) => write.mutate(...args) };
+    }
+    folders(...args) { return this.capture().folders(...args); }
+    videos(...args) { return this.capture().videos(...args); }
+  }
+
+  const fail = (detail, outcome = 'failed') => { const error = new Error(detail); error.outcome = outcome; throw error; };
+  class ApiCopyFlow {
+    constructor(client, context, pace = 400) { this.client = client; this.context = context; this.pace = pace; this.running = false; }
+    check(expected, signal) {
+      if (signal?.aborted) fail('已停止后续复制', 'interrupted');
+      const current = this.context();
+      if (!stableId(current.actor) || current.actor !== expected.actor || current.pageOwner !== expected.pageOwner) fail('账号或来源空间变化，已停止');
+    }
+    require(result) { if (result?.status !== 'confirmed') fail(result?.detail || '结果未识别', result?.status === 'unknown' ? 'unknown' : 'failed'); }
+    resolve(rows, name, required = true) {
+      const found = rows.filter(row => normalizeFavoriteName(row.name) === name);
+      if (found.length > 1) fail(`同名收藏夹身份不明确：${name}`);
+      if (!found.length && required) fail(`未找到收藏夹：${name}`);
+      return found[0];
+    }
+    async resources(folder, signal) {
+      const ids = [], seen = new Set(); let expected = null;
+      for (let pn = 1; pn <= 500; pn++) {
+        if (pn > 1) await pause(this.pace, signal);
+        const page = await this.client.videos(folder.id, pn, signal, folder);
+        if (!Array.isArray(page.medias) || stableId(page.info?.id) !== folder.id || typeof page.has_more !== 'boolean' ||
+          !Number.isSafeInteger(page.info.media_count) || page.info.media_count < 0 || (expected !== null && expected !== page.info.media_count)) fail('来源分页身份或数量变化，未继续复制');
+        expected = page.info.media_count;
+        for (const raw of page.medias) {
+          const id = raw.type === 2 ? stableId(raw.id) : null;
+          if (!id || seen.has(id) || (Number.isInteger(raw.attr) && (raw.attr & 1))) fail('来源含失效、重复或不支持的资源，请先检查');
+          ids.push(id); seen.add(id);
+        }
+        if (!page.has_more) {
+          if (ids.length !== expected) fail('来源列表不完整，未继续复制');
+          return ids;
+        }
+        if (!page.medias.length) break;
+      }
+      fail('来源分页未完整读取');
+    }
+    async prepareTargets(names, expected, creator, signal) {
+      let rows = await this.client.folders(expected.actor, 'created', signal, this.pace);
+      const targets = new Map();
+      // Resolve all ambiguous names before creating anything.
+      for (const name of names) this.resolve(rows, name, false);
+      for (const name of names) {
+        this.check(expected, signal);
+        let target = this.resolve(rows, name, false);
+        if (!target) {
+          const result = await creator.create(name, signal); this.require(result);
+          await pause(this.pace, signal); this.check(expected, signal);
+          try { rows = await this.client.folders(expected.actor, 'created', signal, this.pace); }
+          catch { fail('创建已获响应，但未能核对目标列表；请检查，勿直接重试', 'unknown'); }
+          target = this.resolve(rows, name, false);
+          if (!target) fail('创建已提交，但尚未在目标列表核对到结果；请检查，勿直接重试', 'unknown');
+        }
+        if (!stableId(target.id) || target.ownerId !== expected.actor || !target.available) fail('目标身份或可用性未确认');
+        targets.set(name, target);
+      }
+      return targets;
+    }
+    async run(tasks, { creator = this.client, signal, onProgress = () => {} } = {}) {
+      if (this.running) fail('已有 API 复制任务');
+      tasks = normalizeCopyTasks(tasks);
+      if (!tasks.length) fail('请选择来源');
+      const expected = this.context(); this.check(expected, signal); this.running = true;
+      try {
+        const sources = await this.client.folders(expected.pageOwner, 'created', signal, this.pace);
+        const snapshots = [];
+        for (const task of tasks) {
+          this.check(expected, signal); const source = this.resolve(sources, task.source);
+          if (!source.available || !stableId(source.id) || source.ownerId !== expected.pageOwner) fail('来源身份或可用性未确认');
+          if (expected.actor === expected.pageOwner && task.source === task.target) fail('来源与目标相同，未提交');
+          snapshots.push({ task, source, ids: await this.resources(source, signal) });
+        }
+        const targets = await this.prepareTargets([...new Set(tasks.map(task => task.target))], expected, creator, signal);
+        for (const { task, source, ids } of snapshots) {
+          const target = targets.get(task.target);
+          if (source.id === target.id) fail('来源与目标 ID 相同，未提交');
+          for (let offset = 0; offset < ids.length; offset += 20) {
+            await pause(this.pace, signal); this.check(expected, signal);
+            const fresh = await this.client.folders(expected.actor, 'created', signal, this.pace);
+            const current = fresh.find(row => row.id === target.id);
+            if (!current || current.ownerId !== target.ownerId || current.name !== target.name || !current.available) fail('目标身份变化，已停止');
+            this.check(expected, signal);
+            this.require(await this.client.copy(source, target, ids.slice(offset, offset + 20), expected.actor, signal));
+            onProgress({ task, copied: Math.min(ids.length, offset + 20), total: ids.length });
+          }
+          onProgress({ task, complete: true, total: ids.length });
+        }
+        return { status: 'completed' };
       } finally { this.running = false; }
     }
   }
@@ -1465,8 +1839,12 @@
       this.api = BilibiliAPI;
       this.crossPageFlow = new CrossPageFlowManager(this);
       this.operation = new OperationState();
-      this.logs = new LogStore();
-      this.inventory = new InventoryService();
+      this.logs = new LogStore(500, browserStore('sessionStorage', `bili-favs-records-v2:${PageDetector.getLoginUserUID() || 'guest'}`));
+      this.modes = panelPreferences().modes;
+      this.http = new FolderClient(); this.web = new WebFolderClient();
+      this.transport = new TransportClient(this.http, this.web, this.modes);
+      this.inventory = new InventoryService(this.transport);
+      this.apiCopy = new ApiCopyFlow(this.http, () => ({ actor: PageDetector.getLoginUserUID(), pageOwner: PageDetector.getCurrentPageUID() }));
       this.batchOperations = new BatchOperations(this.inventory.client, () => ({ actor: PageDetector.getLoginUserUID(), pageOwner: PageDetector.getCurrentPageUID() }));
     }
 
@@ -1684,6 +2062,34 @@
      * @returns {Promise<void>}
      */
     async batchCopy(copyList, options = {}) {
+      // A saved webpage handoff must never change execution transport on refresh.
+      if (options.skipCrossPage || options.operationId) return this.batchCopyWeb(copyList, options);
+      const modes = validModes(this.modes);
+      copyList = normalizeCopyTasks(copyList);
+      if (modes.copy === 'web' && modes.create === 'web') return this.batchCopyWeb(copyList, options);
+      this.operation.begin(`批量复制（${modes.copy === 'api' ? 'API' : '网页'}）`, copyList.length, { phase: 'copying' });
+      this.logs.setContext({ view: 'copy', operationId: this.operation.state.operationId, phase: 'copying' });
+      log(`本次方式：复制 ${modes.copy}，创建 ${modes.create}；不会自动切换或重试。`);
+      try {
+        const creator = modes.create === 'api' ? this.http : this.web;
+        if (modes.copy === 'api') {
+          await this.apiCopy.run(copyList, { creator, onProgress: event => {
+            if (event.complete) this.operation.confirm(`${event.task.source} → ${event.task.target}`);
+            else this.operation.update({ detail: `当前收藏夹已确认 ${event.copied} / ${event.total} 条（API）。` });
+          } });
+          this.operation.finish('completed', '所选任务已获得平台确认，请核对目标收藏夹。');
+          return { status: 'completed' };
+        }
+        const expected = this.apiCopy.context();
+        await this.apiCopy.prepareTargets([...new Set(copyList.map(task => task.target))], expected, creator);
+        return await this.batchCopyWeb(copyList, { skipCrossPage: true, operationId: this.operation.state.operationId });
+      } catch (error) {
+        if (!['failed', 'unknown'].includes(this.operation.state.status)) this.operation.finish(error.outcome === 'unknown' ? 'unknown' : 'failed', error.message);
+        throw error;
+      }
+    }
+
+    async batchCopyWeb(copyList, options = {}) {
       copyList = normalizeCopyTasks(copyList);
       const { skipCrossPage = false } = options;
       if (!options.operationId || this.operation.state.operationId !== options.operationId || this.operation.state.status !== 'running')
@@ -1850,233 +2256,50 @@
     }
   }
 
-  /**
-   * 事件处理器
-   * 处理浮动面板的拖动、缩放和交互事件
-   */
-
+  /** Title dragging and thin, in-bounds resizing; one owner for both gestures. */
   class EventHandlers {
-    /**
-     * 切换全选状态
-     * @param {HTMLElement} selectAllButton - 全选按钮
-     * @param {Array} favCheckboxItemList - 复选框项列表
-     */
-    static toggleSelectAll(selectAllButton, favCheckboxItemList) {
-      if (selectAllButton.textContent === '点我全选') {
-        for (const chkboxItem of favCheckboxItemList) {
-          chkboxItem.checkbox.checked = true;
-        }
-        selectAllButton.textContent = '点我全部取消';
-      } else {
-        for (const chkboxItem of favCheckboxItemList) {
-          chkboxItem.checkbox.checked = false;
-        }
-        selectAllButton.textContent = '点我全选';
-      }
-    }
-
-    /**
-     * 切换最小化状态
-     * @param {Object} panel - FloatingPanel 实例
-     */
-    static toggleMinimize(panel) {
-      panel.toggleMinimize();
-    }
-
-    /**
-     * 鼠标松开时结束尺寸修改
-     * @param {Object} panel - FloatingPanel 实例
-     */
-    static stopResizeOnBody(panel) {
-      panel.resizeable = false;
-    }
-
-    /**
-     * 鼠标松开时结束拖动
-     * @param {Object} panel - FloatingPanel 实例
-     */
-    static stopDragOnPanel(panel) {
-      panel.isDragging = false;
-    }
-
-    /**
-     * 鼠标按下事件
-     * @param {Object} panel - FloatingPanel 实例
-     * @param {MouseEvent} e - 鼠标事件
-     */
     static mouseDown(panel, e) {
-      if (e.button !== 0 || e.target.closest('button,input,select,textarea,label,summary,a')) return;
-      const floP = panel.floatingPanel;
-      let d = EventHandlers.getDirection(panel, e);
-
-      // 当位置为四个边和四个角时才开启尺寸修改
-      if (d !== '') {
-        panel.resizeable = true;
-        panel.isDragging = false;
-        panel.direction = d;
-      } else if (e.target.closest('.bf-header')) {
-        // 如果点中了按钮、输入框或输出框，不开启拖动
-        if (
-          e.target.tagName === 'BUTTON' ||
-          e.target.tagName === 'INPUT' ||
-          e.target.tagName === 'SELECT' ||
-          e.target.classList.contains('output-text-box')
-        ) ; else {
-          panel.isDragging = true;
-          panel.offsetX = e.clientX - floP.getBoundingClientRect().left;
-          panel.offsetY = e.clientY - floP.getBoundingClientRect().top;
-        }
-      }
+      if (e.button !== 0 || e.target.closest('button,input,select,textarea,label,summary,a') || panel.exportReview) return;
+      const d = this.getDirection(panel, e), r = panel.floatingPanel.getBoundingClientRect();
+      if (d && !panel.minimized) {
+        panel.resizeable = true; panel.direction = d;
+        panel.resizeStart = { x:e.clientX, y:e.clientY, ...this.rectangle(r) };
+      } else if (!d && e.target.closest('.bf-header')) {
+        panel.dragStart = { x:e.clientX, y:e.clientY, ...this.rectangle(r) };
+      } else return;
+      e.preventDefault();
     }
-
-    /**
-     * 鼠标移动事件，修改大小
-     * @param {Object} panel - FloatingPanel 实例
-     * @param {MouseEvent} e - 鼠标事件
-     */
+    static rectangle(r) { return { left:r.left, top:r.top, width:r.width, height:r.height }; }
+    static getDirection(panel, e) {
+      const r = panel.floatingPanel.getBoundingClientRect(), x = e.clientX-r.left, y = e.clientY-r.top;
+      if (x<0 || y<0 || x>r.width || y>r.height || panel.minimized) return '';
+      if (e.target?.closest('.bf-resize-grip')) return 'se';
+      const edge = CONFIG.PANEL.RESIZE_BORDER_SIZE;
+      return (y<=edge?'n':y>=r.height-edge?'s':'')+(x<=edge?'w':x>=r.width-edge?'e':'');
+    }
     static mouseMove(panel, e) {
-      let floP = panel.floatingPanel;
-      let d = EventHandlers.getDirection(panel, e);
-
-      // 修改鼠标显示效果
-      let cursor = d === '' ? 'default' : d + '-resize';
-      floP.style.cursor = cursor;
-
-      if (panel.resizeable) {
-        // 当开启尺寸修改时，鼠标移动会修改div尺寸
-        const direc = panel.direction;
-        let newWidth = floP.offsetWidth;
-        let newHeight = floP.offsetHeight;
-
-        let originTop = floP.offsetTop;
-        let originLeft = floP.offsetLeft;
-        let newTop = originTop;
-        let newLeft = originLeft;
-
-        // 左侧和上侧
-        if (direc.indexOf('w') !== -1) {
-          newWidth -= e.movementX;
-          newLeft += e.movementX;
-        }
-        if (direc.indexOf('n') !== -1) {
-          newHeight -= e.movementY;
-          newTop += e.movementY;
-        }
-
-        // 右侧和底部
-        if (direc.indexOf('e') !== -1) {
-          newWidth += e.movementX;
-        }
-        if (direc.indexOf('s') !== -1) {
-          newHeight += e.movementY;
-        }
-
-        EventHandlers.judgePanelSizeAndUpdate(panel, newLeft, newTop, newWidth, newHeight, originTop, originLeft);
-      }
+      const d = this.getDirection(panel,e);
+      panel.floatingPanel.style.cursor = d ? d+'-resize' : '';
+      panel.header.style.cursor = d ? d+'-resize' : '';
+      if (!panel.resizeable) return;
+      const s=panel.resizeStart, dir=panel.direction, dx=e.clientX-s.x, dy=e.clientY-s.y;
+      const w=Math.max(panel.minW,s.width+(dir.includes('w')?-dx:dir.includes('e')?dx:0));
+      const h=Math.max(panel.minH,s.height+(dir.includes('n')?-dy:dir.includes('s')?dy:0));
+      this.judgePanelSizeAndUpdate(panel,dir.includes('w')?s.left+s.width-w:s.left,dir.includes('n')?s.top+s.height-h:s.top,w,h);
     }
-
-    /**
-     * 拖动面板
-     * @param {Object} panel - FloatingPanel 实例
-     * @param {MouseEvent} e - 鼠标事件
-     */
-    static dragOnPanel(panel, e) {
-      if (panel.isDragging) {
-        panel.floatingPanel;
-        let newLeft = e.clientX - panel.offsetX;
-        let newTop = e.clientY - panel.offsetY;
-
-        EventHandlers.judgePanelPosAndUpdate(panel, newLeft, newTop);
-      }
+    static dragOnPanel(panel,e) {
+      const s=panel.dragStart;
+      if (!s || panel.resizeable) return;
+      if (!panel.isDragging && Math.hypot(e.clientX-s.x,e.clientY-s.y)<3) return;
+      panel.isDragging=true;
+      this.judgePanelPosAndUpdate(panel,s.left+e.clientX-s.x,s.top+e.clientY-s.y);
     }
-
-    /**
-     * 获取鼠标所在div的位置
-     * @param {Object} panel - FloatingPanel 实例
-     * @param {MouseEvent} ev - 鼠标事件
-     * @returns {string} 方向字符串
-     */
-    static getDirection(panel, ev) {
-      const floP = panel.floatingPanel;
-      let dir = '';
-
-      if (ev.clientX - floP.getBoundingClientRect().left < 15) {
-        dir += 'w';
-      } else if (floP.getBoundingClientRect().right - ev.clientX < 15) {
-        dir += 'e';
-      }
-
-      if (ev.clientY - floP.getBoundingClientRect().top < 15) {
-        dir += 'n';
-      } else if (floP.getBoundingClientRect().bottom - ev.clientY < 15) {
-        dir += 's';
-      }
-
-      return dir;
+    static judgePanelSizeAndUpdate(panel,left,top,width,height) {
+      Object.assign(panel.floatingPanel.style,{left:Math.max(0,left)+'px',top:Math.max(0,top)+'px',width:Math.max(panel.minW,width)+'px',height:Math.max(panel.minH,height)+'px'});
+      panel.clampToViewport();
     }
-
-    /**
-     * 判断并更新面板大小
-     * @param {Object} panel - FloatingPanel 实例
-     * @param {number} newLeft - 新的左边距
-     * @param {number} newTop - 新的上边距
-     * @param {number} newWidth - 新的宽度
-     * @param {number} newHeight - 新的高度
-     * @param {number} originTop - 原始上边距
-     * @param {number} originLeft - 原始左边距
-     */
-    static judgePanelSizeAndUpdate(panel, newLeft, newTop, newWidth, newHeight, originTop, originLeft) {
-      const floP = panel.floatingPanel;
-
-      // 获取视口的宽度和高度
-      let viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-      let viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-
-      // 判断面板是否会跑到屏幕外边
-      if (newLeft < 0 || newLeft + newWidth > viewportWidth) {
-        return;
-      }
-      if (newTop < 0 || newTop + newHeight > viewportHeight) {
-        return;
-      }
-
-      // 确保面板不会变得太小
-      if (newWidth < panel.minW) {
-        newWidth = panel.minW;
-        newLeft = originLeft;
-      }
-
-      if (newHeight < panel.minH) {
-        newHeight = panel.minH;
-        newTop = originTop;
-      }
-
-      floP.style.width = newWidth + 'px';
-      floP.style.height = newHeight + 'px';
-      floP.style.top = newTop + 'px';
-      floP.style.left = newLeft + 'px';
-    }
-
-    /**
-     * 判断并更新面板位置
-     * @param {Object} panel - FloatingPanel 实例
-     * @param {number} newLeft - 新的左边距
-     * @param {number} newTop - 新的上边距
-     */
-    static judgePanelPosAndUpdate(panel, newLeft, newTop) {
-      const floP = panel.floatingPanel;
-
-      // 获取视口的宽度和高度
-      let viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-      let viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-
-      // 确保面板不会移动到屏幕外边
-      newLeft = Math.max(0, Math.min(newLeft, viewportWidth - floP.offsetWidth));
-      newTop = Math.max(0, Math.min(newTop, viewportHeight - floP.offsetHeight));
-
-      // 更新面板位置
-      floP.style.left = newLeft + 'px';
-      floP.style.top = newTop + 'px';
+    static judgePanelPosAndUpdate(panel,left,top) {
+      Object.assign(panel.floatingPanel.style,{left:left+'px',top:top+'px'}); panel.clampToViewport();
     }
   }
 
@@ -2090,14 +2313,16 @@
  box-sizing:border-box; position:fixed; top:24px; left:24px; width:${CONFIG.PANEL.INITIAL_WIDTH}px; height:${CONFIG.PANEL.INITIAL_HEIGHT}px;
  max-width:calc(100vw - 16px); max-height:calc(100dvh - 16px); min-width:280px; min-height:64px;
  z-index:99999; background:var(--bf-surface); color:var(--bf-ink); border:1px solid var(--bf-control); border-radius:6px;
- box-shadow:0 4px 20px #20334424; font:400 var(--bf-text)/1.5 var(--bf-font); overflow:hidden; resize:both;
+ box-shadow:0 4px 20px #20334424; font:400 var(--bf-text)/1.5 var(--bf-font); overflow:hidden; resize:none;
  display:flex; flex-direction:column;
  text-align:left; container-type:inline-size; isolation:isolate; color-scheme:light;
 }
-.bili-favs-manage-panel .bf-body { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto; flex:1; min-height:0; }
+.bili-favs-manage-panel .bf-body { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,var(--bf-record-width,272px)); grid-template-rows:minmax(0,1fr) auto; flex:1; min-height:0; }
 .bili-favs-manage-panel[data-logs-open=false] .bf-body { grid-template-columns:minmax(0,1fr); }
 .bili-favs-manage-panel[data-minimized=true] { display:block; resize:none; }
 .bili-favs-manage-panel[data-minimized=true] .bf-body { display:none; }
+.bili-favs-manage-panel .bf-resize-grip { position:absolute; right:0; bottom:0; width:14px; height:14px; z-index:3; cursor:se-resize; background:repeating-linear-gradient(135deg,transparent 0 3px,var(--bf-control) 3px 4px); clip-path:polygon(100% 0,100% 100%,0 100%); }
+.bili-favs-manage-panel[data-minimized=true] .bf-resize-grip { display:none; }
 .bili-favs-manage-panel * { box-sizing:border-box; font-family:inherit; letter-spacing:normal; }
 .bili-favs-manage-panel [hidden] { display:none !important; }
 .bili-favs-manage-panel h2,.bili-favs-manage-panel h3 { color:var(--bf-ink); font:600 var(--bf-title)/1.5 var(--bf-font); margin:0 0 8px; }
@@ -2111,12 +2336,12 @@
 .bili-favs-manage-panel button:disabled { opacity:.5; cursor:default; }
 .bili-favs-manage-panel :focus-visible { outline:3px solid var(--bf-blue); outline-offset:1px; }
 .bili-favs-manage-panel .bf-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
-.bili-favs-manage-panel .bf-header { display:flex; align-items:center; gap:4px; min-width:0; padding:8px 12px; cursor:move; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
+.bili-favs-manage-panel .bf-header { display:flex; align-items:center; gap:2px; min-width:0; padding:6px; cursor:move; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
 .bili-favs-manage-panel .bf-header strong { min-width:0; font-size:var(--bf-title); }
 .bili-favs-manage-panel .bf-version { margin-right:auto; font-size:var(--bf-small); color:var(--bf-muted); }
-.bili-favs-manage-panel .bf-header button { font-size:var(--bf-small); min-height:28px; padding:4px 6px; border-color:transparent; background:transparent; flex-shrink:0; }
+.bili-favs-manage-panel .bf-header button { font-size:var(--bf-small); min-height:28px; padding:4px; border-color:transparent; background:transparent; flex-shrink:0; }
 .bili-favs-manage-panel .bf-header button[aria-expanded=true] { color:var(--bf-blue); background:var(--bf-selected); }
-.bili-favs-manage-panel .bf-navigation { display:flex; gap:24px; padding:0 12px; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
+.bili-favs-manage-panel .bf-navigation { display:flex; gap:18px; padding:0 12px; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
 .bili-favs-manage-panel .bf-navigation button { border:0; border-bottom:2px solid transparent; border-radius:0; padding:8px 0 6px; background:none; color:var(--bf-muted); }
 .bili-favs-manage-panel .bf-navigation button[aria-pressed=true] { color:var(--bf-blue); font-weight:600; border-bottom-color:var(--bf-blue); }
 .bili-favs-manage-panel .bf-content { grid-column:1; grid-row:1; overflow-y:auto; overflow-x:hidden; padding:8px 12px; min-height:0; scrollbar-width:thin; scrollbar-color:var(--bf-control) transparent; scroll-padding:8px; }
@@ -2183,6 +2408,8 @@
 .bili-favs-manage-panel .bf-diagnostics .bf-tools { margin:4px 0 6px; gap:4px 8px; font-size:var(--bf-small); }
 .bili-favs-manage-panel .bf-diagnostics button,.bili-favs-manage-panel .bf-diagnostics select { font-size:var(--bf-small); min-height:28px; padding:4px 6px; }
 .bili-favs-manage-panel .bf-diagnostics label { gap:4px; }
+.bili-favs-manage-panel .bf-log-filter select { appearance:auto; background-image:none; min-width:90px; flex:1; }
+.bili-favs-manage-panel .bf-log-filter { flex:1; min-width:110px; }
 .bili-favs-manage-panel .output-text-box { flex:1; overflow:auto; min-height:32px; border-top:1px solid var(--bf-line); font-size:var(--bf-small); line-height:1.5; scrollbar-width:thin; scroll-padding:8px; }
 .bili-favs-manage-panel .bf-log-row { display:grid; grid-template-columns:54px 28px minmax(0,1fr); gap:0 6px; padding:5px 0; border-bottom:1px solid var(--bf-line); align-items:baseline; }
 .bili-favs-manage-panel .bf-log-context { color:var(--bf-muted); font-size:var(--bf-small); text-align:right; overflow-wrap:anywhere; }
@@ -2196,28 +2423,29 @@
 .bili-favs-manage-panel .bf-export { position:absolute; inset:0; background:var(--bf-surface); z-index:2; padding:16px; display:flex; align-content:flex-start; flex-wrap:wrap; gap:12px; overflow:auto; }
 .bili-favs-manage-panel .bf-export h3,.bili-favs-manage-panel .bf-export p { width:100%; }
 .bili-favs-manage-panel textarea { display:block; width:100%; height:55%; min-height:140px; resize:vertical; padding:8px; margin:0; border:1px solid var(--bf-control); background:var(--bf-surface); }
-@container (max-width:559px) {
- .bili-favs-manage-panel .bf-body { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto auto; }
- .bili-favs-manage-panel .bf-diagnostics { grid-column:1; grid-row:3; border-left:0; border-top:1px solid var(--bf-line); height:130px; }
- .bili-favs-manage-panel .bf-record-tools { display:flex; align-items:center; justify-content:space-between; gap:8px; }
- .bili-favs-manage-panel .bf-log-heading .bf-muted { display:none; }
- .bili-favs-manage-panel .bf-diagnostics .bf-tools { margin:0; }
- .bili-favs-manage-panel .bf-log-actions { padding:4px 0 0; }
- .bili-favs-manage-panel .bf-log-row { grid-template-columns:54px 28px minmax(0,1fr); gap:4px; padding:4px 0; }
- .bili-favs-manage-panel .bf-log-context { display:none; }
- .bili-favs-manage-panel .bf-log-message { grid-column:auto; }
- .bili-favs-manage-panel .bf-header { padding:6px; gap:2px; flex-wrap:wrap; }
- .bili-favs-manage-panel .bf-header strong { font-size:14px; }
- .bili-favs-manage-panel .bf-header button { padding:4px; }
- .bili-favs-manage-panel .bf-version { font-size:12px; }
- .bili-favs-manage-panel .bf-content { padding:8px; }
- .bili-favs-manage-panel .bf-footer { padding:6px 8px; }
+.bili-favs-manage-panel .bf-settings { display:grid; gap:10px; }
+.bili-favs-manage-panel .bf-setting-row { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.bili-favs-manage-panel .bf-navigation button[data-settings=true] { margin-left:auto; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-body { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto auto; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-diagnostics { grid-column:1; grid-row:3; border-left:0; border-top:1px solid var(--bf-line); height:var(--bf-record-height,130px); }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-record-tools { display:block; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-heading .bf-muted { display:none; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-diagnostics .bf-tools { margin:0; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-actions { padding:4px 0 0; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-row { grid-template-columns:54px 28px minmax(0,1fr); gap:4px; padding:4px 0; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-context { display:none; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-message { grid-column:auto; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-header { padding:6px; gap:2px; flex-wrap:wrap; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-header strong { font-size:14px; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-header button { padding:4px; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-version { font-size:12px; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-content { padding:8px; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-footer { padding:6px 8px; }
  @media(max-height:500px) {
-  .bili-favs-manage-panel .bf-diagnostics { height:96px; padding:4px 8px; }
-  .bili-favs-manage-panel .bf-diagnostics button,.bili-favs-manage-panel .bf-diagnostics select { min-height:24px; padding:2px 6px; }
-  .bili-favs-manage-panel .output-text-box { min-height:24px; }
+  .bili-favs-manage-panel[data-records-layout=bottom] .bf-diagnostics { height:var(--bf-record-height,130px); padding:4px 8px; }
+  .bili-favs-manage-panel[data-records-layout=bottom] .bf-diagnostics button,.bili-favs-manage-panel[data-records-layout=bottom] .bf-diagnostics select { min-height:24px; padding:2px 6px; }
+  .bili-favs-manage-panel[data-records-layout=bottom] .output-text-box { min-height:24px; }
  }
-}
 @media(max-width:595px) { .bili-favs-manage-panel { top:8px; left:8px; } }
 @media(max-height:500px) {
  .bili-favs-manage-panel .bf-header { padding-top:4px; padding-bottom:4px; }
@@ -2251,11 +2479,12 @@
     const label = element('label', 'bf-folder-row');
     label.append(input, element('span', 'bf-folder-name', folder.name),
       element('span', 'bf-folder-count', folder.count == null ? '数量未知' : `${folder.count} 条`));
-    const identity = `ID ${folder.id} / 所有者 ${folder.ownerId || '未知'}`;
+    const identity = `${folder.kind === 'season' ? '合集' : '收藏夹'} / ID ${folder.id || '未知'} / 所有者 ${folder.ownerId || '未知'}`;
     label.title = `${folder.name} · ${identity}`;
     input.setAttribute('aria-label', `${folder.name} · ${identity}${reason ? ` · 不可选：${reason}` : ''}`);
     row.append(label);
     if (reason) row.append(element('span', 'bf-folder-reason', `不可选：${reason}`));
+    else if (folder.available === false) row.append(element('span', 'bf-folder-reason', '内容已失效，可取消订阅'));
     return row;
   }
 
@@ -2316,11 +2545,11 @@
   const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
   const descriptions = {
     delete: { verb: '删除', title: '删除自己创建的收藏夹',
-      detail: '删除整个收藏夹，无法撤销；原视频保留。',
+      detail: '删除此收藏夹及其中的收藏关系，无法在此撤销。',
       agreement: '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。' },
     unsubscribe: { verb: '退订', title: '取消我的收藏夹订阅',
-      detail: '取消我的订阅，原作者内容不受影响。',
-      agreement: '我已检查以上 ID 和所有者，确认取消当前账号对这些收藏夹的订阅；原作者的内容不受影响。' }
+      detail: '取消当前账号对此收藏夹或合集的订阅。',
+      agreement: '我已检查以上类型、ID 和所有者，确认取消当前账号对这些目标的订阅。' }
   };
 
   class MutationPanel {
@@ -2383,10 +2612,13 @@
       this.invalidate();
       try {
         const description = descriptions[this.action];
+        if (this.panel.manager.modes?.manage === 'web' && this.selected().some(folder => folder.available === false))
+          throw new Error('失效条目在网页不显示可核对 ID。请在设置中将“删除与取消订阅”改为 API，保存后重新加载；尚未提交。');
         this.ticket = this.engine.prepare(this.action, this.selected());
-        this.review.append(element('h3', '', `将${description.verb} ${this.ticket.targets.length} 个收藏夹`));
+        const mode = this.panel.manager.modes?.manage;
+        this.review.append(element('h3', '', `将${description.verb} ${this.ticket.targets.length} 项${mode ? `（${mode === 'api' ? 'API' : '网页'}）` : ''}`));
         this.review.append(element('p', '', description.detail));
-        for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ID ${target.id} · 所有者 ${target.ownerId} · ${target.count ?? '未知'} 条`));
+        for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ${target.kind === 'season' ? '合集' : '收藏夹'} · ID ${target.id} · 所有者 ${target.ownerId || '未知'} · ${target.count ?? '未知'} 条${target.available === false ? ' · 内容已失效' : ''}`));
         this.agreement = element('input'); this.agreement.type = 'checkbox';
         const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', description.agreement));
         this.agreement.addEventListener('change', () => this.updateBusy());
@@ -2439,7 +2671,7 @@
       const tools = element('div', 'bf-tools bf-catalog-tools');
       tools.append(this.kind, this.loadButton);
       this.selectionTools = new SelectionToolbar({
-        rows: () => this.rows.map(row => ({ ...row, name: row.folder.name, eligible: row.folder.kind !== 'unsupported' })),
+        rows: () => this.rows.map(row => ({ ...row, name: row.folder.name, eligible: row.folder.kind !== 'unsupported' && row.folder.available !== false })),
         busy: () => panel.busy, change: () => this.updateBusy()
       });
       this.selectionCount = this.selectionTools.count;
@@ -2508,16 +2740,18 @@
       this.cancelButton.hidden = !this.controller;
       if (this.mutations) this.mutations.previewButton.hidden = !manage || busy;
       this.selectionTools.update();
-      for (const row of this.rows) row.input.disabled = busy || row.folder.kind === 'unsupported';
+      for (const row of this.rows) row.input.disabled = busy || row.folder.kind === 'unsupported' || row.folder.available === false;
       this.mutations?.updateBusy();
     }
 
-    selected() { return this.rows.filter(row => row.input.checked).map(row => row.folder); }
+    selected() { return this.rows.filter(row => row.input.checked && row.folder.kind !== 'unsupported' && row.folder.available !== false).map(row => row.folder); }
 
     async run(action, work, phase = '', total = null) {
       if (this.panel.busy) return;
       this.controller = new AbortController();
-      this.panel.setBusy(true); this.operation.begin(action, total, { phase });
+      const modes = this.panel.manager.modes;
+      const mode = modes?.[phase === 'delete' || phase === 'unsubscribe' ? 'manage' : 'read'];
+      this.panel.setBusy(true); this.operation.begin(mode ? `${action}（${mode === 'api' ? 'API' : '网页'}）` : action, total, { phase });
       try { await work(this.controller.signal); }
       catch (err) {
         this.operation.finish(this.controller.signal.aborted ? 'interrupted' : 'failed', this.controller.signal.aborted ? '已取消，可以重新加载或选择。' : err.message);
@@ -2548,7 +2782,7 @@
         for (const folder of folders) {
           const input = element('input'); input.type = 'checkbox'; input.disabled = folder.kind === 'unsupported';
           input.addEventListener('change', () => this.updateBusy());
-          const node = folderRow(folder, input, folder.kind === 'unsupported' ? '合集暂不支持' : '');
+          const node = folderRow(folder, input, folder.kind === 'unsupported' ? '类型未识别' : folder.available === false ? '内容已失效，无法统计' : '');
           this.list.append(node); this.rows.push({ input, folder, node });
         }
         if (!folders.length) this.list.append(element('p', 'bf-empty', '这个范围没有可读取的收藏夹。可以更换范围后重新加载。'));
@@ -2574,6 +2808,65 @@
     destroy() { this.controller?.abort(); this.mutations?.destroy(); }
   }
 
+  /** Geometry is UI state; never restores execution state. */
+  class PanelLayout {
+    constructor(panel, preferences) { this.panel = panel; this.preferences = preferences; this.auxiliary = preferences.auxiliary; }
+    get root() { return this.panel.floatingPanel; }
+    restore() {
+      const { geometry, layout } = this.preferences;
+      if (geometry) for (const key of ['width', 'height', 'left', 'top']) this.root.style[key] = `${geometry[key]}px`;
+      this.root.dataset.recordsLayout = this.panel.logsOpen ? this.orientation() : layout;
+      if (this.auxiliary) this.root.style.setProperty(layout === 'bottom' ? '--bf-record-height' : '--bf-record-width', `${this.auxiliary}px`);
+      this.clamp();
+    }
+    rect() {
+      const r = this.root.getBoundingClientRect();
+      return { width: r.width || parseFloat(this.root.style.width) || CONFIG.PANEL.INITIAL_WIDTH,
+        height: r.height || parseFloat(this.root.style.height) || CONFIG.PANEL.INITIAL_HEIGHT,
+        left: r.width ? r.left : parseFloat(this.root.style.left) || 24,
+        top: r.height ? r.top : parseFloat(this.root.style.top) || 24 };
+    }
+    orientation() { return this.rect().width < 560 ? 'bottom' : 'side'; }
+    clamp() {
+      const r = this.rect();
+      const width = Math.min(r.width, Math.max(280, window.innerWidth - 16));
+      const height = Math.min(r.height, Math.max(64, window.innerHeight - 16));
+      if (r.width !== width) this.root.style.width = `${width}px`;
+      if (r.height !== height) this.root.style.height = `${height}px`;
+      this.root.style.left = `${Math.max(0, Math.min(r.left, window.innerWidth - width))}px`;
+      this.root.style.top = `${Math.max(0, Math.min(r.top, window.innerHeight - height))}px`;
+      if (this.panel.logsOpen) this.root.dataset.recordsLayout = this.orientation();
+    }
+    toggle(willOpen) {
+      const r = this.rect();
+      const side = this.root.dataset.recordsLayout !== 'bottom';
+      if (!willOpen) {
+        const pane = this.panel.diagnostics.getBoundingClientRect();
+        this.auxiliary = side ? pane.width || (r.width - 2) / 2.2 : pane.height || 130;
+      }
+      const key = side ? 'width' : 'height';
+      if (willOpen) this.root.style.setProperty(side ? '--bf-record-width' : '--bf-record-height', `${this.auxiliary}px`);
+      this.root.style[key] = `${Math.max(side ? 280 : 64, r[key] + (willOpen ? 1 : -1) * this.auxiliary)}px`;
+    }
+    save() {
+      if (!this.root) return;
+      const geometry = this.rect();
+      if (this.panel.minimized) geometry.height = parseFloat(this.panel.hiddenHeight) || CONFIG.PANEL.INITIAL_HEIGHT;
+      this.preferences.store.write({ version: 1, geometry, logsOpen: this.panel.logsOpen,
+        layout: this.root.dataset.recordsLayout, auxiliary: this.auxiliary,
+        modes: this.panel.manager.modes || this.preferences.modes });
+    }
+    reset() {
+      const p = this.panel;
+      if (p.minimized) p.toggleMinimize();
+      if (!p.logsOpen) p.toggleLogs();
+      this.auxiliary = 0;
+      this.root.style.removeProperty('--bf-record-width'); this.root.style.removeProperty('--bf-record-height');
+      Object.assign(this.root.style, { width: `${CONFIG.PANEL.INITIAL_WIDTH}px`, height: `${CONFIG.PANEL.INITIAL_HEIGHT}px`, left: '24px', top: '24px' });
+      this.clamp(); this.save();
+    }
+  }
+
   const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止', interrupted: '已中断', unknown: '待核对', waiting: '等待跳转' };
   const logLevels = { info: '信息', warn: '警告', error: '错误', debug: '调试' };
 
@@ -2594,10 +2887,12 @@
       this.minH = 64;
       this.activeView = 'copy';
       this.viewScroll = new Map();
-      this.logsOpen = true;
+      this.preferences = panelPreferences();
+      this.logsOpen = this.preferences.logsOpen;
+      this.layout = new PanelLayout(this, this.preferences);
     }
 
-    get operation() { return this.operations[this.activeView]; }
+    get operation() { return this.operations[this.activeView] || this.operations.copy; }
 
     init() {
       this.favorites = this.manager.getAllFavoriteNames();
@@ -2607,14 +2902,28 @@
       style.textContent = panelStyles;
       this.floatingPanel = root;
       this.header = element('header', 'bf-header');
+      this.header.tabIndex = 0;
+      this.header.title = '拖动标题移动；聚焦标题后方向键移动，Shift + 方向键调整大小';
+      this.header.setAttribute('aria-label', this.header.title);
+      this.header.addEventListener('keydown', event => {
+        if (event.target !== this.header || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+        event.preventDefault(); const r = this.layout.rect();
+        const dx = event.key === 'ArrowLeft' ? -10 : event.key === 'ArrowRight' ? 10 : 0;
+        const dy = event.key === 'ArrowUp' ? -10 : event.key === 'ArrowDown' ? 10 : 0;
+        if (event.shiftKey && !this.minimized) EventHandlers.judgePanelSizeAndUpdate(this, r.left, r.top, r.width + dx, r.height + dy);
+        else EventHandlers.judgePanelPosAndUpdate(this, r.left + dx, r.top + dy);
+        this.layout.save();
+      });
       this.header.append(element('strong', '', '收藏夹管理'));
       this.versionLabel = element('span', 'bf-version', `v${CONFIG.SCRIPT.VERSION}`);
       this.header.append(this.versionLabel);
-      this.logsButton = button('操作记录', () => this.toggleLogs(), 'bf-quiet');
-      this.logsButton.setAttribute('aria-expanded', 'true');
-      this.logsButton.setAttribute('aria-label', '收起操作记录');
-      this.minimizeButton = button('最小化', () => this.toggleMinimize());
-      this.dismissButton = button('关闭', () => { this.onDismiss?.(); this.destroy(); });
+      this.logsButton = button('记录', () => this.toggleLogs(), 'bf-quiet');
+      this.logsButton.setAttribute('aria-expanded', String(this.logsOpen));
+      this.logsButton.setAttribute('aria-label', this.logsOpen ? '收起操作记录' : '查看操作记录');
+      this.minimizeButton = button('−', () => this.toggleMinimize());
+      this.minimizeButton.setAttribute('aria-label', '最小化'); this.minimizeButton.title = '最小化';
+      this.dismissButton = button('×', () => { this.onDismiss?.(); this.destroy(); });
+      this.dismissButton.setAttribute('aria-label', '关闭'); this.dismissButton.title = '关闭';
       this.header.append(this.logsButton, this.minimizeButton, this.dismissButton);
       this.navigation = element('nav', 'bf-navigation');
       this.navigation.setAttribute('aria-label', '管理功能');
@@ -2624,12 +2933,19 @@
         const control = button(label, () => this.showView(view));
         this.viewButtons.set(view, control); this.navigation.append(control);
       }
+      if (this.manager.modes) {
+        this.modeButton = button('设置', () => this.showView('settings'));
+        this.modeButton.dataset.settings = 'true';
+        this.viewButtons.set('settings', this.modeButton);
+        this.navigation.append(this.modeButton);
+      }
       this.content = element('div', 'bf-content');
       this.scope = element('p', 'bf-sr-only');
       this.workspace = element('section', 'bf-workspace');
       const heading = element('div', 'bf-task-heading');
       heading.append(this.scope);
       const help = element('p', 'bf-help', '同名则复用，否则新建；来源保留。');
+      this.copyHelp = help;
       heading.append(help);
       this.workspace.append(heading);
       this.leftPanel = element('section', 'bf-sources');
@@ -2663,6 +2979,7 @@
         this.inventoryPanel = new InventoryPanel(this, this.manager.inventory);
         this.content.append(this.inventoryPanel.root);
       }
+      if (this.manager.modes) { this.createSettingsPanel(); this.content.append(this.settingsRoot); }
       this.createDiagnostics();
       this.footer = element('footer', 'bf-footer');
       this.statusBox.append(this.progressDetails);
@@ -2670,7 +2987,10 @@
       if (this.inventoryPanel) this.footer.append(this.inventoryPanel.actions);
       this.body = element('div', 'bf-body');
       this.body.append(this.content, this.footer, this.diagnostics);
-      root.append(style, this.header, this.navigation, this.body);
+      this.resizeGrip = element('span', 'bf-resize-grip');
+      this.resizeGrip.setAttribute('aria-hidden', 'true');
+      this.resizeGrip.title = '拖动调整大小';
+      root.append(style, this.header, this.navigation, this.body, this.resizeGrip);
       document.body.append(root);
       root.dataset.logsOpen = String(this.logsOpen);
       this.unsubscribes = Object.entries(this.operations).map(([view, operation]) =>
@@ -2679,21 +2999,23 @@
         EventHandlers.mouseMove(this, event);
         EventHandlers.dragOnPanel(this, event);
       };
-      this.onBodyUp = () => { this.resizeable = false; this.isDragging = false; };
+      this.onBodyUp = () => { this.resizeable = false; this.isDragging = false; this.dragStart = null; this.layout.save(); };
       root.addEventListener('mousedown', event => EventHandlers.mouseDown(this, event));
-      document.body.addEventListener('mousemove', this.onBodyMove);
-      document.body.addEventListener('mouseup', this.onBodyUp);
-      this.onViewportResize = () => this.clampToViewport();
+      document.addEventListener('mousemove', this.onBodyMove);
+      document.addEventListener('mouseup', this.onBodyUp);
+      window.addEventListener('blur', this.onBodyUp);
+      this.onViewportResize = () => { this.clampToViewport(); this.layout.save(); };
       window.addEventListener('resize', this.onViewportResize);
-      this.clampToViewport();
+      this.layout.restore();
       this.updateSelectionReview();
       this.showPageTypeIndicator();
       this.renderView();
     }
 
     showView(view) {
-      if (!['copy', 'statistics', 'manage'].includes(view) || this.busy || view === this.activeView) return;
+      if (!['copy', 'statistics', 'manage', 'settings'].includes(view) || this.busy || view === this.activeView) return;
       if ((view === 'statistics' || view === 'manage') && !this.inventoryPanel) return;
+      if (view === 'settings' && !this.settingsRoot) return;
       this.viewScroll.set(this.activeView, this.content.scrollTop);
       this.inventoryPanel?.mutations?.invalidate();
       this.activeView = view;
@@ -2703,7 +3025,9 @@
 
     renderView() {
       const view = this.activeView;
+      this.updateModeSummary();
       this.workspace.hidden = view !== 'copy';
+      if (this.settingsRoot) this.settingsRoot.hidden = view !== 'settings';
       if (this.inventoryPanel) {
         this.inventoryPanel.root.hidden = !['statistics', 'manage'].includes(view);
         if (view === 'statistics' || view === 'manage') this.inventoryPanel.setMode(view);
@@ -2712,11 +3036,13 @@
       this.copyActions.hidden = view !== 'copy';
       this.renderOperation(this.operation.state);
       if (this.outputTextBox && this.logsOpen && !this.minimized) this.renderLogs();
-      this.footer.hidden = !!this.minimized;
+      this.footer.hidden = !!this.minimized || view === 'settings';
       for (const [name, control] of this.viewButtons) control.setAttribute('aria-pressed', String(name === view));
     }
 
     toggleLogs() {
+      if (this.minimized) this.toggleMinimize();
+      this.layout.toggle(!this.logsOpen);
       this.logsOpen = !this.logsOpen;
       // Opening diagnostics from a minimized window restores the working context.
       if (this.logsOpen && this.minimized) this.toggleMinimize();
@@ -2726,6 +3052,7 @@
       this.logsButton.setAttribute('aria-label', this.logsOpen ? '收起操作记录' : '查看操作记录');
       if (this.logsOpen) this.renderLogs();
       else if (this.diagnostics.contains(document.activeElement)) this.logsButton.focus();
+      this.clampToViewport(); this.layout.save();
     }
 
     showPageTypeIndicator() {
@@ -2787,6 +3114,7 @@
       this.floatingPanel?.setAttribute('aria-busy', String(busy));
       this.selectAllButton.disabled = busy || !this.favorites.length;
       this.dismissButton.disabled = busy;
+      if (this.modeButton) this.modeButton.disabled = busy;
       for (const control of this.viewButtons.values()) control.disabled = busy;
       for (const item of this.favCheckboxItemList) { item.checkbox.disabled = busy; item.inputText.disabled = busy; }
       this.startBatchTransferButton.textContent = busy ? '操作中…' : '开始批量复制';
@@ -2848,22 +3176,24 @@
       recordTools.append(title);
       const tools = element('div', 'bf-tools');
       this.logScope = element('select'); this.logScope.setAttribute('aria-label', '记录范围');
-      for (const [value, text] of [['current', '当前功能'], ['all', '全部功能']]) {
+      for (const [value, text] of [['current', '复制功能'], ['all', '全部功能']]) {
         const option = element('option', '', text); option.value = value; this.logScope.append(option);
       }
       this.logScope.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
       this.logFilter = element('select');
-      this.logFilter.setAttribute('aria-label', '日志级别');
-      for (const [value, text] of [['normal', '常规级别'], ['all', '全部级别'], ['error', '错误'], ['warn', '警告'], ['info', '信息'], ['debug', '调试']]) {
+      this.logFilter.setAttribute('aria-label', '记录内容');
+      for (const [value, text] of [['normal', '操作与结果'], ['all', '全部（含调试）'], ['error', '仅错误'], ['warn', '仅警告'], ['info', '仅提示'], ['debug', '仅调试信息']]) {
         const option = element('option', '', text); option.value = value; this.logFilter.append(option);
       }
       this.logFilter.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
       this.followCheckbox = element('input'); this.followCheckbox.type = 'checkbox'; this.followCheckbox.checked = true;
       const followLabel = element('label', '', '跟随最新'); followLabel.prepend(this.followCheckbox);
       this.followCheckbox.addEventListener('change', () => { this.scrollTopEnabled = this.followCheckbox.checked; this.renderLogs(); });
-      tools.append(this.logScope, this.logFilter, followLabel);
+      const scopeLabel = element('label', 'bf-log-filter', '范围'); scopeLabel.append(this.logScope);
+      const contentLabel = element('label', 'bf-log-filter', '内容'); contentLabel.append(this.logFilter);
+      tools.append(scopeLabel, contentLabel);
       const actions = element('div', 'bf-log-actions');
-      actions.append(button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('导出记录', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')));
+      actions.append(button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('导出记录', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')), followLabel);
       this.outputTextBox = element('div', 'output-text-box');
       this.outputTextBox.tabIndex = 0;
       this.outputTextBox.setAttribute('role', 'region');
@@ -2931,34 +3261,73 @@
       area.focus();
     }
 
+    updateModeSummary() {
+      if (!this.manager.modes) return;
+      const name = value => value === 'api' ? 'API' : '网页';
+      const modes = this.manager.modes;
+      this.copyHelp.textContent = `${name(modes.copy)}复制 · ${name(modes.create)}创建 · 来源保留`;
+      this.modeButton.title = `读取/统计：${name(modes.read)}；复制：${name(modes.copy)}；创建：${name(modes.create)}；删除/退订：${name(modes.manage)}`;
+      this.modeButton.setAttribute('aria-label', `设置。${this.modeButton.title}`);
+      if (this.logScope) this.logScope.options[0].textContent = ({ copy: '复制功能', statistics: '统计功能', manage: '管理功能', settings: '设置' })[this.activeView];
+    }
+
+    showModeSettings() { this.showView('settings'); }
+
+    createSettingsPanel() {
+      const root = element('section', 'bf-settings'); this.settingsRoot = root; root.hidden = true;
+      root.setAttribute('aria-label', '设置');
+      root.append(element('h2', '', '操作方式'),
+        element('p', 'bf-muted', '网页方式操作页面按钮，较慢且依赖页面结构；API 直接请求 B 站网页接口，接口和权限可能变化。两种方式均使用当前登录账号。'),
+        element('p', 'bf-muted', '结果不明时停止，不自动切换或重试。API 复制也会读取来源；API 新建目标默认为私密。网页读取会依次查看条目，请勿同时操作页面。'));
+      this.modeChoices = new Map();
+      for (const [key, title] of [['read', '列表读取与统计'], ['copy', '复制内容'], ['create', '创建目标收藏夹'], ['manage', '删除与取消订阅']]) {
+        const label = element('label', 'bf-setting-row', title), select = element('select');
+        select.setAttribute('aria-label', title);
+        for (const [value, title] of [['web', '网页操作'], ['api', 'API']]) { const option = element('option', '', title); option.value = value; select.append(option); }
+        select.value = this.manager.modes[key]; label.append(select); root.append(label); this.modeChoices.set(key, select);
+      }
+      this.settingsStatus = element('p', 'bf-muted'); this.settingsStatus.setAttribute('role', 'status');
+      const controls = element('div', 'bf-tools');
+      this.saveModesButton = button('保存设置', () => {
+        if (this.busy) return;
+        for (const [key, control] of this.modeChoices) this.manager.modes[key] = control.value;
+        this.inventoryPanel?.resetCatalog('设置已更换，请重新加载列表。');
+        this.updateModeSummary(); this.layout.save(); this.settingsStatus.textContent = '已保存。新任务使用以上设置。';
+        this.logs.add(this.modeButton.title, 'info', { view: 'system', phase: 'settings' }); this.renderLogs();
+      }, 'bf-primary');
+      controls.append(this.saveModesButton, button('恢复默认位置和大小', () => this.layout.reset()));
+      root.append(controls, this.settingsStatus);
+    }
+
     toggleMinimize() {
       this.minimized = !this.minimized;
       this.floatingPanel.dataset.minimized = String(this.minimized);
       this.content.hidden = this.minimized;
-      this.navigation.hidden = this.minimized; this.footer.hidden = this.minimized;
+      this.navigation.hidden = this.minimized; this.footer.hidden = this.minimized || this.activeView === 'settings';
       this.diagnostics.hidden = this.minimized || !this.logsOpen;
-      this.minimizeButton.textContent = this.minimized ? '恢复面板' : '最小化';
+      this.minimizeButton.textContent = this.minimized ? '□' : '−';
+      this.minimizeButton.setAttribute('aria-label', this.minimized ? '恢复面板' : '最小化');
+      this.minimizeButton.title = this.minimized ? '恢复面板' : '最小化';
       this.minimizeButton.setAttribute('aria-expanded', String(!this.minimized));
       if (this.minimized) { this.hiddenHeight = this.floatingPanel.style.height; this.floatingPanel.style.height = '64px'; }
       else { this.floatingPanel.style.height = this.hiddenHeight || ''; if (this.logsOpen) this.renderLogs(); this.clampToViewport(); }
+      this.layout.save();
     }
 
-    recordPanelSize() { this.clampToViewport(); }
+    recordPanelSize() { this.clampToViewport(); this.layout.save(); }
 
     clampToViewport() {
-      if (!this.floatingPanel) return;
-      const panel = this.floatingPanel;
-      const rect = panel.getBoundingClientRect();
-      panel.style.left = Math.max(0, Math.min(rect.left, window.innerWidth - rect.width)) + 'px';
-      panel.style.top = Math.max(0, Math.min(rect.top, window.innerHeight - rect.height)) + 'px';
+      if (this.floatingPanel) this.layout.clamp();
     }
 
     destroy() {
+      if (this.floatingPanel) this.layout.save();
       this.inventoryPanel?.destroy();
       if (this.operation.state.status === 'running') this.operation.finish('interrupted', '面板已离开当前页面；请检查页面结果，不要直接重复提交。');
       this.unsubscribes?.forEach(unsubscribe => unsubscribe());
-      document.body.removeEventListener('mousemove', this.onBodyMove);
-      document.body.removeEventListener('mouseup', this.onBodyUp);
+      document.removeEventListener('mousemove', this.onBodyMove);
+      document.removeEventListener('mouseup', this.onBodyUp);
+      window.removeEventListener('blur', this.onBodyUp);
       window.removeEventListener('resize', this.onViewportResize);
       this.floatingPanel?.remove();
       this.floatingPanel = null;

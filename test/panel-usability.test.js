@@ -245,7 +245,7 @@ test('statistics and management share filtered selection semantics, exclude inel
   assert.deepEqual(m.selected().map(f => f.id), ['100', '101']);
   assert.equal(m.rows[2].input.checked, false); assert.equal(m.rows[3].input.checked, false);
   m.preview(); const ticket = m.ticket; assert.ok(ticket);
-  assert.match(m.review.textContent, /无法撤销/); assert.match(m.review.textContent, /ID 100 · 所有者 50 · 2 条/);
+  assert.match(m.review.textContent, /无法在此撤销/); assert.match(m.review.textContent, /ID 100 · 所有者 50 · 2 条/);
   m.selectionTools.search.value = 'Alpha'; m.selectionTools.search.dispatchEvent(new window.Event('input'));
   assert.equal(m.ticket, ticket); assert.match(m.selectionTools.notice.textContent, /筛选外已选 1/);
   m.selectionTools.allButton.click(); assert.equal(m.ticket, null);

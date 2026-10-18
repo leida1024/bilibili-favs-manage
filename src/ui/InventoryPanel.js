@@ -25,7 +25,7 @@ export class InventoryPanel {
     const tools = element('div', 'bf-tools bf-catalog-tools');
     tools.append(this.kind, this.loadButton);
     this.selectionTools = new SelectionToolbar({
-      rows: () => this.rows.map(row => ({ ...row, name: row.folder.name, eligible: row.folder.kind !== 'unsupported' })),
+      rows: () => this.rows.map(row => ({ ...row, name: row.folder.name, eligible: row.folder.kind !== 'unsupported' && row.folder.available !== false })),
       busy: () => panel.busy, change: () => this.updateBusy()
     });
     this.selectionCount = this.selectionTools.count;
@@ -94,16 +94,18 @@ export class InventoryPanel {
     this.cancelButton.hidden = !this.controller;
     if (this.mutations) this.mutations.previewButton.hidden = !manage || busy;
     this.selectionTools.update();
-    for (const row of this.rows) row.input.disabled = busy || row.folder.kind === 'unsupported';
+    for (const row of this.rows) row.input.disabled = busy || row.folder.kind === 'unsupported' || row.folder.available === false;
     this.mutations?.updateBusy();
   }
 
-  selected() { return this.rows.filter(row => row.input.checked).map(row => row.folder); }
+  selected() { return this.rows.filter(row => row.input.checked && row.folder.kind !== 'unsupported' && row.folder.available !== false).map(row => row.folder); }
 
   async run(action, work, phase = '', total = null) {
     if (this.panel.busy) return;
     this.controller = new AbortController();
-    this.panel.setBusy(true); this.operation.begin(action, total, { phase });
+    const modes = this.panel.manager.modes;
+    const mode = modes?.[phase === 'delete' || phase === 'unsubscribe' ? 'manage' : 'read'];
+    this.panel.setBusy(true); this.operation.begin(mode ? `${action}（${mode === 'api' ? 'API' : '网页'}）` : action, total, { phase });
     try { await work(this.controller.signal); }
     catch (err) {
       this.operation.finish(this.controller.signal.aborted ? 'interrupted' : 'failed', this.controller.signal.aborted ? '已取消，可以重新加载或选择。' : err.message);
@@ -134,7 +136,7 @@ export class InventoryPanel {
       for (const folder of folders) {
         const input = element('input'); input.type = 'checkbox'; input.disabled = folder.kind === 'unsupported';
         input.addEventListener('change', () => this.updateBusy());
-        const node = folderRow(folder, input, folder.kind === 'unsupported' ? '合集暂不支持' : '');
+        const node = folderRow(folder, input, folder.kind === 'unsupported' ? '类型未识别' : folder.available === false ? '内容已失效，无法统计' : '');
         this.list.append(node); this.rows.push({ input, folder, node });
       }
       if (!folders.length) this.list.append(element('p', 'bf-empty', '这个范围没有可读取的收藏夹。可以更换范围后重新加载。'));

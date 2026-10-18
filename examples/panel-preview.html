@@ -21,6 +21,8 @@
   import { OperationState } from '../src/core/OperationState.js';
   import { InventoryService } from '../src/core/InventoryService.js';
   import { BatchOperations } from '../src/core/BatchOperations.js';
+  import { panelPreferences, browserStore } from '../src/utils/preferences.js';
+  import { LogStore } from '../src/utils/logStore.js';
   const names = ['编程入门', '摄影课堂', '音乐现场', '旅行灵感', '美食记录'];
   let panel;
   function render() {
@@ -28,6 +30,8 @@
     const scenario = document.querySelector('#scenario').value;
     const deleted = new Set();
     const manager = {
+      modes: panelPreferences().modes,
+      logs: new LogStore(500, browserStore('sessionStorage', 'fictional-preview-records')),
       inventory: new InventoryService({
         async folders(owner, kind) { return Array.from({ length: scenario === 'empty' ? 0 : ['dense', 'many'].includes(scenario) ? 40 : 5 }, (_, i) => ({ id: String(100 + i), ownerId: kind === 'subscribed' && i === 3 ? null : kind === 'created' ? '50' : '90', kind: kind === 'subscribed' && i === 4 ? 'unsupported' : kind, name: kind === 'subscribed' && i === 4 ? '虚构合集（暂不支持）' : `虚构收藏夹 ${i + 1}`, count: 2, protected: i === 0, available: true, subscribed: true })).filter(item => !deleted.has(item.id)); },
         async mutate(action, folder) { deleted.add(folder.id); return { status: 'confirmed', detail: '虚构操作，未发送网络请求' }; },

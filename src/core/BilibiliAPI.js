@@ -246,7 +246,7 @@ export class BilibiliAPI {
    * @param {string} favName - 收藏夹名称
    * @returns {Promise<boolean|null>}
    */
-  static async createFavoriteViaSidebar(favName) {
+  static async createFavoriteViaSidebar(favName, guard = () => true) {
     favName = normalizeFavoriteName(favName);
     if (!favName) return false;
     if (this.getAllFavorites().some(item => this.getFavoriteName(item) === favName)) return true;
@@ -280,6 +280,7 @@ export class BilibiliAPI {
 
     // 输入名称并点击创建
     if (!await this.inputFavoriteName(favName)) return false;
+    if (!guard()) return false;
     if (!await this.clickCreateButton()) return false;
 
     const confirmed = await this.waitForFavorite(favName);

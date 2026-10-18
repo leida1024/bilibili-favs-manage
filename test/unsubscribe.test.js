@@ -17,9 +17,9 @@ function fixture(outcome = { status: 'confirmed' }) {
   return { engine, catalog, calls, client };
 }
 
-test('subscription eligibility rejects owned, season, unavailable, unknown-owner and unknown subscription states', () => {
+test('subscription eligibility rejects owned, unsupported, conflicting and unconfirmed subscriptions', () => {
   const { engine } = fixture();
-  for (const extra of [{ kind: 'created' }, { kind: 'unsupported' }, { ownerId: null }, { ownerId: '50' }, { available: false }, { subscribed: false }, { subscribed: undefined }]) {
+  for (const extra of [{ kind: 'created' }, { kind: 'unsupported' }, { identityConflict: true }, { ownerId: '50' }, { subscribed: false }, { subscribed: undefined }]) {
     assert.throws(() => engine.prepare('unsubscribe', [subscription(100, extra)]));
   }
   const normalized = normalizeFolder({ id: 100, type: 11, mid: 90, upper: { mid: 91 }, state: 0, fav_state: 1 }, 'subscribed');
@@ -56,7 +56,7 @@ test('subscription failure/unknown stop; cancellation prevents remaining items a
   assert.equal(report.cancelled, true); assert.equal(f.calls.length, 1);
 });
 
-test('subscription discovery paginates and excludes seasons; transport uses media ID and never retries network uncertainty', async t => {
+test('subscription discovery paginates with distinct seasons; transport uses media ID and never retries network uncertainty', async t => {
   const dom = new JSDOM('', { url: 'https://space.bilibili.com/50/favlist' });
   globalThis.document = dom.window.document; document.cookie = 'bili_jct=synthetic-only'; t.after(() => dom.window.close());
   let getCalls = 0, postCalls = 0;
@@ -69,7 +69,7 @@ test('subscription discovery paginates and excludes seasons; transport uses medi
     return { ok: true, json: async () => ({ code: 0, data: { count: 2, list: [{ id: Number(pn), type: pn === '1' ? 11 : 21, mid: 90, state: 0, fav_state: 1 }], has_more: pn === '1' } }) };
   });
   const folders = await client.folders('50', 'subscribed', undefined, 0);
-  assert.equal(getCalls, 2); assert.deepEqual(folders.map(f => f.kind), ['subscribed', 'unsupported']);
+  assert.equal(getCalls, 2); assert.deepEqual(folders.map(f => f.kind), ['subscribed', 'season']);
   assert.equal((await client.mutate('unsubscribe', subscription(100))).status, 'unknown'); assert.equal(postCalls, 1);
 });
 
@@ -83,7 +83,7 @@ test('switching scope drops old preview; product unsubscribe needs new independe
   await ui.load(); const m = ui.mutations;
   assert.equal(m.action, 'unsubscribe'); assert.equal(m.selected().length, 0); assert.equal(ui.selected().length, 0);
   m.rows[0].input.checked = true; m.updateBusy(); m.preview();
-  assert.match(m.review.textContent, /所有者 90/); assert.match(m.review.textContent, /原作者的内容不受影响/);
+  assert.match(m.review.textContent, /所有者 90/); assert.match(m.review.textContent, /取消当前账号/);
   assert.equal(m.confirmButton.disabled, true);
   m.agreement.checked = true; await m.execute();
   assert.deepEqual(f.calls, [['100', '90']]); assert.equal(panel.busy, false); assert.equal(f.engine.ticket, null);
