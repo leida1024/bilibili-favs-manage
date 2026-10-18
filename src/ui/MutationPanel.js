@@ -1,5 +1,6 @@
 import { element, button } from './elements.js';
 import { eligibility } from '../core/BatchOperations.js';
+import { folderRow } from './folderRow.js';
 
 const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
 const descriptions = {
@@ -14,13 +15,13 @@ const descriptions = {
 export class MutationPanel {
   constructor(inventoryUI, engine) {
     this.inventoryUI = inventoryUI; this.panel = inventoryUI.panel; this.engine = engine; this.rows = []; this.action = 'delete';
-    this.root = element('section', 'bf-diagnostics bf-mutations');
+    this.root = element('section', 'bf-mutations');
     this.heading = element('h3', '', descriptions.delete.title);
     this.explanation = element('p', 'bf-muted', descriptions.delete.detail);
     this.root.append(this.heading, this.explanation);
-    this.list = element('div', 'bf-selection');
+    this.list = element('div', 'bf-folder-list');
     this.previewButton = button('预览删除目标', () => this.preview());
-    this.review = element('section');
+    this.review = element('section', 'bf-mutation-review');
     this.results = element('div'); this.results.setAttribute('role', 'status');
     this.root.append(this.list, this.previewButton, this.review, this.results);
     this.updateBusy();
@@ -35,13 +36,12 @@ export class MutationPanel {
     this.heading.textContent = description.title; this.explanation.textContent = description.detail;
     this.previewButton.textContent = `预览${description.verb}目标`;
     const { actor, pageOwner } = this.engine.context();
+    if (!folders.length) this.list.append(element('p', 'bf-empty', '加载列表后，在这里选择要管理的收藏夹。默认不会勾选任何项目。'));
     for (const folder of folders) {
       const reason = eligibility(this.action, folder, actor, pageOwner);
       const input = element('input'); input.type = 'checkbox';
-      const label = element('label', 'bf-folder-row');
-      label.append(input, element('span', '', `${folder.name} · ID ${folder.id} · 所有者 ${folder.ownerId || '未知'} · ${folder.count ?? '未知'} 条${reason ? ` · 不可选：${reason}` : ''}`));
-      input.addEventListener('change', () => { this.invalidate(); this.updateBusy(); });
-      this.list.append(label); this.rows.push({ folder, input, reason });
+      input.addEventListener('change', () => { this.invalidate(); this.inventoryUI.updateBusy(); });
+      this.list.append(folderRow(folder, input, reason)); this.rows.push({ folder, input, reason });
     }
     this.updateBusy();
   }
@@ -68,7 +68,10 @@ export class MutationPanel {
       const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', description.agreement));
       this.agreement.addEventListener('change', () => this.updateBusy());
       this.confirmButton = button(`确认${description.verb}以上目标`, () => this.execute());
-      this.review.append(label, this.confirmButton, button('放弃本次操作', () => this.invalidate()));
+      this.confirmButton.classList.add('bf-danger');
+      const actions = element('div', 'bf-tools'); actions.append(this.confirmButton, button('放弃本次操作', () => this.invalidate()));
+      this.review.append(label, actions);
+      this.review.scrollIntoView?.({ block: 'nearest', behavior: 'instant' });
       this.updateBusy(); this.agreement.focus();
     } catch (err) { this.results.textContent = err.message; }
   }

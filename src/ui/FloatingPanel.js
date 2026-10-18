@@ -25,6 +25,8 @@ export class FloatingPanel {
     this.scrollTopEnabled = true;
     this.minW = 280;
     this.minH = 64;
+    this.activeView = 'copy';
+    this.previousView = 'copy';
   }
 
   init() {
@@ -36,36 +38,50 @@ export class FloatingPanel {
     this.floatingPanel = root;
     this.header = element('header', 'bf-header');
     this.header.append(element('strong', '', '收藏夹管理'));
+    this.logsButton = button('记录', () => this.showView(this.activeView === 'logs' ? this.previousView : 'logs'), 'bf-quiet');
+    this.logsButton.setAttribute('aria-label', '查看操作记录');
     this.minimizeButton = button('最小化', () => this.toggleMinimize());
     this.dismissButton = button('关闭', () => { this.onDismiss?.(); this.destroy(); });
-    this.header.append(this.minimizeButton, this.dismissButton);
+    this.header.append(this.logsButton, this.minimizeButton, this.dismissButton);
+    this.navigation = element('nav', 'bf-navigation');
+    this.navigation.setAttribute('aria-label', '管理功能');
+    this.viewButtons = new Map();
+    for (const [view, label] of [['copy', '复制收藏夹'], ['statistics', '统计'], ['manage', '管理']]) {
+      if (view !== 'copy' && !this.manager.inventory) continue;
+      const control = button(label, () => this.showView(view));
+      this.viewButtons.set(view, control); this.navigation.append(control);
+    }
     this.content = element('div', 'bf-content');
     this.scope = element('p', 'bf-muted');
-    this.content.append(this.scope);
-    this.workspace = element('div', 'bf-workspace');
+    this.workspace = element('section', 'bf-workspace');
+    this.workspace.append(element('h2', '', '复制到我的收藏夹'), element('p', 'bf-intro', '勾选来源，在同一行填写目标名称。复制后，来源内容仍会保留。'), this.scope);
+    const help = element('details', 'bf-help');
+    help.append(element('summary', '', '目标同名或不存在时会怎样？'), element('p', '', '在我的空间中，已有同名收藏夹会直接复用，不存在的会新建。名称首尾空白会去掉，内部空格保留。从他人空间复制时，需要跳转到我的空间准备目标，再返回继续；请保持页面打开。'));
+    this.workspace.append(help);
     this.leftPanel = element('section', 'bf-sources');
-    this.leftPanel.append(element('h3', '', '1. 选择来源与目标'));
-    this.leftPanel.append(element('p', 'bf-muted', '复制会保留源收藏；同名目标会复用，缺少的目标会新建。跨页复制可能需要自动跳转。'));
-    this.selectAllButton = button('全选来源', () => this.toggleSelectAll());
-    this.leftPanel.append(this.selectAllButton, this.createFavPanel());
-    this.rightPanel = element('section', 'bf-review');
-    this.rightPanel.append(element('h3', '', '2. 检查复制任务'));
-    this.selectionReview = element('div', 'bf-selection');
-    this.rightPanel.append(this.selectionReview);
+    this.selectAllButton = button('全选', () => this.toggleSelectAll());
+    const columns = element('div', 'bf-copy-columns');
+    this.sourceColumn = element('span', '', '来源收藏夹');
+    columns.append(this.selectAllButton, this.sourceColumn, element('span', 'bf-direction', ''), element('span', '', '目标收藏夹（我的）'));
+    this.leftPanel.append(columns, this.createFavPanel());
+    this.selectionReview = element('p', 'bf-selection-count');
     this.startBatchTransferButton = button('开始批量复制', () => this.startBatchTransfer(), 'bf-primary');
-    this.rightPanel.append(this.startBatchTransferButton);
-    this.workspace.append(this.leftPanel, this.rightPanel);
+    this.copyActions = element('div', 'bf-action-bar');
+    this.copyActions.append(this.selectionReview, this.startBatchTransferButton);
+    this.workspace.append(this.leftPanel);
     this.content.append(this.workspace);
     this.statusBox = element('section', 'bf-status');
     this.statusBox.setAttribute('role', 'status');
     this.statusBox.setAttribute('aria-live', 'polite');
-    this.content.append(this.statusBox);
     if (this.manager.inventory) {
       this.inventoryPanel = new InventoryPanel(this, this.manager.inventory);
       this.content.append(this.inventoryPanel.root);
     }
     this.createDiagnostics();
-    root.append(style, this.header, this.content);
+    this.footer = element('footer', 'bf-footer');
+    this.footer.append(this.statusBox, this.copyActions);
+    if (this.inventoryPanel) this.footer.append(this.inventoryPanel.actions);
+    root.append(style, this.header, this.navigation, this.content, this.footer);
     document.body.append(root);
     this.unsubscribe = this.operation.subscribe(state => this.renderOperation(state));
     this.onBodyMove = event => {
@@ -82,13 +98,40 @@ export class FloatingPanel {
     this.updateSelectionReview();
     this.showPageTypeIndicator();
     this.appendLog('面板已就绪。诊断记录仅保存在当前页面，最多 500 条。');
+    this.showView('copy');
+  }
+
+  showView(view) {
+    if (!['copy', 'statistics', 'manage', 'logs'].includes(view) || (this.busy && view !== 'logs' && view !== this.previousView && view !== this.activeView)) return;
+    if ((view === 'statistics' || view === 'manage') && !this.inventoryPanel) return;
+    if (view === 'logs') { if (this.activeView !== 'logs') this.previousView = this.activeView; }
+    else {
+      if (view !== this.previousView || this.activeView !== 'logs') this.inventoryPanel?.mutations?.invalidate();
+      this.previousView = view;
+    }
+    this.activeView = view;
+    this.workspace.hidden = view !== 'copy';
+    if (this.inventoryPanel) {
+      this.inventoryPanel.root.hidden = !['statistics', 'manage'].includes(view);
+      if (view === 'statistics' || view === 'manage') this.inventoryPanel.setMode(view);
+      this.inventoryPanel.actions.hidden = !['statistics', 'manage'].includes(view);
+    }
+    this.diagnostics.hidden = view !== 'logs';
+    this.copyActions.hidden = view !== 'copy';
+    this.content.classList.toggle('bf-show-logs', view === 'logs');
+    this.content.scrollTop = 0;
+    for (const [name, control] of this.viewButtons) control.setAttribute('aria-pressed', String(name === (view === 'logs' ? this.previousView : view)));
+    this.logsButton.textContent = view === 'logs' ? '返回' : '记录';
+    this.logsButton.setAttribute('aria-label', view === 'logs' ? '返回当前功能' : '查看操作记录');
+    if (view === 'logs') this.renderLogs();
   }
 
   showPageTypeIndicator() {
     const pageUID = PageDetector.getCurrentPageUID();
     const loginUID = PageDetector.getLoginUserUID();
-    this.scope.textContent = !pageUID ? '虚构数据预览 · 不连接真实账号' :
-      `当前空间：${!loginUID ? '身份未确认' : pageUID === loginUID ? '我的空间' : '他人空间'} · 来源为页面已加载的创建收藏夹，未包含订阅。`;
+    this.scope.textContent = !pageUID ? '虚构数据预览，不连接真实账号。' :
+      `来源：${pageUID === loginUID ? '我的空间' : '当前浏览的空间'}已加载的创建收藏夹。目标：${loginUID ? '我的空间' : '登录后可复制到我的空间'}。`;
+    this.sourceColumn.textContent = pageUID && pageUID === loginUID ? '来源（我的空间）' : '来源（当前空间）';
   }
 
   createFavPanel() {
@@ -99,7 +142,7 @@ export class FloatingPanel {
       list.append(item.checkboxContainer);
       return item;
     });
-    if (!this.favorites.length) list.append(element('p', 'bf-muted', '尚未发现来源。请等待侧栏加载，或切换到支持的收藏夹页。'));
+    if (!this.favorites.length) list.append(element('div', 'bf-empty', '还没有读到来源收藏夹。请等待页面侧栏加载；列表出现后会自动更新。'));
     return list;
   }
 
@@ -128,10 +171,16 @@ export class FloatingPanel {
 
   updateSelectionReview() {
     const tasks = this.getSelectedTasks();
-    this.selectionReview.replaceChildren(element('p', '', `已选择 ${tasks.length} 个来源`));
-    for (const task of tasks) this.selectionReview.append(element('p', '', `${task.source} → ${task.target.trim() || '（请填写目标名称）'}`));
-    this.selectAllButton.textContent = tasks.length && tasks.length === this.favorites.length ? '取消全选' : '全选来源';
-    this.startBatchTransferButton.disabled = this.busy || !tasks.length;
+    const missing = tasks.some(task => !task.target.trim());
+    this.selectionReview.textContent = missing ? '请填好已选来源的目标名称' : `已选 ${tasks.length} / ${this.favorites.length} 个收藏夹`;
+    for (const item of this.favCheckboxItemList) {
+      item.checkboxContainer.dataset.selected = String(item.checkbox.checked);
+      item.inputText.setAttribute('aria-invalid', String(item.checkbox.checked && !item.inputText.value.trim()));
+    }
+    this.selectAllButton.textContent = tasks.length && tasks.length === this.favorites.length ? '清除' : '全选';
+    this.selectAllButton.setAttribute('aria-label', tasks.length && tasks.length === this.favorites.length ? '取消全选来源' : '全选来源收藏夹');
+    this.startBatchTransferButton.textContent = this.busy ? '操作中…' : tasks.length ? `复制 ${tasks.length} 个收藏夹` : '开始复制';
+    this.startBatchTransferButton.disabled = this.busy || !tasks.length || missing;
   }
 
   setBusy(busy) {
@@ -139,6 +188,7 @@ export class FloatingPanel {
     this.floatingPanel?.setAttribute('aria-busy', String(busy));
     this.selectAllButton.disabled = busy;
     this.dismissButton.disabled = busy;
+    for (const control of this.viewButtons.values()) control.disabled = busy;
     for (const item of this.favCheckboxItemList) { item.checkbox.disabled = busy; item.inputText.disabled = busy; }
     this.startBatchTransferButton.textContent = busy ? '操作中…' : '开始批量复制';
     this.updateSelectionReview();
@@ -147,10 +197,14 @@ export class FloatingPanel {
   }
 
   renderOperation(state) {
+    this.statusBox.hidden = state.status === 'idle';
     this.statusBox.dataset.status = state.status;
-    this.statusBox.replaceChildren(element('strong', '', `${statusNames[state.status]}${state.action ? ` · ${state.action}` : ''}`),
-      element('p', '', `已确认 ${state.confirmed}${state.total === null ? ' 项（总数未知）' : ` / ${state.total} 项`}`),
-      element('p', '', `最后确认：${state.lastConfirmed || '尚无已确认步骤'}`), element('p', '', state.detail));
+    const details = element('details', 'bf-progress-detail');
+    details.append(element('summary', '', '查看进度详情'), element('p', '', `最后确认：${state.lastConfirmed || '尚无已确认步骤'}`), element('p', '', state.detail));
+    this.statusBox.replaceChildren(element('strong', '', `${statusNames[state.status]}${state.action ? `：${state.action}` : ''}`),
+      element('span', '', `已确认 ${state.confirmed}${state.total === null ? ' 项，总数未知' : ` / ${state.total} 项`}`));
+    if (state.status === 'failed' || state.status === 'interrupted') this.statusBox.append(element('p', 'bf-status-message', state.detail));
+    this.statusBox.append(details);
   }
 
   async startBatchTransfer() {
@@ -167,8 +221,9 @@ export class FloatingPanel {
   }
 
   createDiagnostics() {
-    const details = element('details', 'bf-diagnostics');
-    details.append(element('summary', '', '诊断记录'));
+    const details = element('section', 'bf-diagnostics');
+    this.diagnostics = details;
+    details.append(element('h2', '', '操作记录'));
     const tools = element('div', 'bf-tools');
     this.logFilter = element('select');
     this.logFilter.setAttribute('aria-label', '日志级别');
@@ -211,23 +266,41 @@ export class FloatingPanel {
   reviewExport(text, filename) {
     this.exportReview?.remove();
     const section = element('section', 'bf-export');
+    section.setAttribute('role', 'dialog'); section.setAttribute('aria-label', '导出前检查'); section.setAttribute('aria-modal', 'true');
     section.append(element('h3', '', '导出前检查'), element('p', '', '仅下载到本机，不会上传。内容可能含收藏夹名称、ID 和作者信息；分享前请自行删去。'));
     const area = element('textarea'); area.value = text; area.setAttribute('aria-label', '可编辑的导出内容');
+    const previousFocus = document.activeElement;
+    const close = () => {
+      section.remove(); this.exportReview = null;
+      this.content.inert = false; this.navigation.inert = false; this.footer.inert = false; this.header.inert = false;
+      previousFocus?.focus();
+    };
     section.append(area, button('下载此内容', () => {
       const url = URL.createObjectURL(new Blob([area.value], { type: 'application/json' }));
       const link = element('a'); link.href = url; link.download = filename; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }), button('关闭预览', () => section.remove()));
-    this.content.append(section); this.exportReview = section; area.focus();
+    }), button('关闭预览', close));
+    section.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { event.preventDefault(); close(); }
+      if (event.key === 'Tab') {
+        const focusable = [...section.querySelectorAll('textarea,button')];
+        if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1).focus(); }
+        else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0].focus(); }
+      }
+    });
+    this.floatingPanel.append(section); this.exportReview = section;
+    this.content.inert = true; this.navigation.inert = true; this.footer.inert = true; this.header.inert = true;
+    area.focus();
   }
 
   toggleMinimize() {
     this.minimized = !this.minimized;
     this.content.hidden = this.minimized;
+    this.navigation.hidden = this.minimized; this.footer.hidden = this.minimized;
     this.minimizeButton.textContent = this.minimized ? '恢复面板' : '最小化';
     this.minimizeButton.setAttribute('aria-expanded', String(!this.minimized));
     if (this.minimized) { this.hiddenHeight = this.floatingPanel.style.height; this.floatingPanel.style.height = '64px'; }
-    else { this.floatingPanel.style.height = this.hiddenHeight || '680px'; this.clampToViewport(); }
+    else { this.floatingPanel.style.height = this.hiddenHeight || '640px'; this.clampToViewport(); }
   }
 
   recordPanelSize() { this.clampToViewport(); }
