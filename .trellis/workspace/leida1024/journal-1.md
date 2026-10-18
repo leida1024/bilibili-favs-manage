@@ -18,7 +18,7 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 
 ### Main Changes
 
-(Add details)
+Dedicated browser stdin injection fix; see bootstrap archive verification.
 
 ### Git Commits
 
@@ -28,7 +28,7 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] Dedicated profile mount, duplicate injection and minimize checks passed.
 
 ### Status
 
@@ -51,7 +51,7 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 
 ### Main Changes
 
-(Add details)
+Shared operation state and bounded diagnostic log UI; see UI/log archive.
 
 ### Git Commits
 
@@ -61,7 +61,7 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] 24 tests, build and fictional/local-injection checks passed.
 
 ### Status
 
@@ -84,7 +84,7 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 
 ### Main Changes
 
-(Add details)
+Validated folder client and selected-scope inventory; see statistics archive.
 
 ### Git Commits
 
@@ -94,7 +94,7 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] 29 tests and build passed; public selected scan complete with six unique entries.
 
 ### Status
 
@@ -117,7 +117,7 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 
 ### Main Changes
 
-(Add details)
+One-use deletion tickets and exact identity revalidation; see deletion archive.
 
 ### Git Commits
 
@@ -127,7 +127,7 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] 37 tests and build passed; synthetic confirmation, cancellation and unknown-stop passed.
 
 ### Status
 
@@ -150,7 +150,7 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 
 ### Main Changes
 
-(Add details)
+Folder subscription cancellation and unsupported-type exclusions; see unsubscribe archive.
 
 ### Git Commits
 
@@ -160,7 +160,40 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] 44 tests and build passed; synthetic unsubscribe transport and narrow preview passed.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 6: Paired copy usability acceptance
+
+**Date**: 2026-10-18
+**Task**: Paired copy usability acceptance
+**Branch**: `develop`
+
+### Summary
+
+48 tests, build and whitespace passed. Adjacent copy pairs, separate task views and fixed actions verified at desktop/narrow widths; final public local-injection smoke passed. No real mutations or push. See usability archive verification.
+
+### Main Changes
+
+Adjacent copy pairs, task navigation, single scrolling body and reviewed export overlay; see usability archive.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6883422` | (see git log) |
+
+### Testing
+
+- [OK] 48 tests and build passed; desktop/narrow preview, keyboard/event and final local-injection smoke passed.
 
 ### Status
 

@@ -11,6 +11,10 @@ class PreviewHandler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
+    def log_message(self, format, *args):
+        # A resumed terminal may have a closed stderr pipe; keep serving fixtures.
+        pass
+
 
 if __name__ == "__main__":
     ThreadingHTTPServer(("127.0.0.1", 8766), PreviewHandler).serve_forever()

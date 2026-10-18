@@ -18,4 +18,4 @@ GitHub visibility applies to the whole repository. Development records on a push
 6. Push `master` only for an authorized release. Its push can update the live Greasy Fork code/description. A development push must not be treated as a release.
 7. Return to `develop`; record source/release commit hashes in the task. Keep `master` fixes in sync by merging `master` into `develop` (this direction is safe) or cherry-picking its product commits.
 
-Local development commits and publishing `develop` are within the current development-workspace request. New features are not automatically released to users. Use revert commits for mistakes; do not rewrite shared history.
+The latest user instruction permits local development commits and explicitly prohibits remote pushes until the user reviews the results. Do not push `develop` or any other ref. Earlier roadmap push authorization is superseded. New features are not automatically released to users. Use revert commits for mistakes; do not rewrite shared history.

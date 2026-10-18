@@ -1,32 +1,29 @@
 # Development workspace
 
-This directory exists on `develop`. The root README and `docs/` remain the user manual and maintained product references.
+This directory exists on develop. Root README and docs/ are maintained product documentation.
 
 ## Start here
 
-Read the [development handbook and session handoff](DEVELOPMENT.md) for the current state, remaining work, staged acceptance criteria, and a copyable execution prompt.
+Read the [development handbook](DEVELOPMENT.md), [workflow](workflow.md), [frontend guidelines](spec/frontend/index.md), [branch policy](spec/guides/branch-policy.md) and [dedicated browser policy](spec/guides/browser-testing.md). Then inspect Git state and run python .trellis/scripts/get_context.py and python .trellis/scripts/task.py list.
 
-1. Read [workflow.md](workflow.md) and [branch policy](spec/guides/branch-policy.md).
-2. Run `python .trellis/scripts/get_context.py` and `python .trellis/scripts/task.py list`.
-3. Continue the relevant task; requirements and evidence stay with that task. Read [frontend guidelines](spec/frontend/index.md) before implementation.
-4. Use the [dedicated browser](spec/guides/browser-testing.md) for console-style local injection. Do not publish development builds to Greasy Fork.
+## Completed local scope
 
-## Roadmap
-
-| Order | Task | Intended outcome |
+| Order | Archived task | Result |
 | --- | --- | --- |
-| 1 | [UI and logs](tasks/10-18-ui-and-logs/prd.md) | Clearer controls, progress, failure messages, and diagnostic logs |
-| 2 | [Video statistics](tasks/10-18-video-statistics/prd.md) | Read-only summaries with explicit scope and completeness |
-| 3 | [Batch delete](tasks/10-18-batch-delete-folders/prd.md) | Owned-folder deletion with preview, confirmation, cancellation, and verified results |
-| 4 | [Batch unsubscribe](tasks/10-18-batch-unsubscribe/prd.md) | Separate subscription management with the same operation safeguards |
+| 0 | [Bootstrap](tasks/archive/2026-10/00-bootstrap-guidelines/) | Dedicated profile and local injection verified |
+| 1 | [UI and logs](tasks/archive/2026-10/10-18-ui-and-logs/) | Shared progress, failure feedback and bounded diagnostics |
+| 2 | [Statistics](tasks/archive/2026-10/10-18-video-statistics/) | Explicit selected-scope scans and coverage |
+| 3 | [Delete](tasks/archive/2026-10/10-18-batch-delete-folders/) | One-use confirmed sequential deletion, synthetic acceptance |
+| 4 | [Unsubscribe](tasks/archive/2026-10/10-18-batch-unsubscribe/) | Folder subscriptions with identity safeguards, synthetic acceptance |
+| Follow-up | [Panel usability](tasks/archive/2026-10/10-18-panel-usability/) | Adjacent copy pairs, separate task views and one task scroller |
 
-These are planned increments, not shipped capabilities. UI/logs come first; inventory and stable object identity should precede destructive actions. Each task needs its own evidence-based design before activation. User-visible requests authorize normal planning, implementation, tests, and development commits; this does not authorize arbitrary changes to the user's real collections or automatic release to `master`.
+The local build passed 48 tests and build. These changes are not released. No real-account mutations or remote pushes were performed. The latest user instruction prohibits pushing until user review. Remaining live/GM/navigation limits are in the handbook and task verification files.
 
 ## Records
 
-- `tasks/`: PRDs, designs, implementation plans, research, and validation; completed tasks move to `tasks/archive/YYYY-MM/`.
-- `spec/`: reusable project conventions and operation boundaries.
-- `workspace/leida1024/`: journal and task/commit references; do not duplicate task contents here.
-- `scripts/`: Trellis runtime plus the local `browser.ps1` convenience entry point.
+- tasks/: requirements, design, research and evidence; completed work under archive/YYYY-MM/.
+- spec/: reusable conventions and operation boundaries.
+- workspace/leida1024/: concise journals and work-commit references.
+- scripts/: Trellis runtime, dedicated browser helper and no-cache fictional preview server.
 
-Trellis was initialized with the locally installed `@mindfoldhq/trellis` 0.6.0-rc.0, matching the reference project. No reference project's history or runtime identity was copied. Hooks are optional: if the host has not approved the generated Codex hook, read this entry point and invoke the Python scripts directly; do not modify global Codex settings automatically.
+Trellis uses the local 0.6.0-rc.0 setup. Runtime pointers and browser profiles are ignored or outside Git. Do not change global agent settings automatically.
