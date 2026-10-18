@@ -1,54 +1,26 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1.1
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
-// @author       Your Name
-// @match        https://space.bilibili.com/*/favlist*
+// @author       junxian-li-hpc
+// @match        https://space.bilibili.com/*
+// @run-at       document-start
+// @noframes
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
+// @grant        GM_registerMenuCommand
 // @license      MIT
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  /**
-   * DOM 选择器配置
-   * 集中管理所有 B 站页面相关的选择器
-   * 便于未来页面改版时快速适配
-   */
-
+  /** 两版页面共用的输入框、提示和按钮文字；差异位于 core/adapters/。 */
   const SELECTORS = {
-    // 收藏夹列表
-    FAVORITES_SIDEBAR: '.favlist-aside',
-    FAVORITES_ITEM: '.vui_sidebar-item',
-    FAVORITES_ITEM_TITLE: '.vui_sidebar-item-title .vui_ellipsis',
-    // 当前收藏夹信息
-    CURRENT_FAV_TITLE: '.favlist-info-detail__title-row',
-
-    // 批量操作
-    BATCH_OPERATION_BTN: '.vui_button.favlist-info-batch',
-
-    // 批量操作工具栏
-    SELECT_ALL_CHECKBOX: '.vui_checkbox',
-    // 收藏夹选择弹窗
-    DIALOG_CONTAINER: '.vui_dialog--content.fav-modify-modal-content',
-    FAV_ITEM: '.modify-fav-item',
-    FAV_ITEM_TITLE: '.modify-fav-item__title',
-    FAV_RADIO_INPUT: 'input[type="radio"].vui_radio--input-original',
-    // 新建收藏夹
-    CREATE_FAV_BUTTON: '.modify-fav-add',
     CREATE_FAV_NAME_INPUT: 'input.add-fav-input',
-    // 确定按钮
-    CONFIRM_BUTTON: 'button.vui_button--blue',
-
-    // 提示消息
     TOAST: '.vui_toast',
-
-    // 分页
-    PAGINATION: '.vui_pagenation',
     NEXT_PAGE_TEXT: ['下一页', 'next', '>']
   };
 
@@ -80,16 +52,29 @@
    * @param {Element} parent - 父元素，默认为 document
    * @returns {Promise<Element|null>}
    */
-  async function waitForElement(selector, timeout = 5000, parent = document) {
+  async function waitForElement(selector, timeout = 5000, parent = document, visible = false) {
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
-      const el = parent.querySelector(selector);
+      const el = Array.from(parent.querySelectorAll(selector)).find(el => !visible || isElementVisible(el));
       if (el) {
         return el;
       }
       await delay(100);
     }
     return null;
+  }
+
+  /**
+   * 检查元素及其祖先是否隐藏，排除预渲染但尚未打开的弹窗。
+   * @param {Element} element
+   * @returns {boolean}
+   */
+  function isElementVisible(element) {
+    for (let current = element; current; current = current.parentElement) {
+      const style = window.getComputedStyle(current);
+      if (current.hidden || style.display === 'none' || style.visibility === 'hidden') return false;
+    }
+    return element.isConnected;
   }
 
   /**
@@ -106,16 +91,6 @@
       }
     }
     return null;
-  }
-
-  /**
-   * 检查元素是否存在
-   * @param {string} selector - CSS 选择器
-   * @param {Element} parent - 父元素，默认为 document
-   * @returns {boolean}
-   */
-  function elementExists(selector, parent = document) {
-    return !!parent.querySelector(selector);
   }
 
   /**
@@ -195,8 +170,85 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '1.0'}
+      VERSION: '2.1.1'}
   };
+
+  /** 旧版个人空间（带“体验新版”入口）。 */
+  const LegacyPageAdapter = {
+    name: '旧版个人空间',
+    sidebar: '#fav-createdList-container',
+    sidebarCreate: null,
+    item: '.fav-item',
+    title: 'a.text',
+    itemLink: 'a.text',
+    currentTitle: '.favInfo-details .fav-name',
+    batchButton: '.fav-header .do-batch',
+    selectAll: '.fav-action-bottom li:has(i[class*="icon-selece-all"])',
+    selectedAll: '.icon-selece-all-active',
+    copyButton: '.fav-action-bottom li:has(.icon-copy)',
+    dialog: '.edit-video-modal',
+    dialogItem: '.target-favitem',
+    dialogTitle: '.fav-name',
+    radio: '.fav-select',
+    createButton: '.fake-fav-input',
+    createConfirm: '.edit-video-modal .fav-add-btn',
+    confirm: '.modal-footer .btn',
+    cancel: '.modal-header-close',
+    pagination: '.be-pager',
+    next: '.be-pager-next',
+    getFavorites() {
+      return Array.from(document.querySelectorAll(`${this.sidebar} ${this.item}`));
+    }
+  };
+
+  /** 新版 VUI 收藏夹页。 */
+  const VuiPageAdapter = {
+    name: '新版 (VUI)',
+    sidebar: '.favlist-aside',
+    sidebarCreate: '.favlist-aside',
+    item: '.vui_sidebar-item',
+    title: '.vui_sidebar-item-title .vui_ellipsis',
+    itemLink: null,
+    currentTitle: '.favlist-info-detail__title-row',
+    batchButton: '.vui_button.favlist-info-batch',
+    selectAll: '.vui_checkbox',
+    selectedAll: '.vui_checkbox--checked, input:checked',
+    copyButton: null,
+    dialog: '.vui_dialog--content.fav-modify-modal-content',
+    dialogItem: '.modify-fav-item',
+    dialogTitle: '.modify-fav-item__title',
+    radio: 'input[type="radio"].vui_radio--input-original',
+    createButton: '.modify-fav-add',
+    createConfirm: null,
+    confirm: 'button.vui_button--blue',
+    cancel: 'button:not(.vui_button--blue)',
+    pagination: '.vui_pagenation',
+    next: 'button',
+    getFavorites() {
+      const sidebar = document.querySelector(this.sidebar);
+      if (!sidebar) return [];
+      const items = Array.from(sidebar.querySelectorAll(this.item));
+      const marker = text => Array.from(sidebar.querySelectorAll('*')).filter(
+        el => el.textContent.trim() === text && !el.querySelector(this.item)
+      ).pop();
+      const follows = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+      const start = marker('我创建的收藏夹') || marker('TA创建的收藏夹');
+      if (!start) {
+        warn('未找到创建分组标记，使用侧栏收藏夹列表');
+        return items;
+      }
+      const end = ['我追的合集/收藏夹', '其他收藏', 'TA追的合集/收藏夹']
+        .map(marker).filter(el => el && follows(start, el))
+        .sort((a, b) => follows(a, b) ? -1 : 1)[0];
+      return items.filter(item => follows(start, item) && (!end || follows(item, end)));
+    }
+  };
+
+  const PAGE_ADAPTERS = [VuiPageAdapter, LegacyPageAdapter];
+
+  function getPageAdapter() {
+    return PAGE_ADAPTERS.find(adapter => document.querySelector(adapter.sidebar)) || null;
+  }
 
   /**
    * B 站收藏夹页面 API 封装
@@ -204,86 +256,25 @@
    */
 
 
+  const pageAdapter = () => getPageAdapter() || VuiPageAdapter;
+
   class BilibiliAPI {
     /**
      * 检测页面版本
-     * @returns {boolean} 是否为新版页面
+     * @returns {boolean} 是否为支持的页面版本
      */
     static detectPageVersion() {
-      const isNewVersion = elementExists(SELECTORS.FAVORITES_SIDEBAR);
-      log('页面版本:', isNewVersion ? '新版 (VUI)' : '未知版本');
-
-      if (!isNewVersion) {
-        warn('警告：页面结构可能不受支持，脚本可能无法正常工作');
-      }
-
-      return isNewVersion;
+      const adapter = getPageAdapter();
+      log('页面版本:', adapter?.name || '未知版本');
+      return !!adapter;
     }
 
-    /**
-     * 获取所有收藏夹项
-     * @returns {Array<Element>} 收藏夹项列表
-     */
     static getAllFavorites() {
-      // 调用 getCreatedFavorites() 进行过滤
       return this.getCreatedFavorites();
     }
 
-    /**
-     * 获取"我创建的收藏夹"分组中的收藏夹项（过滤"我追的"和"其他收藏"）
-     * @returns {Array<Element>} 收藏夹项数组
-     */
     static getCreatedFavorites() {
-      const sidebar = document.querySelector(SELECTORS.FAVORITES_SIDEBAR);
-      if (!sidebar) {
-        error('找不到收藏夹侧边栏容器');
-        return [];
-      }
-
-      const allItems = Array.from(sidebar.querySelectorAll(SELECTORS.FAVORITES_ITEM));
-      if (allItems.length === 0) {
-        return [];
-      }
-
-      // 在侧边栏内按"精确文本"定位分组标题元素。
-      // 标题不一定是 sidebar 的直接子节点（常嵌套在 wrapper 内），
-      // 因此遍历全部后代，取文本精确匹配且不含收藏夹项的最深元素。
-      const findMarker = (markerText) => {
-        const matches = Array.from(sidebar.querySelectorAll('*')).filter(
-          el => el.textContent.trim() === markerText &&
-                !el.querySelector(SELECTORS.FAVORITES_ITEM)
-        );
-        return matches.length ? matches[matches.length - 1] : null;
-      };
-
-      // b 是否在 a 之后（文档顺序）
-      const follows = (a, b) =>
-        !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-
-      const createdMarker = findMarker('我创建的收藏夹');
-      if (!createdMarker) {
-        warn('未找到"我创建的收藏夹"分组标记，使用降级策略');
-        warn('将返回所有收藏夹项（包含"我追的合集/收藏夹"）');
-        return allItems;
-      }
-
-      // 结束标记：'我追的合集/收藏夹' 或 '其他收藏' 中，位于 createdMarker 之后且最靠前的一个
-      const endMarker = ['我追的合集/收藏夹', '其他收藏']
-        .map(findMarker)
-        .filter(m => m && follows(createdMarker, m))
-        .sort((a, b) => (follows(a, b) ? -1 : 1))[0] || null;
-
-      // 收集位于 createdMarker 与 endMarker 之间的收藏夹项
-      const favorites = allItems.filter(item => {
-        if (!follows(createdMarker, item)) return false;
-        if (endMarker && !follows(item, endMarker)) return false;
-        return true;
-      });
-
-      log('过滤结果: 总数', allItems.length, '→ 我创建的', favorites.length);
-
-      // 兜底：若意外为空，返回全部，避免面板空白
-      return favorites.length > 0 ? favorites : allItems;
+      return getPageAdapter()?.getFavorites() || [];
     }
 
     /**
@@ -292,7 +283,7 @@
      * @returns {string} 收藏夹名称
      */
     static getFavoriteName(favItem) {
-      const titleEl = favItem.querySelector(SELECTORS.FAVORITES_ITEM_TITLE);
+      const titleEl = favItem.querySelector(pageAdapter().title);
       return titleEl ? titleEl.textContent.trim() : '';
     }
 
@@ -301,7 +292,7 @@
      * @returns {string|null} 当前收藏夹名称，如果找不到则返回 null
      */
     static getCurrentFavoriteName() {
-      const titleEl = document.querySelector(SELECTORS.CURRENT_FAV_TITLE);
+      const titleEl = document.querySelector(pageAdapter().currentTitle);
       if (!titleEl) {
         error('无法获取当前收藏夹名称');
         return null;
@@ -314,7 +305,7 @@
      * @returns {number} 总页数
      */
     static getTotalPages() {
-      const pageInfoText = document.querySelector(SELECTORS.PAGINATION)?.textContent || '';
+      const pageInfoText = document.querySelector(pageAdapter().pagination)?.textContent || '';
       const match = pageInfoText.match(/共\s*(\d+)\s*页/);
       return match ? parseInt(match[1]) : 1;
     }
@@ -324,7 +315,7 @@
      * @returns {Promise<boolean>} 是否成功
      */
     static async clickBatchOperationButton() {
-      const button = document.querySelector(SELECTORS.BATCH_OPERATION_BTN);
+      const button = document.querySelector(pageAdapter().batchButton);
       if (!button || button.textContent.trim() !== BUTTON_TEXTS.BATCH_OPERATION) {
         error('找不到批量操作按钮或按钮文本不匹配');
         return false;
@@ -341,14 +332,16 @@
      * @returns {boolean} 是否成功
      */
     static clickSelectAll() {
-      const checkbox = document.querySelector(SELECTORS.SELECT_ALL_CHECKBOX);
+      const checkbox = Array.from(document.querySelectorAll(pageAdapter().selectAll)).find(isElementVisible);
       if (!checkbox) {
         error('找不到全选按钮');
         return false;
       }
 
-      log('点击全选');
-      checkbox.click();
+      log('全选当前页');
+      const selected = checkbox.matches(pageAdapter().selectedAll) ||
+        checkbox.querySelector(pageAdapter().selectedAll);
+      if (!selected) checkbox.click();
       return true;
     }
 
@@ -357,7 +350,8 @@
      * @returns {Promise<boolean>} 是否成功
      */
     static async clickCopyButton() {
-      const copyBtn = findButtonByText(BUTTON_TEXTS.COPY_TO);
+      const copyBtn = (getPageAdapter()?.copyButton && document.querySelector(getPageAdapter().copyButton)) ||
+        findButtonByText(BUTTON_TEXTS.COPY_TO);
       if (!copyBtn) {
         error('找不到复制至按钮');
         return false;
@@ -374,7 +368,7 @@
      * @returns {Promise<Element|null>} 对话框元素
      */
     static async waitForDialog() {
-      return await waitForElement(SELECTORS.DIALOG_CONTAINER, 3000);
+      return await waitForElement(pageAdapter().dialog, 3000, document, true);
     }
 
     /**
@@ -383,10 +377,10 @@
      * @returns {Array<{element: Element, name: string}>} 收藏夹列表
      */
     static getFavoriteListInDialog(dialog) {
-      const items = dialog.querySelectorAll(SELECTORS.FAV_ITEM);
+      const items = dialog.querySelectorAll(pageAdapter().dialogItem);
       return Array.from(items).map(item => ({
         element: item,
-        name: getElementText(SELECTORS.FAV_ITEM_TITLE, item)
+        name: getElementText(pageAdapter().dialogTitle, item)
       }));
     }
 
@@ -402,7 +396,7 @@
       for (const fav of favList) {
         if (fav.name === favName) {
           log(`找到目标收藏夹：[${favName}]`);
-          const radio = fav.element.querySelector(SELECTORS.FAV_RADIO_INPUT);
+          const radio = fav.element.querySelector(pageAdapter().radio);
           if (radio) {
             radio.click();
             return true;
@@ -420,7 +414,7 @@
      * @returns {Promise<boolean>} 是否成功
      */
     static async clickCreateFavoriteButton(dialog) {
-      const createBtn = dialog.querySelector(SELECTORS.CREATE_FAV_BUTTON);
+      const createBtn = dialog.querySelector(pageAdapter().createButton);
       if (!createBtn) {
         error('找不到新建收藏夹按钮');
         return false;
@@ -438,7 +432,7 @@
      * @returns {Promise<boolean>} 是否成功
      */
     static async inputFavoriteName(name) {
-      const nameInput = document.querySelector(SELECTORS.CREATE_FAV_NAME_INPUT);
+      const nameInput = Array.from(document.querySelectorAll(SELECTORS.CREATE_FAV_NAME_INPUT)).find(isElementVisible);
       if (!nameInput) {
         error('找不到名称输入框');
         return false;
@@ -472,7 +466,8 @@
      * @returns {Promise<boolean>} 是否成功
      */
     static async clickCreateButton() {
-      const createConfirmBtn = findButtonByText(BUTTON_TEXTS.CREATE);
+      const createConfirmBtn = (getPageAdapter()?.createConfirm && document.querySelector(getPageAdapter().createConfirm)) ||
+        findButtonByText(BUTTON_TEXTS.CREATE);
 
       if (!createConfirmBtn || createConfirmBtn.disabled) {
         error('创建按钮不可用');
@@ -492,7 +487,8 @@
      * @returns {Promise<boolean>}
      */
     static async createFavoriteViaSidebar(favName) {
-      const sidebar = document.querySelector(SELECTORS.FAVORITES_SIDEBAR);
+      const selector = pageAdapter().sidebarCreate;
+      const sidebar = selector && document.querySelector(selector);
       if (!sidebar) return false;
 
       // 文本精确为"新建收藏夹"的叶子元素即入口
@@ -513,7 +509,7 @@
       await delay(CONFIG.DELAY.SHORT);
 
       // 等待名称输入框（复用与复制对话框一致的创建组件）
-      const input = await waitForElement(SELECTORS.CREATE_FAV_NAME_INPUT, 3000);
+      const input = await waitForElement(SELECTORS.CREATE_FAV_NAME_INPUT, 3000, document, true);
       if (!input) {
         warn('点击"新建收藏夹"后未出现名称输入框');
         return false;
@@ -527,13 +523,17 @@
       return true;
     }
 
+    static closeDialog(dialog) {
+      dialog.querySelector(pageAdapter().cancel)?.click();
+    }
+
     /**
      * 点击确定按钮
      * @param {Element} dialog - 对话框元素
      * @returns {Promise<boolean>} 是否成功
      */
     static async clickConfirmButton(dialog) {
-      const confirmBtn = dialog.querySelector(SELECTORS.CONFIRM_BUTTON);
+      const confirmBtn = dialog.querySelector(pageAdapter().confirm);
       if (!confirmBtn) {
         error('找不到确定按钮');
         return false;
@@ -559,13 +559,13 @@
      * @returns {Promise<boolean>} 是否成功
      */
     static async clickNextPage() {
-      const paginationEl = document.querySelector(SELECTORS.PAGINATION);
+      const paginationEl = document.querySelector(pageAdapter().pagination);
       if (!paginationEl) {
         log('判断为单页收藏夹');
         return false;
       }
 
-      const allButtons = paginationEl.querySelectorAll('button');
+      const allButtons = paginationEl.querySelectorAll(pageAdapter().next);
       let nextBtn = null;
 
       for (const btn of allButtons) {
@@ -576,7 +576,7 @@
         }
       }
 
-      if (nextBtn && !nextBtn.disabled) {
+      if (nextBtn && !nextBtn.disabled && !nextBtn.classList.contains('be-pager-disabled')) {
         log('点击下一页');
         nextBtn.click();
         await delay(CONFIG.DELAY.MIDDLE);
@@ -599,7 +599,8 @@
         const name = this.getFavoriteName(favItem);
         if (name === favName) {
           log(`点击收藏夹：[${favName}]`);
-          favItem.click();
+          const link = pageAdapter().itemLink;
+          (link ? favItem.querySelector(link) || favItem : favItem).click();
           await delay(CONFIG.DELAY.SHORT);
           return true;
         }
@@ -614,8 +615,7 @@
      * @returns {boolean}
      */
     static isBatchModeActive() {
-      const checkbox = document.querySelector(SELECTORS.SELECT_ALL_CHECKBOX);
-      return !!checkbox;
+      return Array.from(document.querySelectorAll(pageAdapter().selectAll)).some(isElementVisible);
     }
 
     /**
@@ -655,7 +655,7 @@
      * @returns {string|null}
      */
     static getCurrentPageUID() {
-      const match = window.location.pathname.match(/\/(\d+)\/favlist/);
+      const match = window.location.pathname.match(/^\/(\d+)\/favlist(?:\/|$)/);
       return match ? match[1] : null;
     }
 
@@ -891,7 +891,7 @@
         return false;
       }
 
-      allFavs[0].click();
+      await BilibiliAPI.clickFavorite(BilibiliAPI.getFavoriteName(allFavs[0]));
       await delay(CONFIG.DELAY.MIDDLE);
 
       // 2. 进入批量操作模式
@@ -924,18 +924,14 @@
       const createSuccess = await this.manager.createNewFavorite(dialog, favName);
       if (!createSuccess) {
         // 关闭对话框
-        const cancelBtn = dialog.querySelector('button:not(.vui_button--blue)');
-        if (cancelBtn) cancelBtn.click();
+        BilibiliAPI.closeDialog(dialog);
         return false;
       }
 
       // 6. 关闭对话框
       await delay(CONFIG.DELAY.SHORT);
-      const cancelBtn = dialog.querySelector('button:not(.vui_button--blue)');
-      if (cancelBtn) {
-        cancelBtn.click();
-        await delay(CONFIG.DELAY.SHORT);
-      }
+      BilibiliAPI.closeDialog(dialog);
+      await delay(CONFIG.DELAY.SHORT);
 
       return true;
     }
@@ -948,6 +944,14 @@
       const state = StateManager.loadState();
       if (!state) {
         return false; // 没有跨页面状态
+      }
+
+      // 脚本会在空间站内导航后重新挂载，只有任务预期的页面才能恢复。
+      if (state.phase === 'creating' && !PageDetector.isOwnPage()) return false;
+      if (state.phase === 'copying') {
+        const returnURL = new URL(state.returnURL, window.location.origin);
+        if (returnURL.origin !== window.location.origin ||
+            returnURL.pathname !== window.location.pathname) return false;
       }
 
       log('========================================');
@@ -1076,7 +1080,7 @@
       log(`收藏夹 [${currentName}] 共 ${totalPages} 页`);
 
       // 3. 进入批量操作模式
-      const batchSuccess = await this.api.clickBatchOperationButton();
+      const batchSuccess = await this.api.ensureBatchModeActive();
       if (!batchSuccess) {
         error('无法进入批量操作模式');
         return false;
@@ -1148,11 +1152,8 @@
           error('目标收藏夹不存在且无法在他人页面创建');
           error('请使用批量复制功能，脚本会自动处理跨页面创建');
           // 关闭对话框
-          const cancelBtn = dialog.querySelector('button:not(.vui_button--blue)');
-          if (cancelBtn) {
-            cancelBtn.click();
-            await delay(CONFIG.DELAY.SHORT);
-          }
+          this.api.closeDialog(dialog);
+          await delay(CONFIG.DELAY.SHORT);
           return false;
         }
 
@@ -1239,6 +1240,58 @@
       }
 
       log('\n批量复制完成！');
+    }
+  }
+
+  /** 在油猴沙箱中轮询路由和真实业务 DOM，不修改网站的 history。 */
+  class PageLifecycle {
+    constructor({ mount, unmount, refresh, notify, now = Date.now }) {
+      Object.assign(this, { mount, unmount, refresh, notify, now });
+      this.uid = null;
+      this.sidebar = null;
+      this.names = '';
+      this.startedAt = now();
+      this.notified = false;
+      this.dismissed = false;
+    }
+
+    tick() {
+      const uid = PageDetector.getCurrentPageUID();
+      if (uid !== this.uid) {
+        this.unmount();
+        this.uid = uid;
+        this.sidebar = null;
+        this.names = '';
+        this.startedAt = this.now();
+        this.notified = false;
+        this.dismissed = false;
+      }
+      if (!uid || !document.body || this.dismissed) return;
+      const adapter = getPageAdapter();
+      const sidebar = adapter && document.querySelector(adapter.sidebar);
+      if (!sidebar) {
+        if (!this.notified && this.now() - this.startedAt >= 15000) {
+          this.notify('收藏夹仍未加载，或当前界面暂不支持。脚本会继续等待；可刷新页面重试。');
+          this.notified = true;
+        }
+        return;
+      }
+      const names = Array.from(sidebar.querySelectorAll(adapter.title))
+        .map(el => el.textContent.trim()).join('\n');
+      if (!this.sidebar) this.mount();
+      else if (sidebar !== this.sidebar || names !== this.names) {
+        if (this.refresh() === false) return;
+      }
+      this.sidebar = sidebar;
+      this.names = names;
+    }
+
+    reopen() {
+      this.unmount();
+      this.sidebar = null;
+      this.dismissed = false;
+      this.notified = false;
+      this.tick();
     }
   }
 
@@ -1678,6 +1731,7 @@
 
       // 收藏夹列表
       this.favorites = [];
+      this.busy = false;
     }
 
     /**
@@ -1702,6 +1756,23 @@
      */
     loadFavorites() {
       this.favorites = this.manager.getAllFavoriteNames();
+    }
+
+    refreshFavorites() {
+      const selections = new Map(this.favCheckboxItemList.map(item => [item.getLabelValue(), {
+        checked: item.getCheckboxValue(), target: item.getInputTextValue()
+      }]));
+      this.loadFavorites();
+      this.leftPanel.querySelector('.fav-panel')?.remove();
+      this.leftPanel.appendChild(this.createFavPanel());
+      for (const item of this.favCheckboxItemList) {
+        const previous = selections.get(item.getLabelValue());
+        if (previous) {
+          item.checkbox.checked = previous.checked;
+          item.inputText.value = previous.target;
+        }
+      }
+      this.selectAllButton.textContent = '点我全选';
     }
 
     /**
@@ -1794,7 +1865,8 @@
       });
 
       const destroyButton = UIComponents.createButton('点我销毁', () => {
-        this.floatingPanel.remove();
+        this.onDismiss?.();
+        this.destroy();
       });
 
       btnPanel.appendChild(this.selectAllButton);
@@ -1902,6 +1974,7 @@
     createFloatingPanel() {
       const floP = document.createElement('div');
       floP.classList.add('floating-panel');
+      floP.classList.add('bili-favs-manage-panel');
       floP.style.position = 'fixed';
       floP.style.top = '50px';
       floP.style.left = '50px';
@@ -1927,8 +2000,13 @@
       floP.addEventListener('mouseup', () => EventHandlers.stopDragOnPanel(this));
       floP.addEventListener('mousemove', (e) => EventHandlers.dragOnPanel(this, e));
 
-      document.body.addEventListener('mousemove', (e) => EventHandlers.mouseMove(this, e));
-      document.body.addEventListener('mouseup', () => EventHandlers.stopResizeOnBody(this));
+      this.onBodyMove = (e) => EventHandlers.mouseMove(this, e);
+      this.onBodyUp = () => {
+        EventHandlers.stopResizeOnBody(this);
+        EventHandlers.stopDragOnPanel(this);
+      };
+      document.body.addEventListener('mousemove', this.onBodyMove);
+      document.body.addEventListener('mouseup', this.onBodyUp);
 
       return floP;
     }
@@ -1967,6 +2045,7 @@
      * 开始批量复制
      */
     async startBatchTransfer() {
+      if (this.busy) return;
       // 获取选中的复制任务
       const tasks = this.getSelectedTasks();
 
@@ -1978,6 +2057,7 @@
       this.appendLog(`开始批量复制，共 ${tasks.length} 个任务`, this.startBatchCode);
 
       // 禁用按钮
+      this.busy = true;
       this.startBatchTransferButton.disabled = true;
       this.selectAllButton.disabled = true;
       this.startBatchTransferButton.textContent = '复制中...';
@@ -1990,6 +2070,7 @@
         this.appendLog(`✗ 批量复制出错: ${err.message}`, this.errorCode);
         console.error(err);
       } finally {
+        this.busy = false;
         // 恢复按钮
         this.startBatchTransferButton.disabled = false;
         this.selectAllButton.disabled = false;
@@ -2078,6 +2159,8 @@
      * 销毁面板
      */
     destroy() {
+      document.body.removeEventListener('mousemove', this.onBodyMove);
+      document.body.removeEventListener('mouseup', this.onBodyUp);
       if (this.floatingPanel) {
         this.floatingPanel.remove();
         this.floatingPanel = null;
@@ -2085,93 +2168,71 @@
     }
   }
 
-  /**
-   * BiliBili 收藏夹批量管理工具 - 入口文件
-   * Version: 2.0
-   */
+  // SPA 重复注入时只保留一个生命周期。
+  if (!window.__biliFavsLifecycle) {
+    let panel = null;
+    let notice = null;
 
+    function unmount() {
+      panel?.destroy();
+      panel = null;
+      notice?.remove();
+      notice = null;
+      setLoggerPanel(null);
+      // Tampermonkey 的 Window 代理可能拒绝 delete；赋空值同样能释放引用。
+      window.BiliFavPanel = null;
+      window.BiliFavManager = null;
+    }
 
-  // 等待页面加载完成
-  function waitForPageLoad() {
-    return new Promise(resolve => {
-      if (document.readyState === 'complete') {
-        resolve();
-      } else {
-        window.addEventListener('load', resolve);
+    const lifecycle = new PageLifecycle({
+      unmount,
+      mount() {
+        notice?.remove();
+        notice = null;
+        const manager = new FavoriteManager();
+        if (!manager.initialize()) return;
+        panel = new FloatingPanel(manager);
+        panel.onDismiss = () => { lifecycle.dismissed = true; };
+        setLoggerPanel(panel);
+        panel.init();
+        window.BiliFavManager = manager;
+        window.BiliFavPanel = panel;
+        log(`脚本已就绪 v${CONFIG.SCRIPT.VERSION}`);
+
+        const mountedPanel = panel;
+        mountedPanel.busy = true;
+        manager.crossPageFlow.resumeFlow().catch(err => {
+          log('恢复跨页面流程失败:', err.message);
+        }).finally(() => { mountedPanel.busy = false; });
+      },
+      refresh() {
+        if (panel?.busy) return false;
+        panel?.refreshFavorites();
+      },
+      notify(message) {
+        notice = document.createElement('div');
+        notice.id = 'bili-favs-status';
+        notice.setAttribute('role', 'status');
+        notice.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;background:white;color:#333;padding:16px;border:1px solid #00a1d6;max-width:360px;';
+        notice.textContent = `B站收藏夹批量管理：${message}`;
+        document.body.appendChild(notice);
       }
     });
+    window.__biliFavsLifecycle = lifecycle;
+
+    const checkPage = () => {
+      try { lifecycle.tick(); }
+      catch (err) { console.error('[BiliBili Favs] 初始化失败:', err); }
+    };
+    // 轮询可跨油猴隔离环境观察路由，也可处理 load 之后才挂载的收藏夹。
+    // 切换同一用户的收藏夹时保留面板，不打断任务。
+    window.setInterval(checkPage, 500);
+    window.addEventListener('pageshow', checkPage);
+    checkPage();
+
+    if (typeof GM_registerMenuCommand === 'function') {
+      GM_registerMenuCommand('显示收藏夹管理面板', () => lifecycle.reopen());
+    }
   }
-
-  // 主函数
-  async function main() {
-    await waitForPageLoad();
-
-    log('脚本启动 v2.0');
-
-    // 创建管理器实例
-    const manager = new FavoriteManager();
-
-    // 初始化并检测页面版本
-    if (!manager.initialize()) {
-      log('页面版本不支持，脚本退出');
-      return;
-    }
-
-    // 检测页面类型
-    const isOwnPage = PageDetector.isOwnPage();
-    log('页面类型:', isOwnPage ? '我的收藏夹' : '他人的收藏夹');
-
-    // 若存在待恢复的跨页面状态，先创建面板并绑定日志，
-    // 使 creating/copying 自动阶段的日志能输出到面板（而非只进 console）
-    let panel = null;
-    if (StateManager.loadState()) {
-      panel = new FloatingPanel(manager);
-      setLoggerPanel(panel);
-      panel.init();
-      window.BiliFavManager = manager;
-      window.BiliFavPanel = panel;
-    }
-
-    // 检查是否需要恢复跨页面流程
-    const handledCrossPage = await manager.crossPageFlow.resumeFlow();
-    if (handledCrossPage) {
-      // 跨页面流程已处理，面板（若已创建）保留以显示日志
-      log('跨页面流程执行完毕');
-      return;
-    }
-
-    // 获取所有收藏夹名称
-    const favorites = manager.getAllFavoriteNames();
-    log('检测到收藏夹:', favorites.length, '个');
-
-    if (favorites.length > 0) {
-      log('收藏夹列表:', favorites.slice(0, 5).join(', '), favorites.length > 5 ? '...' : '');
-    }
-
-    // 初始化浮动面板 UI（若上面尚未创建）
-    if (!panel) {
-      panel = new FloatingPanel(manager);
-
-      // 设置日志面板，让 panel.init() 中的日志也能输出到面板
-      setLoggerPanel(panel);
-
-      panel.init();
-
-      // 将管理器和面板实例挂载到全局，方便控制台调用
-      window.BiliFavManager = manager;
-      window.BiliFavPanel = panel;
-    }
-
-    log('脚本已就绪！浮动面板已显示');
-    log('控制台使用方法:');
-    log('1. 复制单个收藏夹: await BiliFavManager.copyFavorite("源收藏夹", "目标收藏夹")');
-    log('2. 批量复制: await BiliFavManager.batchCopy([{source: "源1", target: "目标1"}, ...])');
-    log('3. 获取收藏夹列表: BiliFavManager.getAllFavoriteNames()');
-  }
-
-  // 启动脚本
-  main().catch(err => {
-    console.error('[BiliBili Favs] 脚本启动失败:', err);
-  });
 
 })();

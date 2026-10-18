@@ -70,7 +70,7 @@ export class FavoriteManager {
     log(`收藏夹 [${currentName}] 共 ${totalPages} 页`);
 
     // 3. 进入批量操作模式
-    const batchSuccess = await this.api.clickBatchOperationButton();
+    const batchSuccess = await this.api.ensureBatchModeActive();
     if (!batchSuccess) {
       error('无法进入批量操作模式');
       return false;
@@ -142,11 +142,8 @@ export class FavoriteManager {
         error('目标收藏夹不存在且无法在他人页面创建');
         error('请使用批量复制功能，脚本会自动处理跨页面创建');
         // 关闭对话框
-        const cancelBtn = dialog.querySelector('button:not(.vui_button--blue)');
-        if (cancelBtn) {
-          cancelBtn.click();
-          await delay(CONFIG.DELAY.SHORT);
-        }
+        this.api.closeDialog(dialog);
+        await delay(CONFIG.DELAY.SHORT);
         return false;
       }
 

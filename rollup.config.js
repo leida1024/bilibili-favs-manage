@@ -1,6 +1,8 @@
 import resolve from '@rollup/plugin-node-resolve';
 import banner from 'rollup-plugin-banner2';
-import terser from '@rollup/plugin-terser';
+import { readFileSync } from 'node:fs';
+
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
 export default {
   input: 'src/main.js',
@@ -15,23 +17,20 @@ export default {
       return `// ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      ${version}
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
-// @author       Your Name
-// @match        https://space.bilibili.com/*/favlist*
+// @author       junxian-li-hpc
+// @match        https://space.bilibili.com/*
+// @run-at       document-start
+// @noframes
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
+// @grant        GM_registerMenuCommand
 // @license      MIT
 // ==/UserScript==
 
 `;
-    }),
-    // 可选：压缩代码（开发时可以注释掉）
-    // terser({
-    //   format: {
-    //     comments: /^!/
-    //   }
-    // })
+    })
   ]
 };

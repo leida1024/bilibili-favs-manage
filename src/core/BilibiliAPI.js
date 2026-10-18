@@ -4,90 +4,31 @@
  */
 
 import { SELECTORS, BUTTON_TEXTS } from '../config/selectors.js';
-import { delay, waitForElement, findButtonByText, elementExists, getElementText } from '../utils/dom.js';
+import { delay, waitForElement, findButtonByText, getElementText, isElementVisible } from '../utils/dom.js';
 import { log, error, warn } from '../utils/logger.js';
 import { CONFIG } from '../config/config.js';
+import { getPageAdapter } from './adapters/index.js';
+import { VuiPageAdapter } from './adapters/VuiPageAdapter.js';
+
+const pageAdapter = () => getPageAdapter() || VuiPageAdapter;
 
 export class BilibiliAPI {
   /**
    * 检测页面版本
-   * @returns {boolean} 是否为新版页面
+   * @returns {boolean} 是否为支持的页面版本
    */
   static detectPageVersion() {
-    const isNewVersion = elementExists(SELECTORS.FAVORITES_SIDEBAR);
-    log('页面版本:', isNewVersion ? '新版 (VUI)' : '未知版本');
-
-    if (!isNewVersion) {
-      warn('警告：页面结构可能不受支持，脚本可能无法正常工作');
-    }
-
-    return isNewVersion;
+    const adapter = getPageAdapter();
+    log('页面版本:', adapter?.name || '未知版本');
+    return !!adapter;
   }
 
-  /**
-   * 获取所有收藏夹项
-   * @returns {Array<Element>} 收藏夹项列表
-   */
   static getAllFavorites() {
-    // 调用 getCreatedFavorites() 进行过滤
     return this.getCreatedFavorites();
   }
 
-  /**
-   * 获取"我创建的收藏夹"分组中的收藏夹项（过滤"我追的"和"其他收藏"）
-   * @returns {Array<Element>} 收藏夹项数组
-   */
   static getCreatedFavorites() {
-    const sidebar = document.querySelector(SELECTORS.FAVORITES_SIDEBAR);
-    if (!sidebar) {
-      error('找不到收藏夹侧边栏容器');
-      return [];
-    }
-
-    const allItems = Array.from(sidebar.querySelectorAll(SELECTORS.FAVORITES_ITEM));
-    if (allItems.length === 0) {
-      return [];
-    }
-
-    // 在侧边栏内按"精确文本"定位分组标题元素。
-    // 标题不一定是 sidebar 的直接子节点（常嵌套在 wrapper 内），
-    // 因此遍历全部后代，取文本精确匹配且不含收藏夹项的最深元素。
-    const findMarker = (markerText) => {
-      const matches = Array.from(sidebar.querySelectorAll('*')).filter(
-        el => el.textContent.trim() === markerText &&
-              !el.querySelector(SELECTORS.FAVORITES_ITEM)
-      );
-      return matches.length ? matches[matches.length - 1] : null;
-    };
-
-    // b 是否在 a 之后（文档顺序）
-    const follows = (a, b) =>
-      !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-
-    const createdMarker = findMarker('我创建的收藏夹');
-    if (!createdMarker) {
-      warn('未找到"我创建的收藏夹"分组标记，使用降级策略');
-      warn('将返回所有收藏夹项（包含"我追的合集/收藏夹"）');
-      return allItems;
-    }
-
-    // 结束标记：'我追的合集/收藏夹' 或 '其他收藏' 中，位于 createdMarker 之后且最靠前的一个
-    const endMarker = ['我追的合集/收藏夹', '其他收藏']
-      .map(findMarker)
-      .filter(m => m && follows(createdMarker, m))
-      .sort((a, b) => (follows(a, b) ? -1 : 1))[0] || null;
-
-    // 收集位于 createdMarker 与 endMarker 之间的收藏夹项
-    const favorites = allItems.filter(item => {
-      if (!follows(createdMarker, item)) return false;
-      if (endMarker && !follows(item, endMarker)) return false;
-      return true;
-    });
-
-    log('过滤结果: 总数', allItems.length, '→ 我创建的', favorites.length);
-
-    // 兜底：若意外为空，返回全部，避免面板空白
-    return favorites.length > 0 ? favorites : allItems;
+    return getPageAdapter()?.getFavorites() || [];
   }
 
   /**
@@ -96,7 +37,7 @@ export class BilibiliAPI {
    * @returns {string} 收藏夹名称
    */
   static getFavoriteName(favItem) {
-    const titleEl = favItem.querySelector(SELECTORS.FAVORITES_ITEM_TITLE);
+    const titleEl = favItem.querySelector(pageAdapter().title);
     return titleEl ? titleEl.textContent.trim() : '';
   }
 
@@ -105,7 +46,7 @@ export class BilibiliAPI {
    * @returns {string|null} 当前收藏夹名称，如果找不到则返回 null
    */
   static getCurrentFavoriteName() {
-    const titleEl = document.querySelector(SELECTORS.CURRENT_FAV_TITLE);
+    const titleEl = document.querySelector(pageAdapter().currentTitle);
     if (!titleEl) {
       error('无法获取当前收藏夹名称');
       return null;
@@ -118,7 +59,7 @@ export class BilibiliAPI {
    * @returns {number} 总页数
    */
   static getTotalPages() {
-    const pageInfoText = document.querySelector(SELECTORS.PAGINATION)?.textContent || '';
+    const pageInfoText = document.querySelector(pageAdapter().pagination)?.textContent || '';
     const match = pageInfoText.match(/共\s*(\d+)\s*页/);
     return match ? parseInt(match[1]) : 1;
   }
@@ -128,7 +69,7 @@ export class BilibiliAPI {
    * @returns {Promise<boolean>} 是否成功
    */
   static async clickBatchOperationButton() {
-    const button = document.querySelector(SELECTORS.BATCH_OPERATION_BTN);
+    const button = document.querySelector(pageAdapter().batchButton);
     if (!button || button.textContent.trim() !== BUTTON_TEXTS.BATCH_OPERATION) {
       error('找不到批量操作按钮或按钮文本不匹配');
       return false;
@@ -145,14 +86,16 @@ export class BilibiliAPI {
    * @returns {boolean} 是否成功
    */
   static clickSelectAll() {
-    const checkbox = document.querySelector(SELECTORS.SELECT_ALL_CHECKBOX);
+    const checkbox = Array.from(document.querySelectorAll(pageAdapter().selectAll)).find(isElementVisible);
     if (!checkbox) {
       error('找不到全选按钮');
       return false;
     }
 
-    log('点击全选');
-    checkbox.click();
+    log('全选当前页');
+    const selected = checkbox.matches(pageAdapter().selectedAll) ||
+      checkbox.querySelector(pageAdapter().selectedAll);
+    if (!selected) checkbox.click();
     return true;
   }
 
@@ -161,7 +104,8 @@ export class BilibiliAPI {
    * @returns {Promise<boolean>} 是否成功
    */
   static async clickCopyButton() {
-    const copyBtn = findButtonByText(BUTTON_TEXTS.COPY_TO);
+    const copyBtn = (getPageAdapter()?.copyButton && document.querySelector(getPageAdapter().copyButton)) ||
+      findButtonByText(BUTTON_TEXTS.COPY_TO);
     if (!copyBtn) {
       error('找不到复制至按钮');
       return false;
@@ -178,7 +122,7 @@ export class BilibiliAPI {
    * @returns {Promise<Element|null>} 对话框元素
    */
   static async waitForDialog() {
-    return await waitForElement(SELECTORS.DIALOG_CONTAINER, 3000);
+    return await waitForElement(pageAdapter().dialog, 3000, document, true);
   }
 
   /**
@@ -187,10 +131,10 @@ export class BilibiliAPI {
    * @returns {Array<{element: Element, name: string}>} 收藏夹列表
    */
   static getFavoriteListInDialog(dialog) {
-    const items = dialog.querySelectorAll(SELECTORS.FAV_ITEM);
+    const items = dialog.querySelectorAll(pageAdapter().dialogItem);
     return Array.from(items).map(item => ({
       element: item,
-      name: getElementText(SELECTORS.FAV_ITEM_TITLE, item)
+      name: getElementText(pageAdapter().dialogTitle, item)
     }));
   }
 
@@ -206,7 +150,7 @@ export class BilibiliAPI {
     for (const fav of favList) {
       if (fav.name === favName) {
         log(`找到目标收藏夹：[${favName}]`);
-        const radio = fav.element.querySelector(SELECTORS.FAV_RADIO_INPUT);
+        const radio = fav.element.querySelector(pageAdapter().radio);
         if (radio) {
           radio.click();
           return true;
@@ -224,7 +168,7 @@ export class BilibiliAPI {
    * @returns {Promise<boolean>} 是否成功
    */
   static async clickCreateFavoriteButton(dialog) {
-    const createBtn = dialog.querySelector(SELECTORS.CREATE_FAV_BUTTON);
+    const createBtn = dialog.querySelector(pageAdapter().createButton);
     if (!createBtn) {
       error('找不到新建收藏夹按钮');
       return false;
@@ -242,7 +186,7 @@ export class BilibiliAPI {
    * @returns {Promise<boolean>} 是否成功
    */
   static async inputFavoriteName(name) {
-    const nameInput = document.querySelector(SELECTORS.CREATE_FAV_NAME_INPUT);
+    const nameInput = Array.from(document.querySelectorAll(SELECTORS.CREATE_FAV_NAME_INPUT)).find(isElementVisible);
     if (!nameInput) {
       error('找不到名称输入框');
       return false;
@@ -276,7 +220,8 @@ export class BilibiliAPI {
    * @returns {Promise<boolean>} 是否成功
    */
   static async clickCreateButton() {
-    const createConfirmBtn = findButtonByText(BUTTON_TEXTS.CREATE);
+    const createConfirmBtn = (getPageAdapter()?.createConfirm && document.querySelector(getPageAdapter().createConfirm)) ||
+      findButtonByText(BUTTON_TEXTS.CREATE);
 
     if (!createConfirmBtn || createConfirmBtn.disabled) {
       error('创建按钮不可用');
@@ -296,7 +241,8 @@ export class BilibiliAPI {
    * @returns {Promise<boolean>}
    */
   static async createFavoriteViaSidebar(favName) {
-    const sidebar = document.querySelector(SELECTORS.FAVORITES_SIDEBAR);
+    const selector = pageAdapter().sidebarCreate;
+    const sidebar = selector && document.querySelector(selector);
     if (!sidebar) return false;
 
     // 文本精确为"新建收藏夹"的叶子元素即入口
@@ -317,7 +263,7 @@ export class BilibiliAPI {
     await delay(CONFIG.DELAY.SHORT);
 
     // 等待名称输入框（复用与复制对话框一致的创建组件）
-    const input = await waitForElement(SELECTORS.CREATE_FAV_NAME_INPUT, 3000);
+    const input = await waitForElement(SELECTORS.CREATE_FAV_NAME_INPUT, 3000, document, true);
     if (!input) {
       warn('点击"新建收藏夹"后未出现名称输入框');
       return false;
@@ -331,13 +277,17 @@ export class BilibiliAPI {
     return true;
   }
 
+  static closeDialog(dialog) {
+    dialog.querySelector(pageAdapter().cancel)?.click();
+  }
+
   /**
    * 点击确定按钮
    * @param {Element} dialog - 对话框元素
    * @returns {Promise<boolean>} 是否成功
    */
   static async clickConfirmButton(dialog) {
-    const confirmBtn = dialog.querySelector(SELECTORS.CONFIRM_BUTTON);
+    const confirmBtn = dialog.querySelector(pageAdapter().confirm);
     if (!confirmBtn) {
       error('找不到确定按钮');
       return false;
@@ -363,13 +313,13 @@ export class BilibiliAPI {
    * @returns {Promise<boolean>} 是否成功
    */
   static async clickNextPage() {
-    const paginationEl = document.querySelector(SELECTORS.PAGINATION);
+    const paginationEl = document.querySelector(pageAdapter().pagination);
     if (!paginationEl) {
       log('判断为单页收藏夹');
       return false;
     }
 
-    const allButtons = paginationEl.querySelectorAll('button');
+    const allButtons = paginationEl.querySelectorAll(pageAdapter().next);
     let nextBtn = null;
 
     for (const btn of allButtons) {
@@ -380,7 +330,7 @@ export class BilibiliAPI {
       }
     }
 
-    if (nextBtn && !nextBtn.disabled) {
+    if (nextBtn && !nextBtn.disabled && !nextBtn.classList.contains('be-pager-disabled')) {
       log('点击下一页');
       nextBtn.click();
       await delay(CONFIG.DELAY.MIDDLE);
@@ -403,7 +353,8 @@ export class BilibiliAPI {
       const name = this.getFavoriteName(favItem);
       if (name === favName) {
         log(`点击收藏夹：[${favName}]`);
-        favItem.click();
+        const link = pageAdapter().itemLink;
+        (link ? favItem.querySelector(link) || favItem : favItem).click();
         await delay(CONFIG.DELAY.SHORT);
         return true;
       }
@@ -418,8 +369,7 @@ export class BilibiliAPI {
    * @returns {boolean}
    */
   static isBatchModeActive() {
-    const checkbox = document.querySelector(SELECTORS.SELECT_ALL_CHECKBOX);
-    return !!checkbox;
+    return Array.from(document.querySelectorAll(pageAdapter().selectAll)).some(isElementVisible);
   }
 
   /**

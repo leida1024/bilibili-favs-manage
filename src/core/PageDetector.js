@@ -9,7 +9,7 @@ export class PageDetector {
    * @returns {string|null}
    */
   static getCurrentPageUID() {
-    const match = window.location.pathname.match(/\/(\d+)\/favlist/);
+    const match = window.location.pathname.match(/^\/(\d+)\/favlist(?:\/|$)/);
     return match ? match[1] : null;
   }
 

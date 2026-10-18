@@ -51,6 +51,7 @@ export class FloatingPanel {
 
     // 收藏夹列表
     this.favorites = [];
+    this.busy = false;
   }
 
   /**
@@ -75,6 +76,23 @@ export class FloatingPanel {
    */
   loadFavorites() {
     this.favorites = this.manager.getAllFavoriteNames();
+  }
+
+  refreshFavorites() {
+    const selections = new Map(this.favCheckboxItemList.map(item => [item.getLabelValue(), {
+      checked: item.getCheckboxValue(), target: item.getInputTextValue()
+    }]));
+    this.loadFavorites();
+    this.leftPanel.querySelector('.fav-panel')?.remove();
+    this.leftPanel.appendChild(this.createFavPanel());
+    for (const item of this.favCheckboxItemList) {
+      const previous = selections.get(item.getLabelValue());
+      if (previous) {
+        item.checkbox.checked = previous.checked;
+        item.inputText.value = previous.target;
+      }
+    }
+    this.selectAllButton.textContent = '点我全选';
   }
 
   /**
@@ -167,7 +185,8 @@ export class FloatingPanel {
     });
 
     const destroyButton = UIComponents.createButton('点我销毁', () => {
-      this.floatingPanel.remove();
+      this.onDismiss?.();
+      this.destroy();
     });
 
     btnPanel.appendChild(this.selectAllButton);
@@ -275,6 +294,7 @@ export class FloatingPanel {
   createFloatingPanel() {
     const floP = document.createElement('div');
     floP.classList.add('floating-panel');
+    floP.classList.add('bili-favs-manage-panel');
     floP.style.position = 'fixed';
     floP.style.top = '50px';
     floP.style.left = '50px';
@@ -300,8 +320,13 @@ export class FloatingPanel {
     floP.addEventListener('mouseup', () => EventHandlers.stopDragOnPanel(this));
     floP.addEventListener('mousemove', (e) => EventHandlers.dragOnPanel(this, e));
 
-    document.body.addEventListener('mousemove', (e) => EventHandlers.mouseMove(this, e));
-    document.body.addEventListener('mouseup', () => EventHandlers.stopResizeOnBody(this));
+    this.onBodyMove = (e) => EventHandlers.mouseMove(this, e);
+    this.onBodyUp = () => {
+      EventHandlers.stopResizeOnBody(this);
+      EventHandlers.stopDragOnPanel(this);
+    };
+    document.body.addEventListener('mousemove', this.onBodyMove);
+    document.body.addEventListener('mouseup', this.onBodyUp);
 
     return floP;
   }
@@ -340,6 +365,7 @@ export class FloatingPanel {
    * 开始批量复制
    */
   async startBatchTransfer() {
+    if (this.busy) return;
     // 获取选中的复制任务
     const tasks = this.getSelectedTasks();
 
@@ -351,6 +377,7 @@ export class FloatingPanel {
     this.appendLog(`开始批量复制，共 ${tasks.length} 个任务`, this.startBatchCode);
 
     // 禁用按钮
+    this.busy = true;
     this.startBatchTransferButton.disabled = true;
     this.selectAllButton.disabled = true;
     this.startBatchTransferButton.textContent = '复制中...';
@@ -363,6 +390,7 @@ export class FloatingPanel {
       this.appendLog(`✗ 批量复制出错: ${err.message}`, this.errorCode);
       console.error(err);
     } finally {
+      this.busy = false;
       // 恢复按钮
       this.startBatchTransferButton.disabled = false;
       this.selectAllButton.disabled = false;
@@ -451,6 +479,8 @@ export class FloatingPanel {
    * 销毁面板
    */
   destroy() {
+    document.body.removeEventListener('mousemove', this.onBodyMove);
+    document.body.removeEventListener('mouseup', this.onBodyUp);
     if (this.floatingPanel) {
       this.floatingPanel.remove();
       this.floatingPanel = null;

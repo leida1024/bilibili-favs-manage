@@ -110,7 +110,7 @@ export class CrossPageFlowManager {
       return false;
     }
 
-    allFavs[0].click();
+    await BilibiliAPI.clickFavorite(BilibiliAPI.getFavoriteName(allFavs[0]));
     await delay(CONFIG.DELAY.MIDDLE);
 
     // 2. 进入批量操作模式
@@ -143,18 +143,14 @@ export class CrossPageFlowManager {
     const createSuccess = await this.manager.createNewFavorite(dialog, favName);
     if (!createSuccess) {
       // 关闭对话框
-      const cancelBtn = dialog.querySelector('button:not(.vui_button--blue)');
-      if (cancelBtn) cancelBtn.click();
+      BilibiliAPI.closeDialog(dialog);
       return false;
     }
 
     // 6. 关闭对话框
     await delay(CONFIG.DELAY.SHORT);
-    const cancelBtn = dialog.querySelector('button:not(.vui_button--blue)');
-    if (cancelBtn) {
-      cancelBtn.click();
-      await delay(CONFIG.DELAY.SHORT);
-    }
+    BilibiliAPI.closeDialog(dialog);
+    await delay(CONFIG.DELAY.SHORT);
 
     return true;
   }
@@ -167,6 +163,14 @@ export class CrossPageFlowManager {
     const state = StateManager.loadState();
     if (!state) {
       return false; // 没有跨页面状态
+    }
+
+    // 脚本会在空间站内导航后重新挂载，只有任务预期的页面才能恢复。
+    if (state.phase === 'creating' && !PageDetector.isOwnPage()) return false;
+    if (state.phase === 'copying') {
+      const returnURL = new URL(state.returnURL, window.location.origin);
+      if (returnURL.origin !== window.location.origin ||
+          returnURL.pathname !== window.location.pathname) return false;
     }
 
     log('========================================');

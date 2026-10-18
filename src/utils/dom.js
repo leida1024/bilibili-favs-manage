@@ -18,16 +18,29 @@ export function delay(ms) {
  * @param {Element} parent - 父元素，默认为 document
  * @returns {Promise<Element|null>}
  */
-export async function waitForElement(selector, timeout = 5000, parent = document) {
+export async function waitForElement(selector, timeout = 5000, parent = document, visible = false) {
   const startTime = Date.now();
   while (Date.now() - startTime < timeout) {
-    const el = parent.querySelector(selector);
+    const el = Array.from(parent.querySelectorAll(selector)).find(el => !visible || isElementVisible(el));
     if (el) {
       return el;
     }
     await delay(100);
   }
   return null;
+}
+
+/**
+ * 检查元素及其祖先是否隐藏，排除预渲染但尚未打开的弹窗。
+ * @param {Element} element
+ * @returns {boolean}
+ */
+export function isElementVisible(element) {
+  for (let current = element; current; current = current.parentElement) {
+    const style = window.getComputedStyle(current);
+    if (current.hidden || style.display === 'none' || style.visibility === 'hidden') return false;
+  }
+  return element.isConnected;
 }
 
 /**

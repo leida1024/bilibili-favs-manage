@@ -38,8 +38,8 @@ export const CONFIG = {
 
   // 脚本信息
   SCRIPT: {
-    VERSION: '1.0',
+    VERSION: '2.1.1',
     NAME: 'BiliBili 收藏夹批量管理',
-    DESCRIPTION: '适配新版 B 站收藏夹页面（VUI 组件库）'
+    DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
   }
 };

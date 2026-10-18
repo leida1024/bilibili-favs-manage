@@ -1,13 +1,13 @@
 {
   "name": "bilibili-favs-manage",
-  "version": "1.0.0",
+  "version": "2.1.1",
   "description": "B站收藏夹批量管理工具",
   "type": "module",
   "main": "src/main.js",
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c -w",
-    "lint": "eslint src"
+    "test": "node --test test/*.test.js"
   },
   "keywords": [
     "bilibili",
@@ -19,6 +19,7 @@
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-terser": "^0.4.4",
+    "jsdom": "^26.1.0",
     "rollup": "^4.9.6",
     "rollup-plugin-banner2": "^1.2.2"
   }
