@@ -19,7 +19,7 @@ export default {
 // @namespace    http://tampermonkey.net/
 // @version      ${version}
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
-// @author       junxian-li-hpc
+// @author       leida1024
 // @match        https://space.bilibili.com/*
 // @run-at       document-start
 // @noframes

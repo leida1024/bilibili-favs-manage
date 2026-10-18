@@ -16,6 +16,24 @@ npm test
 
 构建版本来自 `package.json`，发布时同步更新 `src/config/config.js` 的日志版本、锁文件和更新日志，再重新构建。构建不会自动发布至 Greasy Fork。
 
+## 发布与自动同步
+
+仓库地址为 `https://github.com/leida1024/bilibili-favs-manage`，发布分支为 `master`。Greasy Fork 应同步构建产物的 Raw 地址：
+
+```text
+https://raw.githubusercontent.com/leida1024/bilibili-favs-manage/master/dist/BilibiliFavsManage.user.js
+```
+
+首次配置时，在 Greasy Fork 脚本的「管理」中设置上述代码同步地址，再按照账号中的「设置 Webhook」说明配置 GitHub 仓库的 **Settings → Webhooks**：Payload URL 和 Secret 使用 Greasy Fork 提供的值，Content type 选 `application/json`，监听 `push`，保持 Active。Secret 不要提交进仓库。
+
+后续发布：
+
+1. 更新版本号和更新日志，执行 `npm test` 与 `npm run build`。
+2. 将源码及 `dist/BilibiliFavsManage.user.js` 一起提交并推送到 `master`。
+3. 检查 GitHub Webhook 的 Recent Deliveries，以及 Greasy Fork 的同步状态和脚本版本。
+
+Webhook 仅在推送包含脚本文件变更时同步代码；只修改文档无需增加脚本版本号。用户端仍按脚本管理器的更新检查周期获取新版。GitHub 用户名或仓库名改变后，也要更新 Git 远程地址和 Greasy Fork 的同步地址。
+
 ## 目录
 
 ```text
