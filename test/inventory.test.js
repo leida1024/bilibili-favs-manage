@@ -40,6 +40,20 @@ test('cancel prevents next request and releases scan admission', async () => {
   assert.equal(report.uniqueVideos, 1);
 });
 
+test('explicit zero-count null lists are empty; unknown totals and mismatched identity stay incomplete', async () => {
+  let data = { count: 0, list: null, has_more: false };
+  const client = new FolderClient(async () => ({ ok: true, json: async () => ({ code: 0, data }) }));
+  assert.deepEqual(await client.folders('50', 'created'), []);
+  assert.deepEqual(await client.folders('50', 'subscribed'), []);
+  data = { info: { id: 100, media_count: 0 }, medias: null, has_more: false };
+  const empty = await new InventoryService(client, 0).scan([folder]);
+  assert.equal(empty.complete, true); assert.equal(empty.uniqueVideos, 0);
+  data = { info: { id: 100 }, medias: [], has_more: false };
+  assert.equal((await new InventoryService(client, 0).scan([folder])).complete, false);
+  data = { info: { id: 101, media_count: 0 }, medias: [], has_more: false };
+  assert.match((await new InventoryService(client, 0).scan([folder])).folders[0].issue, /身份/);
+});
+
 test('client normalizes IDs, excludes unknown types, rejects incomplete and duplicate discovery', async () => {
   assert.equal(normalizeFolder({ id: 1, mid: 2, title: 'same', is_kid_playlist: 0 }, 'created').protected, true);
   assert.equal(normalizeFolder({ id: 2, mid: 2, title: 'same', is_kid_playlist: 0 }, 'created', 1).protected, false);

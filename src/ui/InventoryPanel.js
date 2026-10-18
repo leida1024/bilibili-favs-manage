@@ -25,7 +25,7 @@ export class InventoryPanel {
       this.root.append(this.mutations.root);
     }
     this.kind.addEventListener('change', () => {
-      this.folders = []; this.rows = []; this.list.replaceChildren(); this.mutations?.setCatalog([]); this.updateBusy();
+      this.folders = []; this.rows = []; this.list.replaceChildren(); this.mutations?.setCatalog([], this.kind.value); this.updateBusy();
     });
     this.updateBusy();
   }
@@ -50,19 +50,22 @@ export class InventoryPanel {
     catch (err) {
       this.panel.operation.finish(this.controller.signal.aborted ? 'interrupted' : 'failed', this.controller.signal.aborted ? '已取消，请重新选择后开始。' : err.message);
       this.result.textContent = this.panel.operation.state.detail;
-    } finally { this.controller = null; this.panel.setBusy(false); }
+    } finally {
+      if (this.controller.signal.aborted && this.panel.operation.state.status === 'running') this.panel.operation.finish('interrupted', '已取消，未继续后续请求。');
+      this.controller = null; this.panel.setBusy(false);
+    }
   }
 
   load() {
     return this.run('读取收藏夹列表', async signal => {
       this.folders = []; this.rows = []; this.list.replaceChildren(); this.report = null; this.result.textContent = '';
-      this.mutations?.setCatalog([]);
+      this.mutations?.setCatalog([], this.kind.value);
       const kind = this.kind.value;
       const owner = kind === 'created' ? PageDetector.getCurrentPageUID() : PageDetector.getLoginUserUID();
       const folders = await this.service.client.folders(owner, kind, signal);
       if (signal.aborted) return;
       this.folders = folders; this.catalogOwner = owner; this.catalogKind = kind;
-      this.mutations?.setCatalog(folders);
+      this.mutations?.setCatalog(folders, kind);
       for (const folder of folders) {
         const label = element('label', 'bf-folder-row');
         const input = element('input'); input.type = 'checkbox'; input.disabled = folder.kind === 'unsupported';

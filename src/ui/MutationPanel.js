@@ -2,13 +2,22 @@ import { element, button } from './elements.js';
 import { eligibility } from '../core/BatchOperations.js';
 
 const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
+const descriptions = {
+  delete: { verb: '删除', title: '删除自己创建的收藏夹',
+    detail: '与统计分开勾选。默认/特殊收藏夹不可选。删除会移除收藏夹及其中的收藏关系，请自行备份；这里不提供撤销。不会删除原作者上传的视频。',
+    agreement: '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。' },
+  unsubscribe: { verb: '退订', title: '取消我的收藏夹订阅',
+    detail: '只管理当前登录账号的收藏夹订阅，不改变原作者的收藏夹内容。合集、所有者未知或不可用的条目暂不支持。与统计分开勾选。',
+    agreement: '我已检查以上 ID 和所有者，确认取消当前账号对这些收藏夹的订阅；原作者的内容不受影响。' }
+};
 
 export class MutationPanel {
   constructor(inventoryUI, engine) {
-    this.inventoryUI = inventoryUI; this.panel = inventoryUI.panel; this.engine = engine; this.rows = [];
+    this.inventoryUI = inventoryUI; this.panel = inventoryUI.panel; this.engine = engine; this.rows = []; this.action = 'delete';
     this.root = element('section', 'bf-diagnostics bf-mutations');
-    this.root.append(element('h3', '', '删除自己创建的收藏夹'));
-    this.root.append(element('p', 'bf-muted', '与统计分开勾选。默认/特殊收藏夹不可选。删除会移除收藏夹及其中的收藏关系，请自行备份；这里不提供撤销。不会删除原作者上传的视频。'));
+    this.heading = element('h3', '', descriptions.delete.title);
+    this.explanation = element('p', 'bf-muted', descriptions.delete.detail);
+    this.root.append(this.heading, this.explanation);
     this.list = element('div', 'bf-selection');
     this.previewButton = button('预览删除目标', () => this.preview());
     this.review = element('section');
@@ -19,11 +28,15 @@ export class MutationPanel {
 
   invalidate() { this.engine.invalidate(); this.ticket = null; this.review.replaceChildren(); }
 
-  setCatalog(folders) {
+  setCatalog(folders, kind) {
     this.invalidate(); this.rows = []; this.list.replaceChildren();
+    if (kind) this.action = kind === 'subscribed' ? 'unsubscribe' : 'delete';
+    const description = descriptions[this.action];
+    this.heading.textContent = description.title; this.explanation.textContent = description.detail;
+    this.previewButton.textContent = `预览${description.verb}目标`;
     const { actor, pageOwner } = this.engine.context();
     for (const folder of folders) {
-      const reason = eligibility('delete', folder, actor, pageOwner);
+      const reason = eligibility(this.action, folder, actor, pageOwner);
       const input = element('input'); input.type = 'checkbox';
       const label = element('label', 'bf-folder-row');
       label.append(input, element('span', '', `${folder.name} · ID ${folder.id} · 所有者 ${folder.ownerId || '未知'} · ${folder.count ?? '未知'} 条${reason ? ` · 不可选：${reason}` : ''}`));
@@ -47,13 +60,14 @@ export class MutationPanel {
     if (this.panel.busy) return;
     this.invalidate();
     try {
-      this.ticket = this.engine.prepare('delete', this.selected());
-      this.review.append(element('h3', '', `将删除 ${this.ticket.targets.length} 个收藏夹`));
+      const description = descriptions[this.action];
+      this.ticket = this.engine.prepare(this.action, this.selected());
+      this.review.append(element('h3', '', `将${description.verb} ${this.ticket.targets.length} 个收藏夹`));
       for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ID ${target.id} · 所有者 ${target.ownerId} · ${target.count ?? '未知'} 条`));
       this.agreement = element('input'); this.agreement.type = 'checkbox';
-      const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。'));
+      const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', description.agreement));
       this.agreement.addEventListener('change', () => this.updateBusy());
-      this.confirmButton = button('确认删除以上目标', () => this.execute());
+      this.confirmButton = button(`确认${description.verb}以上目标`, () => this.execute());
       this.review.append(label, this.confirmButton, button('放弃本次操作', () => this.invalidate()));
       this.updateBusy(); this.agreement.focus();
     } catch (err) { this.results.textContent = err.message; }
@@ -62,7 +76,7 @@ export class MutationPanel {
   execute() {
     if (this.panel.busy || !this.ticket || !this.agreement?.checked) return;
     const ticket = this.ticket; this.ticket = null; this.review.replaceChildren();
-    return this.inventoryUI.run('删除收藏夹', async signal => {
+    return this.inventoryUI.run(`${descriptions[ticket.action].verb}收藏夹`, async signal => {
       const report = await this.engine.execute(ticket, { confirmed: true, signal, onResult: result => {
         if (result.status === 'confirmed') this.panel.operation.confirm(`ID ${result.id}：平台已确认`);
       } });
