@@ -28,4 +28,4 @@ Inspect these consumers before designing a shared progress/log model. Build/revi
 
 ## Scope and authorization
 
-This task is a prioritized planning entry. Complete design.md and implement.md before activation when selected for implementation. Default approach is to keep plain JS and reuse the existing components; a framework rewrite is out of scope. No Greasy Fork release or real collection mutations are authorized by this PRD.
+Selected for implementation by the user's 2026-10-18 Stage 0–4 execution request. Local commits, verification, archives, and journals are authorized. The later user instruction forbids remote pushes until their return and acceptance. Keep plain JS and existing component boundaries; no framework rewrite, Greasy Fork release, or real collection mutations. Design and implementation plan are internally reviewed before activation. No blocking product questions remain.
