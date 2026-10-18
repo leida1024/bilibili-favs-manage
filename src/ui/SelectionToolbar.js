@@ -33,6 +33,7 @@ export class SelectionToolbar {
 
   update() {
     const rows = this.rows();
+    this.root.dataset.empty = String(!rows.length);
     const visible = new Set(this.visibleRows(rows));
     const eligible = [...visible].filter(row => row.eligible);
     const selected = rows.filter(row => row.eligible && row.input.checked);
@@ -46,7 +47,8 @@ export class SelectionToolbar {
     this.allButton.setAttribute('aria-label', `${all ? '取消全选' : '全选'}${this.search.value.trim() ? '搜索结果中' : ''}可选收藏夹`);
     this.allButton.disabled = this.busy() || !eligible.length;
     this.search.disabled = this.busy();
-    this.count.textContent = `已选 ${selected.length} / ${rows.length} 个收藏夹`;
+    const unavailable = rows.filter(row => !row.eligible).length;
+    this.count.textContent = `已选 ${selected.length} / ${rows.length} 个收藏夹${unavailable ? ` · ${unavailable} 个不可选` : ''}`;
     this.notice.hidden = !this.search.value.trim();
     this.notice.textContent = `${visible.size} 个匹配${outside ? ` · 筛选外已选 ${outside} 个，也会执行` : ''}`;
   }

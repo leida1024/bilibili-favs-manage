@@ -5,7 +5,7 @@
 
 import { SELECTORS, BUTTON_TEXTS } from '../config/selectors.js';
 import { delay, waitForElement, findButtonByText, getElementText, isElementVisible } from '../utils/dom.js';
-import { log, error, warn } from '../utils/logger.js';
+import { log, error, warn, debug } from '../utils/logger.js';
 import { CONFIG } from '../config/config.js';
 import { getPageAdapter } from './adapters/index.js';
 import { VuiPageAdapter } from './adapters/VuiPageAdapter.js';
@@ -76,7 +76,7 @@ export class BilibiliAPI {
       return false;
     }
 
-    log('点击批量操作按钮');
+    debug('点击批量操作按钮');
     button.click();
     await delay(CONFIG.DELAY.SHORT);
     return true;
@@ -93,7 +93,7 @@ export class BilibiliAPI {
       return false;
     }
 
-    log('全选当前页');
+    debug('全选当前页');
     const selected = checkbox.matches(pageAdapter().selectedAll) ||
       checkbox.querySelector(pageAdapter().selectedAll);
     if (!selected) checkbox.click();
@@ -112,7 +112,7 @@ export class BilibiliAPI {
       return false;
     }
 
-    log('点击复制至按钮');
+    debug('点击复制至按钮');
     copyBtn.click();
     await delay(CONFIG.DELAY.SHORT);
     return true;
@@ -152,7 +152,7 @@ export class BilibiliAPI {
 
     for (const fav of favList) {
       if (fav.name === favName) {
-        log(`找到目标收藏夹：[${favName}]`);
+        debug(`找到目标收藏夹：[${favName}]`);
         const radio = fav.element.querySelector(pageAdapter().radio);
         if (radio) {
           radio.click();
@@ -177,7 +177,7 @@ export class BilibiliAPI {
       return false;
     }
 
-    log('点击新建收藏夹按钮');
+    debug('点击新建收藏夹按钮');
     createBtn.click();
     await delay(CONFIG.DELAY.MIDDLE);
     return true;
@@ -197,7 +197,7 @@ export class BilibiliAPI {
       return false;
     }
 
-    log('输入新收藏夹名称:', name);
+    debug('输入新收藏夹名称:', name);
 
     // 模拟真实输入
     nameInput.focus();
@@ -233,7 +233,7 @@ export class BilibiliAPI {
       return false;
     }
 
-    log('点击创建按钮');
+    debug('点击创建按钮');
     createConfirmBtn.click();
     await delay(CONFIG.DELAY.MIDDLE);
     return true;
@@ -264,7 +264,7 @@ export class BilibiliAPI {
       return null;
     }
 
-    log('点击左侧边栏[新建收藏夹]');
+    debug('点击左侧边栏[新建收藏夹]');
     const clickable = entry.closest(
       'button, [role="button"], [class*="add"], [class*="create"], [class*="btn"]'
     ) || entry;
@@ -314,29 +314,38 @@ export class BilibiliAPI {
    * @returns {Promise<boolean>} 是否成功
    */
   static async clickConfirmButton(dialog) {
+    this.copySubmission = { status: 'not_started', detail: '尚未提交复制' };
     const confirmBtn = dialog.querySelector(pageAdapter().confirm);
-    if (!confirmBtn) {
+    if (!confirmBtn || confirmBtn.disabled) {
       error('找不到确定按钮');
       return false;
     }
 
-    log('点击确定');
+    debug('点击确定');
     // Only a newly rendered success message can confirm this submission.
-    let confirmed = false;
+    let confirmed = false, finish;
+    const result = new Promise(resolve => { finish = resolve; });
     const observer = new window.MutationObserver(records => {
       for (const record of records) {
         const nodes = record.type === 'childList' ? [...record.addedNodes] : [record.target];
         for (const node of nodes) {
           const el = node.nodeType === 1 ? node : node.parentElement;
           const toast = el?.closest(SELECTORS.TOAST) || el?.querySelector?.(SELECTORS.TOAST);
-          if (toast?.textContent.includes(BUTTON_TEXTS.SUCCESS)) confirmed = true;
+          if (toast?.textContent.includes(BUTTON_TEXTS.SUCCESS)) { confirmed = true; finish(); }
         }
       }
     });
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-    try { confirmBtn.click(); await delay(CONFIG.DELAY.LONG); }
-    finally { observer.disconnect(); }
+    let timer;
+    this.copySubmission = { status: 'unknown', detail: '复制已提交，但未观察到平台成功提示。' };
+    try {
+      confirmBtn.click();
+      await Promise.race([result, new Promise(resolve => { timer = setTimeout(resolve, CONFIG.DELAY.LONG * 3); })]);
+    } catch (err) {
+      err.outcome = 'unknown'; throw err;
+    } finally { observer.disconnect(); clearTimeout(timer); }
     if (confirmed) {
+      this.copySubmission = { status: 'confirmed', detail: '已观察到平台成功提示' };
       log('✓ 复制成功');
       return true;
     } else {
@@ -353,7 +362,7 @@ export class BilibiliAPI {
   static async clickNextPage() {
     const paginationEl = document.querySelector(pageAdapter().pagination);
     if (!paginationEl) {
-      log('判断为单页收藏夹');
+      debug('判断为单页收藏夹');
       return false;
     }
 
@@ -392,7 +401,7 @@ export class BilibiliAPI {
     for (const favItem of allFavs) {
       const name = this.getFavoriteName(favItem);
       if (name === favName) {
-        log(`点击收藏夹：[${favName}]`);
+        debug(`点击收藏夹：[${favName}]`);
         const link = pageAdapter().itemLink;
         (link ? favItem.querySelector(link) || favItem : favItem).click();
         await delay(CONFIG.DELAY.SHORT);
@@ -418,11 +427,11 @@ export class BilibiliAPI {
    */
   static async ensureBatchModeActive() {
     if (this.isBatchModeActive()) {
-      log('批量模式已激活');
+      debug('批量模式已激活');
       return true;
     }
 
-    log('批量模式已退出，重新进入');
+    debug('批量模式已退出，重新进入');
     return await this.clickBatchOperationButton();
   }
 

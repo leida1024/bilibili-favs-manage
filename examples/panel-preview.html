@@ -54,7 +54,7 @@
       });
       panel.updateSelectionReview();
     }
-    panel.appendLog('虚构数据示例：操作记录只保存在当前页面。');
+    panel.appendLog('虚构数据示例；跨页复制会携带同一任务的记录。');
     if (['running', 'failed', 'completed', 'interrupted'].includes(scenario)) {
       manager.operation.begin('模拟复制', 2);
       manager.operation.confirm('编程入门 → 学习资料');

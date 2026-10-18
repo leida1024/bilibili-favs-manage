@@ -7,6 +7,16 @@ const LOG_PREFIX = '[BiliBili Favs]';
 
 // 全局面板引用（由 FloatingPanel 设置）
 let globalPanel = null;
+let globalStore = null;
+
+export function setLoggerStore(store) { globalStore = store; }
+
+function record(args, level) {
+  const message = args.map(value => value instanceof Error ? value.message : String(value)).join(' ');
+  if (globalPanel) {
+    globalPanel.appendLog(message, { info: globalPanel.normalCode, error: globalPanel.errorCode, warn: globalPanel.warnCode, debug: globalPanel.debugCode }[level]);
+  } else globalStore?.add(message, level);
+}
 
 /**
  * 设置全局面板引用
@@ -22,9 +32,7 @@ export function setLoggerPanel(panel) {
  */
 export function log(...args) {
   console.log(LOG_PREFIX, ...args);
-  if (globalPanel) {
-    globalPanel.appendLog(args.join(' '), globalPanel.normalCode);
-  }
+  record(args, 'info');
 }
 
 /**
@@ -33,9 +41,7 @@ export function log(...args) {
  */
 export function error(...args) {
   console.error(LOG_PREFIX, ...args);
-  if (globalPanel) {
-    globalPanel.appendLog(args.join(' '), globalPanel.errorCode);
-  }
+  record(args, 'error');
 }
 
 /**
@@ -44,9 +50,7 @@ export function error(...args) {
  */
 export function warn(...args) {
   console.warn(LOG_PREFIX, ...args);
-  if (globalPanel) {
-    globalPanel.appendLog(args.join(' '), globalPanel.warnCode);
-  }
+  record(args, 'warn');
 }
 
 /**
@@ -55,7 +59,7 @@ export function warn(...args) {
  */
 export function debug(...args) {
   console.debug(LOG_PREFIX, ...args);
-  globalPanel?.appendLog(args.join(' '), globalPanel.debugCode);
+  record(args, 'debug');
 }
 
 /**

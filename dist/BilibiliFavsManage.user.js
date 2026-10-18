@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.2.0-dev.1
+// @version      2.2.1
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       leida1024
 // @match        https://space.bilibili.com/*
@@ -113,6 +113,16 @@
 
   // 全局面板引用（由 FloatingPanel 设置）
   let globalPanel = null;
+  let globalStore = null;
+
+  function setLoggerStore(store) { globalStore = store; }
+
+  function record(args, level) {
+    const message = args.map(value => value instanceof Error ? value.message : String(value)).join(' ');
+    if (globalPanel) {
+      globalPanel.appendLog(message, { info: globalPanel.normalCode, error: globalPanel.errorCode, warn: globalPanel.warnCode, debug: globalPanel.debugCode }[level]);
+    } else globalStore?.add(message, level);
+  }
 
   /**
    * 设置全局面板引用
@@ -128,9 +138,7 @@
    */
   function log(...args) {
     console.log(LOG_PREFIX, ...args);
-    if (globalPanel) {
-      globalPanel.appendLog(args.join(' '), globalPanel.normalCode);
-    }
+    record(args, 'info');
   }
 
   /**
@@ -139,9 +147,7 @@
    */
   function error(...args) {
     console.error(LOG_PREFIX, ...args);
-    if (globalPanel) {
-      globalPanel.appendLog(args.join(' '), globalPanel.errorCode);
-    }
+    record(args, 'error');
   }
 
   /**
@@ -150,9 +156,16 @@
    */
   function warn(...args) {
     console.warn(LOG_PREFIX, ...args);
-    if (globalPanel) {
-      globalPanel.appendLog(args.join(' '), globalPanel.warnCode);
-    }
+    record(args, 'warn');
+  }
+
+  /**
+   * 输出调试日志
+   * @param {...any} args - 日志内容
+   */
+  function debug(...args) {
+    console.debug(LOG_PREFIX, ...args);
+    record(args, 'debug');
   }
 
   /**
@@ -195,7 +208,7 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.2.0-dev.1',
+      VERSION: '2.2.1',
       NAME: 'BiliBili 收藏夹批量管理',
       DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
     }
@@ -364,7 +377,7 @@
         return false;
       }
 
-      log('点击批量操作按钮');
+      debug('点击批量操作按钮');
       button.click();
       await delay(CONFIG.DELAY.SHORT);
       return true;
@@ -381,7 +394,7 @@
         return false;
       }
 
-      log('全选当前页');
+      debug('全选当前页');
       const selected = checkbox.matches(pageAdapter().selectedAll) ||
         checkbox.querySelector(pageAdapter().selectedAll);
       if (!selected) checkbox.click();
@@ -400,7 +413,7 @@
         return false;
       }
 
-      log('点击复制至按钮');
+      debug('点击复制至按钮');
       copyBtn.click();
       await delay(CONFIG.DELAY.SHORT);
       return true;
@@ -440,7 +453,7 @@
 
       for (const fav of favList) {
         if (fav.name === favName) {
-          log(`找到目标收藏夹：[${favName}]`);
+          debug(`找到目标收藏夹：[${favName}]`);
           const radio = fav.element.querySelector(pageAdapter().radio);
           if (radio) {
             radio.click();
@@ -465,7 +478,7 @@
         return false;
       }
 
-      log('点击新建收藏夹按钮');
+      debug('点击新建收藏夹按钮');
       createBtn.click();
       await delay(CONFIG.DELAY.MIDDLE);
       return true;
@@ -485,7 +498,7 @@
         return false;
       }
 
-      log('输入新收藏夹名称:', name);
+      debug('输入新收藏夹名称:', name);
 
       // 模拟真实输入
       nameInput.focus();
@@ -521,7 +534,7 @@
         return false;
       }
 
-      log('点击创建按钮');
+      debug('点击创建按钮');
       createConfirmBtn.click();
       await delay(CONFIG.DELAY.MIDDLE);
       return true;
@@ -552,7 +565,7 @@
         return null;
       }
 
-      log('点击左侧边栏[新建收藏夹]');
+      debug('点击左侧边栏[新建收藏夹]');
       const clickable = entry.closest(
         'button, [role="button"], [class*="add"], [class*="create"], [class*="btn"]'
       ) || entry;
@@ -602,29 +615,38 @@
      * @returns {Promise<boolean>} 是否成功
      */
     static async clickConfirmButton(dialog) {
+      this.copySubmission = { status: 'not_started', detail: '尚未提交复制' };
       const confirmBtn = dialog.querySelector(pageAdapter().confirm);
-      if (!confirmBtn) {
+      if (!confirmBtn || confirmBtn.disabled) {
         error('找不到确定按钮');
         return false;
       }
 
-      log('点击确定');
+      debug('点击确定');
       // Only a newly rendered success message can confirm this submission.
-      let confirmed = false;
+      let confirmed = false, finish;
+      const result = new Promise(resolve => { finish = resolve; });
       const observer = new window.MutationObserver(records => {
         for (const record of records) {
           const nodes = record.type === 'childList' ? [...record.addedNodes] : [record.target];
           for (const node of nodes) {
             const el = node.nodeType === 1 ? node : node.parentElement;
             const toast = el?.closest(SELECTORS.TOAST) || el?.querySelector?.(SELECTORS.TOAST);
-            if (toast?.textContent.includes(BUTTON_TEXTS.SUCCESS)) confirmed = true;
+            if (toast?.textContent.includes(BUTTON_TEXTS.SUCCESS)) { confirmed = true; finish(); }
           }
         }
       });
       observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-      try { confirmBtn.click(); await delay(CONFIG.DELAY.LONG); }
-      finally { observer.disconnect(); }
+      let timer;
+      this.copySubmission = { status: 'unknown', detail: '复制已提交，但未观察到平台成功提示。' };
+      try {
+        confirmBtn.click();
+        await Promise.race([result, new Promise(resolve => { timer = setTimeout(resolve, CONFIG.DELAY.LONG * 3); })]);
+      } catch (err) {
+        err.outcome = 'unknown'; throw err;
+      } finally { observer.disconnect(); clearTimeout(timer); }
       if (confirmed) {
+        this.copySubmission = { status: 'confirmed', detail: '已观察到平台成功提示' };
         log('✓ 复制成功');
         return true;
       } else {
@@ -641,7 +663,7 @@
     static async clickNextPage() {
       const paginationEl = document.querySelector(pageAdapter().pagination);
       if (!paginationEl) {
-        log('判断为单页收藏夹');
+        debug('判断为单页收藏夹');
         return false;
       }
 
@@ -680,7 +702,7 @@
       for (const favItem of allFavs) {
         const name = this.getFavoriteName(favItem);
         if (name === favName) {
-          log(`点击收藏夹：[${favName}]`);
+          debug(`点击收藏夹：[${favName}]`);
           const link = pageAdapter().itemLink;
           (link ? favItem.querySelector(link) || favItem : favItem).click();
           await delay(CONFIG.DELAY.SHORT);
@@ -706,11 +728,11 @@
      */
     static async ensureBatchModeActive() {
       if (this.isBatchModeActive()) {
-        log('批量模式已激活');
+        debug('批量模式已激活');
         return true;
       }
 
-      log('批量模式已退出，重新进入');
+      debug('批量模式已退出，重新进入');
       return await this.clickBatchOperationButton();
     }
 
@@ -869,6 +891,69 @@
     }
   }
 
+  /** Structured diagnostics only: never interpreted as executable state. */
+  function sanitizeLog(value) {
+    return String(value)
+      .replace(/https?:\/\/[^\s<>]+/gi, '[URL omitted]')
+      .replace(/((?:cookie|authorization|bearer|token|csrf|bili_jct|sessdata|password|secret)\s*[=:]?\s*)[^\s,;]+/gi, '$1[redacted]')
+      .slice(0, 2000);
+  }
+
+  const newOperationId = () => globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const identifier = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(value) ? value : '';
+  const views = ['copy', 'statistics', 'manage', 'system'];
+  const contextOf = context => ({
+    view: views.includes(context?.view) ? context.view : 'system',
+    operationId: identifier(context?.operationId),
+    phase: identifier(context?.phase)
+  });
+
+  class LogStore {
+    constructor(limit = 500) {
+      this.limit = Math.max(1, limit);
+      this.entries = [];
+      this.dropped = 0;
+      this.context = contextOf();
+    }
+
+    setContext(context) { this.context = contextOf(context); }
+
+    add(message, level = 'info', context = this.context) {
+      this.entries.push({ id: newOperationId(), time: new Date().toISOString(),
+        level: ['info', 'warn', 'error', 'debug'].includes(level) ? level : 'info',
+        ...contextOf(context), message: sanitizeLog(message).trim() });
+      this.trim();
+    }
+
+    trim() {
+      while (this.entries.length > this.limit) { this.entries.shift(); this.dropped++; }
+    }
+
+    clear() { this.entries = []; this.dropped = 0; }
+    filter(level = 'all', view = 'all') {
+      return this.entries.filter(entry => (level === 'all' || (level === 'normal' ? entry.level !== 'debug' : entry.level === level)) &&
+        (view === 'all' || entry.view === view || entry.view === 'system'));
+    }
+    snapshot(operationId) {
+      return { schemaVersion: 2, dropped: this.dropped,
+        entries: this.entries.filter(entry => !operationId || entry.operationId === operationId).map(entry => ({ ...entry })) };
+    }
+    restore(snapshot) {
+      if (snapshot?.schemaVersion !== 2 || !Array.isArray(snapshot.entries)) return;
+      const entries = new Map(this.entries.map(entry => [entry.id, entry]));
+      for (const raw of snapshot.entries.slice(-this.limit)) {
+        if (!identifier(raw?.id) || typeof raw.time !== 'string' || !Number.isFinite(Date.parse(raw.time)) ||
+            typeof raw.message !== 'string' || !['info', 'warn', 'error', 'debug'].includes(raw.level)) continue;
+        entries.set(raw.id, { id: raw.id, time: new Date(raw.time).toISOString(), level: raw.level,
+          ...contextOf(raw), message: sanitizeLog(raw.message) });
+      }
+      this.entries = [...entries.values()].sort((a, b) => a.time.localeCompare(b.time));
+      this.dropped = Math.max(this.dropped, Number.isSafeInteger(snapshot.dropped) && snapshot.dropped >= 0 ? snapshot.dropped : 0);
+      this.trim();
+    }
+    export() { return JSON.stringify(this.snapshot(), null, 2); }
+  }
+
   /**
    * 跨页面流程管理器
    * 处理跨页面创建收藏夹的完整流程
@@ -898,18 +983,14 @@
         throw new Error('无法确认登录身份，请登录后再复制');
       }
 
-      // 保存状态（缺失对比延后到自己页面执行）
+      this.manager.operation.update({ phase: 'creating', detail: '即将前往我的空间，检查并准备目标收藏夹。' });
+      this.manager.logs.setContext({ view: 'copy', operationId: this.manager.operation.state.operationId, phase: 'creating' });
+      log('3 秒后前往我的空间准备目标，随后返回来源继续复制。');
       StateManager.saveState({
-        phase: 'creating',
-        returnURL: window.location.href,
-        tasks: tasks
+        phase: 'creating', returnURL: window.location.href, tasks,
+        operationId: this.manager.operation.state.operationId,
+        journal: this.manager.logs.snapshot(this.manager.operation.state.operationId)
       });
-
-      log('========================================');
-      log('即将跳转到自己的收藏夹页面对比并创建缺失收藏夹');
-      log('完成后将自动返回并继续复制');
-      log('跳转倒计时: 3 秒...');
-      log('========================================');
 
       await delay(3000);
       window.location.href = ownURL;
@@ -923,10 +1004,8 @@
     async batchCreateFavorites(favNames) {
       favNames = [...new Set(favNames.map(normalizeFavoriteName))];
       if (favNames.some(name => !name)) return false;
-      log('========================================');
       log('开始批量创建收藏夹');
       log(`共 ${favNames.length} 个: ${favNames.join(', ')}`);
-      log('========================================');
 
       for (let i = 0; i < favNames.length; i++) {
         const favName = favNames[i];
@@ -1052,11 +1131,11 @@
       // 只有创建全部确认成功后才保存下一阶段。
       StateManager.clearState();
       state.tasks = normalizeCopyTasks(state.tasks);
-
-      log('========================================');
-      log('检测到跨页面流程状态');
-      log(`阶段: ${state.phase}`);
-      log('========================================');
+      const operationId = typeof state.operationId === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(state.operationId) ? state.operationId : newOperationId();
+      this.manager.logs.restore(state.journal);
+      this.manager.operation.begin('批量复制', state.tasks.length, { operationId, phase: state.phase });
+      this.manager.logs.setContext({ view: 'copy', operationId, phase: state.phase });
+      log(state.phase === 'creating' ? '已到达我的空间，继续准备目标。' : '已返回来源空间，继续复制。');
 
       if (state.phase === 'creating') {
         // 当前已在「自己页面」，此时 getAllFavoriteNames() = 自己的收藏夹
@@ -1081,29 +1160,19 @@
         }
 
         // 更新状态：准备返回复制
-        StateManager.saveState({
-          ...state,
-          phase: 'copying'
-        });
-
-        log('========================================');
-        log('收藏夹准备完成，返回原页面继续复制');
-        log('跳转倒计时: 3 秒...');
-        log('========================================');
+        log('目标准备完成，3 秒后返回来源空间继续复制。');
+        StateManager.saveState({ ...state, operationId, phase: 'copying',
+          journal: this.manager.logs.snapshot(operationId) });
 
         await delay(3000);
         window.location.href = state.returnURL;
-        this.manager.operation.finish('interrupted', '目标准备完成，等待返回来源页面继续复制。');
+        this.manager.operation.finish('waiting', '目标准备完成，等待返回来源页面继续复制。');
 
         return true;
       } else if (state.phase === 'copying') {
         // 回到原页面，继续复制流程
-        log('========================================');
-        log('已返回原页面，继续复制流程');
-        log('========================================');
-
         // 执行复制（跳过跨页面检测，避免重复触发跳转）
-        await this.manager.batchCopy(state.tasks, { skipCrossPage: true });
+        await this.manager.batchCopy(state.tasks, { skipCrossPage: true, operationId });
 
         // 复制完成后清除状态
         StateManager.clearState();
@@ -1119,7 +1188,7 @@
   class OperationState {
     constructor() {
       this.listeners = new Set();
-      this.state = { status: 'idle', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '选择来源并检查目标后开始。' };
+      this.state = { status: 'idle', operationId: '', phase: '', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '' };
     }
 
     subscribe(listener) {
@@ -1133,8 +1202,8 @@
       for (const listener of this.listeners) listener({ ...this.state });
     }
 
-    begin(action, total = null) {
-      this.update({ status: 'running', action, total, confirmed: 0, lastConfirmed: '', detail: '正在准备，请勿重复提交。' });
+    begin(action, total = null, { operationId = newOperationId(), phase = '' } = {}) {
+      this.update({ status: 'running', operationId, phase, action, total, confirmed: 0, lastConfirmed: '', detail: '正在准备…' });
     }
 
     confirm(step) {
@@ -1142,7 +1211,7 @@
     }
 
     finish(status, detail) {
-      if (!['completed', 'failed', 'interrupted'].includes(status)) throw new Error('Invalid terminal operation status');
+      if (!['completed', 'failed', 'interrupted', 'unknown', 'waiting'].includes(status)) throw new Error('Invalid terminal operation status');
       this.update({ status, detail });
     }
   }
@@ -1153,9 +1222,13 @@
   function normalizeFolder(raw, kind, index = 0) {
     const id = stableId(raw.id);
     const ownerId = stableId(raw.upper?.mid ?? raw.mid);
+    const protectionReason = kind !== 'created' ? null : index === 0 ? 'default' :
+      [true, 1].includes(raw.is_kid_playlist) || (raw.type !== undefined && raw.type !== 11) ? 'special' :
+        [false, 0].includes(raw.is_kid_playlist) ? null : 'unknown';
     return Object.freeze({ id, ownerId, kind: kind === 'created' ? 'created' : raw.type === 11 ? 'subscribed' : 'unsupported',
       name: typeof raw.title === 'string' ? raw.title : '（名称未知）', count: knownCount(raw.media_count),
-      protected: kind === 'created' && (index === 0 || raw.is_kid_playlist !== 0 || (raw.type !== undefined && raw.type !== 11)),
+      // Current API uses booleans; older responses used 0/1. Missing stays protected.
+      protected: protectionReason !== null, protectionReason,
       available: (kind === 'created' ? raw.state === undefined || raw.state === 0 : raw.state === 0) &&
         !(stableId(raw.mid) && stableId(raw.upper?.mid) && stableId(raw.mid) !== stableId(raw.upper.mid)), subscribed: raw.fav_state === 1 });
   }
@@ -1322,7 +1395,7 @@
     if (action !== 'delete') return '操作类型不支持';
     if (folder.kind !== 'created') return '不是创建的收藏夹';
     if (folder.ownerId !== actor || pageOwner !== actor) return '只能管理自己空间的收藏夹';
-    if (folder.protected !== false) return '默认、特殊或保护状态未知的收藏夹';
+    if (folder.protected !== false) return { default: '默认收藏夹', special: '特殊收藏夹', unknown: '保护状态未确认' }[folder.protectionReason] || '默认、特殊或保护状态未确认';
     return null;
   }
 
@@ -1362,7 +1435,7 @@
             if (signal?.aborted) break;
             const fresh = catalog.find(folder => folder.id === target.id);
             if (!fresh || eligibility(ticket.action, fresh, current.actor, current.pageOwner) ||
-              ['id', 'ownerId', 'name', 'count', 'kind', 'protected', 'available', 'subscribed'].some(key => fresh[key] !== target[key])) throw new Error('目标身份、名称、数量或保护状态变化，请重新加载并预览');
+              ['id', 'ownerId', 'name', 'count', 'kind', 'protected', 'protectionReason', 'available', 'subscribed'].some(key => fresh[key] !== target[key])) throw new Error('目标身份、名称、数量或保护状态变化，请重新加载并预览');
             const latest = this.context();
             if (latest.actor !== ticket.actor || latest.pageOwner !== ticket.pageOwner) throw new Error('账号或空间变化，未提交');
             if (signal?.aborted) break;
@@ -1392,6 +1465,7 @@
       this.api = BilibiliAPI;
       this.crossPageFlow = new CrossPageFlowManager(this);
       this.operation = new OperationState();
+      this.logs = new LogStore();
       this.inventory = new InventoryService();
       this.batchOperations = new BatchOperations(this.inventory.client, () => ({ actor: PageDetector.getLoginUserUID(), pageOwner: PageDetector.getCurrentPageUID() }));
     }
@@ -1434,6 +1508,7 @@
       targetFavName = normalizeFavoriteName(targetFavName);
       if (!sourceFavName || !targetFavName) return false;
       log(`开始复制收藏夹 [${sourceFavName}] 到 [${targetFavName}]`);
+      this.copyStep = '打开来源收藏夹';
 
       // 1. 点击源收藏夹
       const clickSuccess = await this.api.clickFavorite(sourceFavName);
@@ -1445,7 +1520,8 @@
 
       // 2. 获取当前收藏夹信息
       const currentName = this.api.getCurrentFavoriteName();
-      if (!currentName) {
+      if (normalizeFavoriteName(currentName || '') !== sourceFavName) {
+        error('来源收藏夹未切换到预期名称，未提交复制');
         return false;
       }
 
@@ -1453,6 +1529,7 @@
       log(`收藏夹 [${currentName}] 共 ${totalPages} 页`);
 
       // 3. 进入批量操作模式
+      this.copyStep = '进入批量模式';
       const batchSuccess = await this.api.ensureBatchModeActive();
       if (!batchSuccess) {
         error('无法进入批量操作模式');
@@ -1462,16 +1539,17 @@
       // 4. 逐页复制
       for (let page = 1; page <= totalPages; page++) {
         log(`正在处理第 ${page}/${totalPages} 页`);
-        this.operation.update({ detail: `正在复制第 ${page} 页；页数来自当前页面，${totalPages === 1 ? '未检测到更多分页' : `检测到 ${totalPages} 页`}。` });
+        this.copyPage = page;
+        this.operation.update({ detail: `正在复制第 ${page} / ${totalPages} 页。` });
 
         const pageSuccess = await this.copyOnePage(targetFavName);
         if (!pageSuccess) {
-          error(`第 ${page} 页复制失败`);
           return false;
         }
 
         // 如果不是最后一页，点击下一页
         if (page < totalPages) {
+          this.copyStep = '前往下一页';
           const nextSuccess = await this.api.clickNextPage();
           if (!nextSuccess) {
             warn(`无法跳转到第 ${page + 1} 页`);
@@ -1492,6 +1570,7 @@
     async copyOnePage(targetFavName) {
       targetFavName = normalizeFavoriteName(targetFavName);
       if (!targetFavName) return false;
+      this.copyStep = '进入批量模式';
       // 0. 确保批量模式激活
       const batchActive = await this.api.ensureBatchModeActive();
       if (!batchActive) {
@@ -1500,12 +1579,14 @@
       }
 
       // 1. 全选
+      this.copyStep = '选择当前页视频';
       if (!this.api.clickSelectAll()) {
         return false;
       }
       await delay(CONFIG.DELAY.SHORT);
 
       // 2. 点击复制按钮
+      this.copyStep = '打开复制对话框';
       if (!await this.api.clickCopyButton()) {
         return false;
       }
@@ -1535,10 +1616,11 @@
 
         // 在自己页面，直接创建
         log(`目标收藏夹 [${targetFavName}] 不存在，尝试创建`);
+        this.copyStep = '准备目标收藏夹';
         const createSuccess = await this.createNewFavorite(dialog, targetFavName);
         if (!createSuccess) {
-          error('创建收藏夹失败');
-          return false;
+          const err = new Error('目标准备未确认，请先检查是否已创建收藏夹。');
+          err.outcome = 'unknown'; throw err;
         }
         // 创建后组件可能重渲染，不能继续操作已脱离页面的旧节点。
         dialog = await this.api.waitForDialog();
@@ -1547,13 +1629,20 @@
 
       // 5. 选择目标收藏夹
       await delay(CONFIG.DELAY.SHORT);
+      this.copyStep = '选择目标收藏夹';
       if (!this.api.selectFavoriteInDialog(dialog, targetFavName)) {
         return false;
       }
 
       // 6. 点击确定
       await delay(CONFIG.DELAY.SHORT);
-      return await this.api.clickConfirmButton(dialog);
+      this.copyStep = '确认复制结果';
+      const confirmed = await this.api.clickConfirmButton(dialog);
+      if (!confirmed && this.api.copySubmission?.status === 'unknown') {
+        const err = new Error(this.api.copySubmission.detail);
+        err.outcome = 'unknown'; throw err;
+      }
+      return confirmed;
     }
 
     /**
@@ -1597,7 +1686,9 @@
     async batchCopy(copyList, options = {}) {
       copyList = normalizeCopyTasks(copyList);
       const { skipCrossPage = false } = options;
-      this.operation.begin('批量复制', copyList.length);
+      if (!options.operationId || this.operation.state.operationId !== options.operationId || this.operation.state.status !== 'running')
+        this.operation.begin('批量复制', copyList.length, { operationId: options.operationId, phase: 'copying' });
+      this.logs.setContext({ view: 'copy', operationId: this.operation.state.operationId, phase: this.operation.state.phase });
       try {
       log('开始批量复制，共', copyList.length, '个任务');
 
@@ -1609,7 +1700,7 @@
           // 由「自己页面」阶段再对比并创建缺失的收藏夹
           log('检测到在别人页面，启动跨页面流程...');
           await this.crossPageFlow.startCrossPageFlow(copyList);
-          this.operation.finish('interrupted', '已交接跨页面流程。等待目的页面继续；当前页面没有确认复制完成。');
+          this.operation.finish('waiting', '已交接跨页任务，等待目的页面继续。');
           return { status: 'handoff' }; // A navigation is not a completed copy.
         }
       }
@@ -1617,10 +1708,11 @@
       // 正常复制流程
       for (let i = 0; i < copyList.length; i++) {
         const { source, target } = copyList[i];
-        log(`\n[${i + 1}/${copyList.length}] ${source} → ${target}`);
+        this.copyStep = '开始当前收藏夹'; this.copyPage = null;
+        log(`[${i + 1}/${copyList.length}] ${source} → ${target}`);
 
         if (!await this.copyFavorite(source, target)) {
-          throw new Error(`收藏夹 [${source}] → [${target}] 复制失败，已停止后续任务，请检查页面结果后重试`);
+          throw new Error(`复制失败：${source} → ${target}；步骤：${this.copyStep}${this.copyPage ? `（第 ${this.copyPage} 页）` : ''}。后续任务未执行，请先核对页面结果。`);
         }
         this.operation.confirm(`${source} → ${target}`);
 
@@ -1634,7 +1726,9 @@
       this.operation.finish('completed', '所选任务已完成。可检查目标收藏夹。');
       return { status: 'completed' };
       } catch (err) {
-        this.operation.finish('failed', `${err.message} 请先检查页面结果，不要直接重复提交。`);
+        const unknown = err.outcome === 'unknown';
+        const detail = unknown ? `${err.message} 步骤：${this.copyStep}${this.copyPage ? `（第 ${this.copyPage} 页）` : ''}；后续任务已停止，请先核对目标，勿直接重试。` : err.message;
+        this.operation.finish(unknown ? 'unknown' : 'failed', detail);
         throw err;
       }
     }
@@ -1986,31 +2080,6 @@
     }
   }
 
-  /** Export allowlist: timestamps, levels, and sanitized text only. */
-  function sanitizeLog(value) {
-    return String(value)
-      .replace(/https?:\/\/[^\s<>]+/gi, '[URL omitted]')
-      .replace(/((?:cookie|authorization|bearer|token|csrf|bili_jct|sessdata|password|secret)\s*[=:]?\s*)[^\s,;]+/gi, '$1[redacted]')
-      .slice(0, 2000);
-  }
-
-  class LogStore {
-    constructor(limit = 500) {
-      this.limit = Math.max(1, limit);
-      this.entries = [];
-      this.dropped = 0;
-    }
-
-    add(message, level = 'info') {
-      this.entries.push({ time: new Date().toISOString(), level: ['info', 'warn', 'error', 'debug'].includes(level) ? level : 'info', message: sanitizeLog(message) });
-      while (this.entries.length > this.limit) { this.entries.shift(); this.dropped++; }
-    }
-
-    clear() { this.entries = []; this.dropped = 0; }
-    filter(level = 'all') { return this.entries.filter(entry => level === 'all' || entry.level === level); }
-    export() { return JSON.stringify({ dropped: this.dropped, entries: this.entries }, null, 2); }
-  }
-
   const panelStyles = `
 .bili-favs-manage-panel {
  --bf-font:system-ui,-apple-system,"Segoe UI","Microsoft YaHei UI","PingFang SC","Noto Sans CJK SC",sans-serif;
@@ -2018,14 +2087,14 @@
  --bf-ink:#243544; --bf-muted:#526575; --bf-blue:#00789b; --bf-hover:#006581;
  --bf-line:#dce4eb; --bf-control:#8295a5; --bf-surface:#fff; --bf-soft:#f5f7f9; --bf-selected:#edf7fb;
  --bf-danger:#a8382b; --bf-danger-soft:#fff5f2; --bf-success:#236846; --bf-warning:#795200;
- box-sizing:border-box; position:fixed; top:24px; left:24px; width:640px; height:600px;
+ box-sizing:border-box; position:fixed; top:24px; left:24px; width:${CONFIG.PANEL.INITIAL_WIDTH}px; height:${CONFIG.PANEL.INITIAL_HEIGHT}px;
  max-width:calc(100vw - 16px); max-height:calc(100dvh - 16px); min-width:280px; min-height:64px;
  z-index:99999; background:var(--bf-surface); color:var(--bf-ink); border:1px solid var(--bf-control); border-radius:6px;
  box-shadow:0 4px 20px #20334424; font:400 var(--bf-text)/1.5 var(--bf-font); overflow:hidden; resize:both;
  display:flex; flex-direction:column;
  text-align:left; container-type:inline-size; isolation:isolate; color-scheme:light;
 }
-.bili-favs-manage-panel .bf-body { display:grid; grid-template-columns:minmax(0,1fr) 220px; grid-template-rows:minmax(0,1fr) auto; flex:1; min-height:0; }
+.bili-favs-manage-panel .bf-body { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto; flex:1; min-height:0; }
 .bili-favs-manage-panel[data-logs-open=false] .bf-body { grid-template-columns:minmax(0,1fr); }
 .bili-favs-manage-panel[data-minimized=true] { display:block; resize:none; }
 .bili-favs-manage-panel[data-minimized=true] .bf-body { display:none; }
@@ -2056,16 +2125,17 @@
 .bili-favs-manage-panel .bf-task-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:0 8px; margin-bottom:6px; }
 .bili-favs-manage-panel .bf-help { margin:2px 0 8px; }
 .bili-favs-manage-panel .bf-selection-tools { display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px; padding:0 0 6px; }
+.bili-favs-manage-panel .bf-selection-tools[data-empty=true] { display:none; }
 .bili-favs-manage-panel .bf-search { flex:1; min-width:100px; }
 .bili-favs-manage-panel input[type=search] { display:block; width:100%; min-width:0; min-height:30px; padding:4px 6px; border:1px solid var(--bf-control); border-radius:4px; background:var(--bf-surface); }
 .bili-favs-manage-panel input::placeholder { color:var(--bf-muted); opacity:1; }
 .bili-favs-manage-panel .bf-selection-tools button { font-size:var(--bf-small); }
-.bili-favs-manage-panel .bf-selection-count { color:var(--bf-muted); font-size:var(--bf-small); font-variant-numeric:tabular-nums; }
+.bili-favs-manage-panel .bf-selection-count { flex-basis:100%; color:var(--bf-muted); font-size:var(--bf-small); font-variant-numeric:tabular-nums; }
 .bili-favs-manage-panel .bf-filter-notice { flex-basis:100%; font-size:var(--bf-small); color:var(--bf-warning); }
 .bili-favs-manage-panel .bf-copy-columns,.bili-favs-manage-panel .signal-panel { display:grid; grid-template-columns:20px minmax(0,1fr) 12px minmax(0,1fr); align-items:center; gap:6px; }
 .bili-favs-manage-panel .bf-copy-columns { padding:4px 0; font-size:var(--bf-small); color:var(--bf-muted); border-bottom:1px solid var(--bf-control); }
 .bili-favs-manage-panel .fav-panel { margin:0; }
-.bili-favs-manage-panel .signal-panel { padding:3px 0; border-bottom:1px solid var(--bf-line); }
+.bili-favs-manage-panel .signal-panel { padding:2px 0; border-bottom:1px solid var(--bf-line); }
 .bili-favs-manage-panel [data-selected=true] { background:var(--bf-selected); }
 .bili-favs-manage-panel .signal-panel label { overflow-wrap:anywhere; min-width:0; cursor:pointer; }
 .bili-favs-manage-panel .bf-direction { text-align:center; color:var(--bf-muted); }
@@ -2083,6 +2153,7 @@
 .bili-favs-manage-panel .bf-status>span { color:var(--bf-muted); font-variant-numeric:tabular-nums; }
 .bili-favs-manage-panel .bf-status[data-status=failed] strong,.bili-favs-manage-panel .bf-status[data-status=interrupted] strong { color:var(--bf-danger); }
 .bili-favs-manage-panel .bf-status[data-status=completed] strong { color:var(--bf-success); }
+.bili-favs-manage-panel .bf-status[data-status=unknown] strong { color:var(--bf-warning); }
 .bili-favs-manage-panel .bf-progress-detail { width:100%; color:var(--bf-muted); }
 .bili-favs-manage-panel .bf-progress-detail p { display:inline; margin:0; }
 .bili-favs-manage-panel .bf-progress-detail p+p::before { content:' · '; }
@@ -2090,10 +2161,15 @@
 .bili-favs-manage-panel .bf-tools select { min-width:0; max-width:100%; }
 .bili-favs-manage-panel .bf-tools label { display:flex; align-items:center; gap:4px; }
 .bili-favs-manage-panel .bf-catalog-tools { margin:0 0 8px; }
-.bili-favs-manage-panel .bf-scope-label { flex:1; min-width:0; font-size:var(--bf-small); color:var(--bf-muted); }
-.bili-favs-manage-panel .bf-scope-label select { flex:1; }
+.bili-favs-manage-panel .bf-scope-switch { display:flex; gap:0; flex:1; min-width:0; }
+.bili-favs-manage-panel .bf-scope-switch button { flex:1; border-radius:0; font-size:var(--bf-small); padding:4px 6px; }
+.bili-favs-manage-panel .bf-scope-switch button+button { margin-left:-1px; }
+.bili-favs-manage-panel .bf-scope-switch button:first-child { border-radius:4px 0 0 4px; }
+.bili-favs-manage-panel .bf-scope-switch button:last-child { border-radius:0 4px 4px 0; }
+.bili-favs-manage-panel .bf-scope-switch button[aria-pressed=true] { background:var(--bf-selected); color:var(--bf-blue); border-color:var(--bf-blue); position:relative; font-weight:600; }
+.bili-favs-manage-panel .bf-catalog-tools>button { font-size:var(--bf-small); }
 .bili-favs-manage-panel .bf-empty { padding:20px 8px; text-align:center; color:var(--bf-muted); line-height:1.8; }
-.bili-favs-manage-panel .bf-folder-item { border-bottom:1px solid var(--bf-line); padding:6px 0; }
+.bili-favs-manage-panel .bf-folder-item { border-bottom:1px solid var(--bf-line); padding:3px 0; }
 .bili-favs-manage-panel .bf-folder-row { display:flex; align-items:flex-start; gap:8px; overflow-wrap:anywhere; min-width:0; }
 .bili-favs-manage-panel .bf-folder-item>.bf-folder-row { display:grid; grid-template-columns:20px minmax(0,1fr) max-content; align-items:center; cursor:pointer; min-height:24px; }
 .bili-favs-manage-panel .bf-folder-name { min-width:0; overflow-wrap:anywhere; }
@@ -2108,7 +2184,8 @@
 .bili-favs-manage-panel .bf-diagnostics button,.bili-favs-manage-panel .bf-diagnostics select { font-size:var(--bf-small); min-height:28px; padding:4px 6px; }
 .bili-favs-manage-panel .bf-diagnostics label { gap:4px; }
 .bili-favs-manage-panel .output-text-box { flex:1; overflow:auto; min-height:32px; border-top:1px solid var(--bf-line); font-size:var(--bf-small); line-height:1.5; scrollbar-width:thin; scroll-padding:8px; }
-.bili-favs-manage-panel .bf-log-row { display:grid; grid-template-columns:54px minmax(0,1fr); gap:0 6px; padding:6px 0; border-bottom:1px solid var(--bf-line); align-items:baseline; }
+.bili-favs-manage-panel .bf-log-row { display:grid; grid-template-columns:54px 28px minmax(0,1fr); gap:0 6px; padding:5px 0; border-bottom:1px solid var(--bf-line); align-items:baseline; }
+.bili-favs-manage-panel .bf-log-context { color:var(--bf-muted); font-size:var(--bf-small); text-align:right; overflow-wrap:anywhere; }
 .bili-favs-manage-panel .bf-log-row time { color:var(--bf-muted); font-variant-numeric:tabular-nums; }
 .bili-favs-manage-panel .bf-log-level { font-weight:600; }
 .bili-favs-manage-panel .bf-log-message { grid-column:1/-1; white-space:pre-wrap; overflow-wrap:anywhere; min-width:0; }
@@ -2119,7 +2196,7 @@
 .bili-favs-manage-panel .bf-export { position:absolute; inset:0; background:var(--bf-surface); z-index:2; padding:16px; display:flex; align-content:flex-start; flex-wrap:wrap; gap:12px; overflow:auto; }
 .bili-favs-manage-panel .bf-export h3,.bili-favs-manage-panel .bf-export p { width:100%; }
 .bili-favs-manage-panel textarea { display:block; width:100%; height:55%; min-height:140px; resize:vertical; padding:8px; margin:0; border:1px solid var(--bf-control); background:var(--bf-surface); }
-@container (max-width:579px) {
+@container (max-width:559px) {
  .bili-favs-manage-panel .bf-body { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto auto; }
  .bili-favs-manage-panel .bf-diagnostics { grid-column:1; grid-row:3; border-left:0; border-top:1px solid var(--bf-line); height:130px; }
  .bili-favs-manage-panel .bf-record-tools { display:flex; align-items:center; justify-content:space-between; gap:8px; }
@@ -2127,6 +2204,7 @@
  .bili-favs-manage-panel .bf-diagnostics .bf-tools { margin:0; }
  .bili-favs-manage-panel .bf-log-actions { padding:4px 0 0; }
  .bili-favs-manage-panel .bf-log-row { grid-template-columns:54px 28px minmax(0,1fr); gap:4px; padding:4px 0; }
+ .bili-favs-manage-panel .bf-log-context { display:none; }
  .bili-favs-manage-panel .bf-log-message { grid-column:auto; }
  .bili-favs-manage-panel .bf-header { padding:6px; gap:2px; flex-wrap:wrap; }
  .bili-favs-manage-panel .bf-header strong { font-size:14px; }
@@ -2214,6 +2292,7 @@
 
     update() {
       const rows = this.rows();
+      this.root.dataset.empty = String(!rows.length);
       const visible = new Set(this.visibleRows(rows));
       const eligible = [...visible].filter(row => row.eligible);
       const selected = rows.filter(row => row.eligible && row.input.checked);
@@ -2227,7 +2306,8 @@
       this.allButton.setAttribute('aria-label', `${all ? '取消全选' : '全选'}${this.search.value.trim() ? '搜索结果中' : ''}可选收藏夹`);
       this.allButton.disabled = this.busy() || !eligible.length;
       this.search.disabled = this.busy();
-      this.count.textContent = `已选 ${selected.length} / ${rows.length} 个收藏夹`;
+      const unavailable = rows.filter(row => !row.eligible).length;
+      this.count.textContent = `已选 ${selected.length} / ${rows.length} 个收藏夹${unavailable ? ` · ${unavailable} 个不可选` : ''}`;
       this.notice.hidden = !this.search.value.trim();
       this.notice.textContent = `${visible.size} 个匹配${outside ? ` · 筛选外已选 ${outside} 个，也会执行` : ''}`;
     }
@@ -2236,7 +2316,7 @@
   const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
   const descriptions = {
     delete: { verb: '删除', title: '删除自己创建的收藏夹',
-      detail: '删除收藏夹及收藏关系，无法撤销；原视频保留。',
+      detail: '删除整个收藏夹，无法撤销；原视频保留。',
       agreement: '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。' },
     unsubscribe: { verb: '退订', title: '取消我的收藏夹订阅',
       detail: '取消我的订阅，原作者内容不受影响。',
@@ -2324,14 +2404,15 @@
       const ticket = this.ticket; this.ticket = null; this.review.replaceChildren();
       return this.inventoryUI.run(`${descriptions[ticket.action].verb}收藏夹`, async signal => {
         const report = await this.engine.execute(ticket, { confirmed: true, signal, onResult: result => {
-          if (result.status === 'confirmed') this.panel.operation.confirm(`ID ${result.id}：平台已确认`);
+          if (result.status === 'confirmed') this.inventoryUI.operation.confirm(`ID ${result.id}：平台已确认`);
         } });
         this.inventoryUI.resetCatalog('本次操作后列表需要更新，请重新加载。');
         this.results.replaceChildren(element('p', '', report.complete ? '本次目标均已确认。请刷新平台列表核对。' : report.cancelled ? '已取消后续操作。请核对已提交项目。' : '已停止；请检查下列结果后再决定后续操作。'));
         for (const result of report.results) this.results.append(element('p', '', `${result.name} · ID ${result.id} · ${statuses[result.status]}：${result.detail}`));
         this.results.append(button('检查并导出操作结果', () => this.panel.reviewExport(JSON.stringify(report, null, 2), 'bili-operation.json')));
-        this.panel.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : 'failed', '本次确认已用完；再次操作须重新加载列表、选择并确认。未知结果请先在平台核对，勿直接重试。');
-      });
+        this.inventoryUI.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : report.results.some(result => result.status === 'unknown') ? 'unknown' : 'failed',
+          report.complete ? '已完成；再次操作请重新加载、选择并确认。' : '本次确认已用完。请核对结果，再重新加载和确认。');
+      }, ticket.action, ticket.targets.length);
     }
 
     destroy() { this.invalidate(); }
@@ -2342,19 +2423,21 @@
       this.panel = panel; this.service = service; this.folders = []; this.rows = [];
       this.mode = 'statistics';
       this.root = element('section', 'bf-inventory');
-      this.intro = element('p', 'bf-help', '只读统计所选范围，缺失信息记为未知。');
-      this.root.append(this.intro);
-      this.kind = element('select'); this.kind.setAttribute('aria-label', '加载范围');
+      this.kind = element('div', 'bf-scope-switch'); this.kind.setAttribute('role', 'group'); this.kind.setAttribute('aria-label', '列表范围');
+      this.kind.value = 'created'; this.scopeButtons = new Map();
       for (const [value, label] of [['created', '当前空间创建'], ['subscribed', '我的订阅']]) {
-        const option = element('option', '', label); option.value = value; this.kind.append(option);
+        const control = button(label, () => {
+          if (panel.busy || this.kind.value === value) return;
+          this.kind.value = value; this.kind.dispatchEvent(new window.Event('change'));
+        });
+        this.scopeButtons.set(value, control); this.kind.append(control);
       }
       this.loadButton = button('加载列表', () => this.load());
       this.scanButton = button('统计选中收藏夹', () => this.scan());
       this.cancelButton = button('停止后续操作', () => { this.controller?.abort(); this.updateBusy(); });
       this.exportButton = button('检查并导出统计', () => { if (this.report) panel.reviewExport(JSON.stringify(this.report, null, 2), 'bili-inventory.json'); });
       const tools = element('div', 'bf-tools bf-catalog-tools');
-      const scopeLabel = element('label', 'bf-scope-label', '列表范围');
-      scopeLabel.append(this.kind); tools.append(scopeLabel, this.loadButton);
+      tools.append(this.kind, this.loadButton);
       this.selectionTools = new SelectionToolbar({
         rows: () => this.rows.map(row => ({ ...row, name: row.folder.name, eligible: row.folder.kind !== 'unsupported' })),
         busy: () => panel.busy, change: () => this.updateBusy()
@@ -2364,7 +2447,7 @@
       this.actions.append(this.exportButton, this.scanButton, this.cancelButton);
       this.scanButton.classList.add('bf-primary');
       this.list = element('div', 'bf-folder-list');
-      this.list.append(element('p', 'bf-empty', '点击“加载列表”，读取当前选择的范围。不会自动扫描。'));
+      this.list.append(element('p', 'bf-empty', '加载列表后，选择需要统计的收藏夹。'));
       this.result = element('div', 'bf-inventory-result'); this.result.setAttribute('role', 'status');
       this.root.append(tools, this.selectionTools.root, this.list, this.result);
       if (panel.manager.batchOperations) {
@@ -2374,13 +2457,20 @@
       }
       this.kind.addEventListener('change', () => {
         this.resetCatalog('范围已更换，请重新加载列表。'); this.updateBusy();
-        this.panel.operation.update({ status: 'idle', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '' });
+        this.operation.update({ status: 'idle', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '' });
       });
       this.mutations?.setCatalog([], this.kind.value);
       this.updateBusy();
     }
 
+    get operation() { return this.panel.operations[this.mode]; }
+
     resetCatalog(message) {
+      for (const view of ['statistics', 'manage']) {
+        const operation = this.panel.operations[view];
+        if (operation.state.status !== 'running')
+          operation.update({ status: 'idle', action: '', detail: '', confirmed: 0, total: null, lastConfirmed: '' });
+      }
       this.panel.viewScroll.delete('statistics'); this.panel.viewScroll.delete('manage');
       if (this.panel.activeView !== 'copy') this.panel.content.scrollTop = 0;
       this.folders = []; this.rows = []; this.report = null; this.result.replaceChildren();
@@ -2395,7 +2485,6 @@
       }
       this.mode = mode;
       const manage = mode === 'manage';
-      this.intro.hidden = manage;
       this.selectionTools.root.hidden = manage;
       this.list.hidden = manage; this.result.hidden = manage;
       if (this.mutations) this.mutations.root.hidden = !manage;
@@ -2405,6 +2494,10 @@
     updateBusy() {
       const busy = this.panel.busy;
       this.kind.disabled = busy; this.loadButton.disabled = busy;
+      for (const [kind, control] of this.scopeButtons) {
+        control.disabled = busy; control.setAttribute('aria-pressed', String(this.kind.value === kind));
+        control.textContent = this.mode === 'manage' ? kind === 'created' ? '删除收藏夹' : '取消订阅' : kind === 'created' ? '当前空间' : '我的订阅';
+      }
       this.loadButton.textContent = busy ? '操作中…' : this.folders.length ? '重新加载' : '加载列表';
       this.scanButton.disabled = busy || !this.selected().length;
       this.cancelButton.disabled = !busy || !this.controller || this.controller.signal.aborted;
@@ -2421,16 +2514,15 @@
 
     selected() { return this.rows.filter(row => row.input.checked).map(row => row.folder); }
 
-    async run(action, work) {
+    async run(action, work, phase = '', total = null) {
       if (this.panel.busy) return;
       this.controller = new AbortController();
-      this.panel.setBusy(true); this.panel.operation.begin(action);
+      this.panel.setBusy(true); this.operation.begin(action, total, { phase });
       try { await work(this.controller.signal); }
       catch (err) {
-        this.panel.operation.finish(this.controller.signal.aborted ? 'interrupted' : 'failed', this.controller.signal.aborted ? '已取消，请重新选择后开始。' : err.message);
-        (this.mode === 'manage' && this.mutations ? this.mutations.results : this.result).textContent = this.panel.operation.state.detail;
+        this.operation.finish(this.controller.signal.aborted ? 'interrupted' : 'failed', this.controller.signal.aborted ? '已取消，可以重新加载或选择。' : err.message);
       } finally {
-        if (this.controller.signal.aborted && this.panel.operation.state.status === 'running') this.panel.operation.finish('interrupted', '已取消，未继续后续请求。');
+        if (this.controller.signal.aborted && this.operation.state.status === 'running') this.operation.finish('interrupted', '已取消，未继续后续请求。');
         this.controller = null; this.panel.setBusy(false);
       }
     }
@@ -2460,35 +2552,37 @@
           this.list.append(node); this.rows.push({ input, folder, node });
         }
         if (!folders.length) this.list.append(element('p', 'bf-empty', '这个范围没有可读取的收藏夹。可以更换范围后重新加载。'));
-        this.panel.operation.finish('completed', `列表读取完成：${folders.length} 项；尚未选择或扫描。`);
-      });
+        this.operation.finish('completed', `已读取 ${folders.length} 个收藏夹。`);
+        this.operation.update({ status: 'idle' });
+      }, 'loading');
     }
 
     scan() {
       const folders = this.selected();
       return this.run('只读统计', async signal => {
         this.report = null; this.result.replaceChildren();
-        const report = await this.service.scan(folders, { signal, onPage: ({ page, loaded }) => this.panel.operation.confirm(`第 ${page} 页，当前夹已读取 ${loaded} 条`) });
+        const report = await this.service.scan(folders, { signal, onPage: ({ page, loaded }) => this.operation.confirm(`第 ${page} 页，当前夹已读取 ${loaded} 条`) });
         this.report = report;
         this.result.replaceChildren(element('p', '', `${report.complete ? '完整扫描' : report.cancelled ? '已取消 · 部分结果' : '扫描不完整'}：覆盖 ${report.folders.length}/${report.scope.length} 个收藏夹，读取 ${report.entries} 条。`),
           element('p', '', `唯一视频 ${report.uniqueVideos} · 重复出现 ${report.duplicateOccurrences} · 无法识别 ${report.unknownIdentity} · 失效标记 ${report.unavailable}`),
           element('p', '', `已知时长合计 ${report.knownDurationSeconds} 秒（唯一视频；${report.unknownDurations} 个时长未知）· ${report.unknownUploaders} 个作者未知`));
         for (const f of report.folders) this.result.append(element('p', 'bf-muted', `ID ${f.id}：${f.pages} 页 / ${f.loaded} 条 / 预期 ${f.expected ?? '未知'}${f.issue ? ` · ${f.issue}` : ''}`));
-        this.panel.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : 'failed', report.complete ? '已读取所选范围；这是读取时的快照，不代表账号全部收藏。' : '仅保留已读取数据；未完成范围不可当作总数。');
-      });
+        this.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : 'failed', report.complete ? '所选范围统计完成，缺失信息记为未知。' : '仅保留已读取数据；未完成范围不可当作总数。');
+      }, 'scanning');
     }
 
     destroy() { this.controller?.abort(); this.mutations?.destroy(); }
   }
 
-  const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止', interrupted: '已中断' };
+  const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止', interrupted: '已中断', unknown: '待核对', waiting: '等待跳转' };
   const logLevels = { info: '信息', warn: '警告', error: '错误', debug: '调试' };
 
   class FloatingPanel {
     constructor(manager) {
       this.manager = manager;
-      this.operation = manager.operation || new OperationState();
-      this.logs = new LogStore();
+      this.operations = { copy: manager.operation || new OperationState(), statistics: new OperationState(), manage: new OperationState() };
+      this.logs = manager.logs || new LogStore();
+      this.operationTransitions = new Map();
       this.errorCode = 0;
       this.normalCode = 1;
       this.warnCode = 7;
@@ -2502,6 +2596,8 @@
       this.viewScroll = new Map();
       this.logsOpen = true;
     }
+
+    get operation() { return this.operations[this.activeView]; }
 
     init() {
       this.favorites = this.manager.getAllFavoriteNames();
@@ -2529,7 +2625,7 @@
         this.viewButtons.set(view, control); this.navigation.append(control);
       }
       this.content = element('div', 'bf-content');
-      this.scope = element('p', 'bf-muted');
+      this.scope = element('p', 'bf-sr-only');
       this.workspace = element('section', 'bf-workspace');
       const heading = element('div', 'bf-task-heading');
       heading.append(this.scope);
@@ -2577,7 +2673,8 @@
       root.append(style, this.header, this.navigation, this.body);
       document.body.append(root);
       root.dataset.logsOpen = String(this.logsOpen);
-      this.unsubscribe = this.operation.subscribe(state => this.renderOperation(state));
+      this.unsubscribes = Object.entries(this.operations).map(([view, operation]) =>
+        operation.subscribe(state => this.onOperation(view, state)));
       this.onBodyMove = event => {
         EventHandlers.mouseMove(this, event);
         EventHandlers.dragOnPanel(this, event);
@@ -2591,7 +2688,6 @@
       this.clampToViewport();
       this.updateSelectionReview();
       this.showPageTypeIndicator();
-      this.appendLog('准备就绪。请选择收藏夹。');
       this.renderView();
     }
 
@@ -2614,6 +2710,8 @@
         this.inventoryPanel.actions.hidden = !['statistics', 'manage'].includes(view);
       }
       this.copyActions.hidden = view !== 'copy';
+      this.renderOperation(this.operation.state);
+      if (this.outputTextBox && this.logsOpen && !this.minimized) this.renderLogs();
       this.footer.hidden = !!this.minimized;
       for (const [name, control] of this.viewButtons) control.setAttribute('aria-pressed', String(name === view));
     }
@@ -2697,12 +2795,20 @@
       this.onBusyChange?.(busy);
     }
 
-    renderOperation(state) {
-      const transition = `${state.action}:${state.status}`;
-      if (state.status !== 'idle' && transition !== this.lastOperationTransition) {
-        this.appendLog(`${statusNames[state.status]}：${state.action || '操作'}。${state.detail}`, state.status === 'failed' ? this.errorCode : state.status === 'interrupted' ? this.warnCode : this.normalCode);
+    onOperation(view, state) {
+      const transition = `${state.operationId}:${state.phase}:${state.status}`;
+      if (state.status !== 'idle') {
+        this.logs.setContext({ view, operationId: state.operationId, phase: state.phase });
+        if (transition !== this.operationTransitions.get(view)) {
+          this.appendLog(`${statusNames[state.status]}：${state.action || '操作'}。${state.detail}`,
+            state.status === 'failed' ? this.errorCode : ['interrupted', 'unknown'].includes(state.status) ? this.warnCode : this.normalCode);
+        }
       }
-      this.lastOperationTransition = transition;
+      this.operationTransitions.set(view, transition);
+      if (view === this.activeView) this.renderOperation(state);
+    }
+
+    renderOperation(state) {
       this.statusBox.hidden = state.status === 'idle';
       this.statusBox.dataset.status = state.status;
       this.progressDetails.hidden = state.status === 'idle';
@@ -2723,8 +2829,8 @@
         this.setBusy(true);
         await this.manager.batchCopy(tasks);
       } catch (err) {
-        this.operation.finish('failed', `${err.message} 请检查页面结果后再决定是否重试。`);
-        this.appendLog(err.message, this.errorCode);
+        if (!['failed', 'unknown'].includes(this.operation.state.status))
+          this.operation.finish(err.outcome === 'unknown' ? 'unknown' : 'failed', err.message);
       } finally { this.setBusy(false); }
     }
 
@@ -2741,16 +2847,21 @@
       const recordTools = element('div', 'bf-record-tools');
       recordTools.append(title);
       const tools = element('div', 'bf-tools');
+      this.logScope = element('select'); this.logScope.setAttribute('aria-label', '记录范围');
+      for (const [value, text] of [['current', '当前功能'], ['all', '全部功能']]) {
+        const option = element('option', '', text); option.value = value; this.logScope.append(option);
+      }
+      this.logScope.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
       this.logFilter = element('select');
       this.logFilter.setAttribute('aria-label', '日志级别');
-      for (const [value, text] of [['all', '全部级别'], ['error', '错误'], ['warn', '警告'], ['info', '信息'], ['debug', '调试']]) {
+      for (const [value, text] of [['normal', '常规级别'], ['all', '全部级别'], ['error', '错误'], ['warn', '警告'], ['info', '信息'], ['debug', '调试']]) {
         const option = element('option', '', text); option.value = value; this.logFilter.append(option);
       }
       this.logFilter.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
       this.followCheckbox = element('input'); this.followCheckbox.type = 'checkbox'; this.followCheckbox.checked = true;
       const followLabel = element('label', '', '跟随最新'); followLabel.prepend(this.followCheckbox);
       this.followCheckbox.addEventListener('change', () => { this.scrollTopEnabled = this.followCheckbox.checked; this.renderLogs(); });
-      tools.append(this.logFilter, followLabel);
+      tools.append(this.logScope, this.logFilter, followLabel);
       const actions = element('div', 'bf-log-actions');
       actions.append(button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('导出记录', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')));
       this.outputTextBox = element('div', 'output-text-box');
@@ -2774,13 +2885,18 @@
 
     renderLogs() {
       const top = this.logScrollTop || 0;
-      const entries = this.logs.filter(this.logFilter.value);
+      const entries = this.logs.filter(this.logFilter.value, this.logScope.value === 'all' ? 'all' : this.activeView);
       this.outputTextBox.replaceChildren(...entries.map(entry => {
         const row = element('div', `bf-log-row bf-log-${entry.level}`);
-        row.append(element('time', '', entry.time.slice(11, 19)), element('span', 'bf-log-level', logLevels[entry.level]), element('span', 'bf-log-message', entry.message));
+        const time = element('time', '', new Date(entry.time).toLocaleTimeString('zh-CN', { hour12: false }));
+        time.dateTime = entry.time; time.title = new Date(entry.time).toLocaleString('zh-CN');
+        const phaseNames = { creating: '准备目标', copying: '复制', loading: '读取列表', scanning: '统计', delete: '删除', unsubscribe: '退订' };
+        const viewNames = { copy: '复制', statistics: '统计', manage: '管理', system: '系统' };
+        const context = element('span', 'bf-log-context', entry.operationId ? `${viewNames[entry.view]} #${entry.operationId.slice(-6)} ${phaseNames[entry.phase] || entry.phase}` : viewNames[entry.view]);
+        row.append(time, element('span', 'bf-log-level', logLevels[entry.level]), context, element('span', 'bf-log-message', entry.message));
         return row;
       }));
-      if (!entries.length) this.outputTextBox.append(element('p', 'bf-empty', this.logs.entries.length ? '此级别没有记录，可切换到全部级别。' : '暂无记录。后续操作会显示在这里。'));
+      if (!entries.length) this.outputTextBox.append(element('p', 'bf-empty', this.logs.entries.length ? '此级别没有当前范围的记录，可切换范围或级别。' : '暂无记录。后续操作会显示在这里。'));
       this.logCount.textContent = `${entries.length} / ${this.logs.entries.length} 条${this.logs.dropped ? ` · 已淘汰 ${this.logs.dropped} 条` : ''}`;
       this.outputTextBox.scrollTop = this.scrollTopEnabled ? this.outputTextBox.scrollHeight : top;
     }
@@ -2840,7 +2956,7 @@
     destroy() {
       this.inventoryPanel?.destroy();
       if (this.operation.state.status === 'running') this.operation.finish('interrupted', '面板已离开当前页面；请检查页面结果，不要直接重复提交。');
-      this.unsubscribe?.();
+      this.unsubscribes?.forEach(unsubscribe => unsubscribe());
       document.body.removeEventListener('mousemove', this.onBodyMove);
       document.body.removeEventListener('mouseup', this.onBodyUp);
       window.removeEventListener('resize', this.onViewportResize);
@@ -2860,6 +2976,7 @@
       notice?.remove();
       notice = null;
       setLoggerPanel(null);
+      setLoggerStore(null);
       // Tampermonkey 的 Window 代理可能拒绝 delete；赋空值同样能释放引用。
       window.BiliFavPanel = null;
       window.BiliFavManager = null;
@@ -2871,6 +2988,7 @@
         notice?.remove();
         notice = null;
         const manager = new FavoriteManager();
+        setLoggerStore(manager.logs);
         if (!manager.initialize()) return;
         panel = new FloatingPanel(manager);
         panel.onDismiss = () => { lifecycle.dismissed = true; };
@@ -2883,8 +3001,8 @@
         const mountedPanel = panel;
         mountedPanel.setBusy(true);
         manager.crossPageFlow.resumeFlow().catch(err => {
-          log('恢复跨页面流程失败:', err.message);
-          manager.operation.finish('failed', `恢复失败：${err.message}。请检查页面后重试。`);
+          if (!['failed', 'unknown'].includes(manager.operation.state.status))
+            manager.operation.finish('failed', err.message);
         }).finally(() => { if (mountedPanel.floatingPanel) mountedPanel.setBusy(false); });
       },
       refresh() {

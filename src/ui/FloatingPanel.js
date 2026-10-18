@@ -11,14 +11,15 @@ import { SelectionToolbar } from './SelectionToolbar.js';
 import { CONFIG } from '../config/config.js';
 export { element, button } from './elements.js';
 
-const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止', interrupted: '已中断' };
+const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止', interrupted: '已中断', unknown: '待核对', waiting: '等待跳转' };
 const logLevels = { info: '信息', warn: '警告', error: '错误', debug: '调试' };
 
 export class FloatingPanel {
   constructor(manager) {
     this.manager = manager;
-    this.operation = manager.operation || new OperationState();
-    this.logs = new LogStore();
+    this.operations = { copy: manager.operation || new OperationState(), statistics: new OperationState(), manage: new OperationState() };
+    this.logs = manager.logs || new LogStore();
+    this.operationTransitions = new Map();
     this.errorCode = 0;
     this.normalCode = 1;
     this.warnCode = 7;
@@ -32,6 +33,8 @@ export class FloatingPanel {
     this.viewScroll = new Map();
     this.logsOpen = true;
   }
+
+  get operation() { return this.operations[this.activeView]; }
 
   init() {
     this.favorites = this.manager.getAllFavoriteNames();
@@ -59,7 +62,7 @@ export class FloatingPanel {
       this.viewButtons.set(view, control); this.navigation.append(control);
     }
     this.content = element('div', 'bf-content');
-    this.scope = element('p', 'bf-muted');
+    this.scope = element('p', 'bf-sr-only');
     this.workspace = element('section', 'bf-workspace');
     const heading = element('div', 'bf-task-heading');
     heading.append(this.scope);
@@ -107,7 +110,8 @@ export class FloatingPanel {
     root.append(style, this.header, this.navigation, this.body);
     document.body.append(root);
     root.dataset.logsOpen = String(this.logsOpen);
-    this.unsubscribe = this.operation.subscribe(state => this.renderOperation(state));
+    this.unsubscribes = Object.entries(this.operations).map(([view, operation]) =>
+      operation.subscribe(state => this.onOperation(view, state)));
     this.onBodyMove = event => {
       EventHandlers.mouseMove(this, event);
       EventHandlers.dragOnPanel(this, event);
@@ -121,7 +125,6 @@ export class FloatingPanel {
     this.clampToViewport();
     this.updateSelectionReview();
     this.showPageTypeIndicator();
-    this.appendLog('准备就绪。请选择收藏夹。');
     this.renderView();
   }
 
@@ -144,6 +147,8 @@ export class FloatingPanel {
       this.inventoryPanel.actions.hidden = !['statistics', 'manage'].includes(view);
     }
     this.copyActions.hidden = view !== 'copy';
+    this.renderOperation(this.operation.state);
+    if (this.outputTextBox && this.logsOpen && !this.minimized) this.renderLogs();
     this.footer.hidden = !!this.minimized;
     for (const [name, control] of this.viewButtons) control.setAttribute('aria-pressed', String(name === view));
   }
@@ -227,12 +232,20 @@ export class FloatingPanel {
     this.onBusyChange?.(busy);
   }
 
-  renderOperation(state) {
-    const transition = `${state.action}:${state.status}`;
-    if (state.status !== 'idle' && transition !== this.lastOperationTransition) {
-      this.appendLog(`${statusNames[state.status]}：${state.action || '操作'}。${state.detail}`, state.status === 'failed' ? this.errorCode : state.status === 'interrupted' ? this.warnCode : this.normalCode);
+  onOperation(view, state) {
+    const transition = `${state.operationId}:${state.phase}:${state.status}`;
+    if (state.status !== 'idle') {
+      this.logs.setContext({ view, operationId: state.operationId, phase: state.phase });
+      if (transition !== this.operationTransitions.get(view)) {
+        this.appendLog(`${statusNames[state.status]}：${state.action || '操作'}。${state.detail}`,
+          state.status === 'failed' ? this.errorCode : ['interrupted', 'unknown'].includes(state.status) ? this.warnCode : this.normalCode);
+      }
     }
-    this.lastOperationTransition = transition;
+    this.operationTransitions.set(view, transition);
+    if (view === this.activeView) this.renderOperation(state);
+  }
+
+  renderOperation(state) {
     this.statusBox.hidden = state.status === 'idle';
     this.statusBox.dataset.status = state.status;
     this.progressDetails.hidden = state.status === 'idle';
@@ -253,8 +266,8 @@ export class FloatingPanel {
       this.setBusy(true);
       await this.manager.batchCopy(tasks);
     } catch (err) {
-      this.operation.finish('failed', `${err.message} 请检查页面结果后再决定是否重试。`);
-      this.appendLog(err.message, this.errorCode);
+      if (!['failed', 'unknown'].includes(this.operation.state.status))
+        this.operation.finish(err.outcome === 'unknown' ? 'unknown' : 'failed', err.message);
     } finally { this.setBusy(false); }
   }
 
@@ -271,16 +284,21 @@ export class FloatingPanel {
     const recordTools = element('div', 'bf-record-tools');
     recordTools.append(title);
     const tools = element('div', 'bf-tools');
+    this.logScope = element('select'); this.logScope.setAttribute('aria-label', '记录范围');
+    for (const [value, text] of [['current', '当前功能'], ['all', '全部功能']]) {
+      const option = element('option', '', text); option.value = value; this.logScope.append(option);
+    }
+    this.logScope.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
     this.logFilter = element('select');
     this.logFilter.setAttribute('aria-label', '日志级别');
-    for (const [value, text] of [['all', '全部级别'], ['error', '错误'], ['warn', '警告'], ['info', '信息'], ['debug', '调试']]) {
+    for (const [value, text] of [['normal', '常规级别'], ['all', '全部级别'], ['error', '错误'], ['warn', '警告'], ['info', '信息'], ['debug', '调试']]) {
       const option = element('option', '', text); option.value = value; this.logFilter.append(option);
     }
     this.logFilter.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
     this.followCheckbox = element('input'); this.followCheckbox.type = 'checkbox'; this.followCheckbox.checked = true;
     const followLabel = element('label', '', '跟随最新'); followLabel.prepend(this.followCheckbox);
     this.followCheckbox.addEventListener('change', () => { this.scrollTopEnabled = this.followCheckbox.checked; this.renderLogs(); });
-    tools.append(this.logFilter, followLabel);
+    tools.append(this.logScope, this.logFilter, followLabel);
     const actions = element('div', 'bf-log-actions');
     actions.append(button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('导出记录', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')));
     this.outputTextBox = element('div', 'output-text-box');
@@ -304,13 +322,18 @@ export class FloatingPanel {
 
   renderLogs() {
     const top = this.logScrollTop || 0;
-    const entries = this.logs.filter(this.logFilter.value);
+    const entries = this.logs.filter(this.logFilter.value, this.logScope.value === 'all' ? 'all' : this.activeView);
     this.outputTextBox.replaceChildren(...entries.map(entry => {
       const row = element('div', `bf-log-row bf-log-${entry.level}`);
-      row.append(element('time', '', entry.time.slice(11, 19)), element('span', 'bf-log-level', logLevels[entry.level]), element('span', 'bf-log-message', entry.message));
+      const time = element('time', '', new Date(entry.time).toLocaleTimeString('zh-CN', { hour12: false }));
+      time.dateTime = entry.time; time.title = new Date(entry.time).toLocaleString('zh-CN');
+      const phaseNames = { creating: '准备目标', copying: '复制', loading: '读取列表', scanning: '统计', delete: '删除', unsubscribe: '退订' };
+      const viewNames = { copy: '复制', statistics: '统计', manage: '管理', system: '系统' };
+      const context = element('span', 'bf-log-context', entry.operationId ? `${viewNames[entry.view]} #${entry.operationId.slice(-6)} ${phaseNames[entry.phase] || entry.phase}` : viewNames[entry.view]);
+      row.append(time, element('span', 'bf-log-level', logLevels[entry.level]), context, element('span', 'bf-log-message', entry.message));
       return row;
     }));
-    if (!entries.length) this.outputTextBox.append(element('p', 'bf-empty', this.logs.entries.length ? '此级别没有记录，可切换到全部级别。' : '暂无记录。后续操作会显示在这里。'));
+    if (!entries.length) this.outputTextBox.append(element('p', 'bf-empty', this.logs.entries.length ? '此级别没有当前范围的记录，可切换范围或级别。' : '暂无记录。后续操作会显示在这里。'));
     this.logCount.textContent = `${entries.length} / ${this.logs.entries.length} 条${this.logs.dropped ? ` · 已淘汰 ${this.logs.dropped} 条` : ''}`;
     this.outputTextBox.scrollTop = this.scrollTopEnabled ? this.outputTextBox.scrollHeight : top;
   }
@@ -370,7 +393,7 @@ export class FloatingPanel {
   destroy() {
     this.inventoryPanel?.destroy();
     if (this.operation.state.status === 'running') this.operation.finish('interrupted', '面板已离开当前页面；请检查页面结果，不要直接重复提交。');
-    this.unsubscribe?.();
+    this.unsubscribes?.forEach(unsubscribe => unsubscribe());
     document.body.removeEventListener('mousemove', this.onBodyMove);
     document.body.removeEventListener('mouseup', this.onBodyUp);
     window.removeEventListener('resize', this.onViewportResize);
