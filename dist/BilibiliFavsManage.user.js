@@ -2012,96 +2012,123 @@
   }
 
   const panelStyles = `
-.bili-favs-manage-panel { --bf-ink:#203344; --bf-blue:#007fa8; --bf-line:#dae5ec; position:fixed; top:36px; left:36px; width:680px; height:auto; max-width:calc(100vw - 16px); max-height:min(620px,calc(100dvh - 16px)); min-width:280px; min-height:64px; z-index:99999; background:#fff; color:var(--bf-ink); border:1px solid var(--bf-line); border-radius:10px; box-shadow:0 12px 42px #20334424; font:14px/1.5 "Microsoft YaHei UI","PingFang SC","Noto Sans CJK SC",sans-serif; overflow:hidden; resize:both; display:flex; flex-direction:column; text-align:left; container-type:inline-size; }
-.bili-favs-manage-panel * { box-sizing:border-box; }
+.bili-favs-manage-panel {
+ --bf-font:system-ui,-apple-system,"Segoe UI","Microsoft YaHei UI","PingFang SC","Noto Sans CJK SC",sans-serif;
+ --bf-text:14px; --bf-small:12px; --bf-title:16px;
+ --bf-ink:#243544; --bf-muted:#526575; --bf-blue:#00789b; --bf-hover:#006581;
+ --bf-line:#dce4eb; --bf-control:#8295a5; --bf-surface:#fff; --bf-soft:#f5f8fa; --bf-selected:#edf7fb;
+ --bf-danger:#a8382b; --bf-danger-soft:#fff5f2; --bf-success:#236846; --bf-warning:#795200;
+ box-sizing:border-box; position:fixed; top:36px; left:36px; width:680px; height:auto; max-width:calc(100vw - 16px); max-height:min(700px,calc(100dvh - 16px)); min-width:280px; min-height:64px;
+ z-index:99999; background:var(--bf-surface); color:var(--bf-ink); border:1px solid var(--bf-line); border-radius:12px; box-shadow:0 12px 42px #20334424;
+ font:400 var(--bf-text)/1.5 var(--bf-font); overflow:hidden; resize:both; display:flex; flex-direction:column; text-align:left; container-type:inline-size; isolation:isolate; color-scheme:light;
+}
+.bili-favs-manage-panel * { box-sizing:border-box; font-family:inherit; letter-spacing:normal; }
 .bili-favs-manage-panel [hidden] { display:none !important; }
-.bili-favs-manage-panel h2 { color:var(--bf-ink); font-family:inherit; font-size:16px; line-height:1.4; font-weight:700; margin:0 0 6px; }
-.bili-favs-manage-panel h3 { color:var(--bf-ink); font-size:15px; font-weight:600; margin:0 0 6px; }
-.bili-favs-manage-panel p { margin:6px 0; overflow-wrap:anywhere; }
-.bili-favs-manage-panel .bf-header { display:flex; align-items:center; gap:6px; padding:7px 16px; background:#fff; cursor:move; flex-shrink:0; }
-.bili-favs-manage-panel .bf-header strong { flex:1; font-size:16px; letter-spacing:.03em; }
-.bili-favs-manage-panel button,.bili-favs-manage-panel select { width:auto; min-height:34px; margin:0; padding:6px 12px; border:1px solid #b7c9d5; border-radius:5px; background:#fff; color:var(--bf-ink); cursor:pointer; font:inherit; line-height:1.4; }
-.bili-favs-manage-panel button:hover:not(:disabled) { border-color:var(--bf-blue); background:#f2faff; }
+.bili-favs-manage-panel h2,.bili-favs-manage-panel h3 { color:var(--bf-ink); font:600 var(--bf-title)/1.5 var(--bf-font); margin:0 0 8px; }
+.bili-favs-manage-panel strong { font-weight:600; }
+.bili-favs-manage-panel p { margin:4px 0; overflow-wrap:anywhere; }
+.bili-favs-manage-panel label { color:inherit; font:inherit; }
+.bili-favs-manage-panel button,.bili-favs-manage-panel select,.bili-favs-manage-panel input,.bili-favs-manage-panel textarea { font:inherit; color:var(--bf-ink); }
+.bili-favs-manage-panel button,.bili-favs-manage-panel select { width:auto; min-height:36px; margin:0; padding:7px 12px; border:1px solid var(--bf-control); border-radius:6px; background:var(--bf-surface); cursor:pointer; line-height:1.4; transition:background-color 140ms ease,border-color 140ms ease; }
+.bili-favs-manage-panel button:hover:not(:disabled) { border-color:var(--bf-blue); background:var(--bf-selected); }
+.bili-favs-manage-panel button:active:not(:disabled) { background:var(--bf-line); }
 .bili-favs-manage-panel button:disabled { opacity:.5; cursor:default; }
-.bili-favs-manage-panel :focus-visible { outline:3px solid #178cb3; outline-offset:2px; }
-.bili-favs-manage-panel .bf-header button { font-size:12px; min-height:30px; padding:5px 8px; border-color:transparent; }
-.bili-favs-manage-panel .bf-header button:hover { background:#edf6fa; }
-.bili-favs-manage-panel .bf-navigation { display:flex; gap:20px; padding:0 20px; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
-.bili-favs-manage-panel .bf-navigation button { border:0; border-bottom:3px solid transparent; border-radius:0; padding:7px 2px; background:none; color:#526879; }
-.bili-favs-manage-panel .bf-navigation button[aria-pressed=true] { color:var(--bf-blue); font-weight:700; border-bottom-color:var(--bf-blue); }
-.bili-favs-manage-panel .bf-content { overflow-y:auto; overflow-x:hidden; padding:12px 16px; min-height:0; flex:0 1 auto; scrollbar-width:thin; scrollbar-color:#a1b6c3 transparent; }
-.bili-favs-manage-panel .bf-muted { color:#526879; font-size:12px; }
-.bili-favs-manage-panel .bf-intro { color:#40596c; max-width:70ch; margin-bottom:6px; }
-.bili-favs-manage-panel .bf-help { font-size:12px; color:#526879; margin:4px 0 8px; max-width:75ch; }
+.bili-favs-manage-panel :focus-visible { outline:3px solid var(--bf-blue); outline-offset:2px; }
+.bili-favs-manage-panel .bf-header { display:flex; align-items:center; gap:4px; padding:10px 16px; background:var(--bf-soft); cursor:move; flex-shrink:0; }
+.bili-favs-manage-panel .bf-header strong { flex:1; min-width:0; font-size:var(--bf-title); }
+.bili-favs-manage-panel .bf-header button { font-size:var(--bf-small); min-height:32px; padding:6px 8px; border-color:transparent; background:transparent; }
+.bili-favs-manage-panel .bf-header button[aria-expanded=true] { color:var(--bf-blue); background:var(--bf-selected); border-color:var(--bf-control); }
+.bili-favs-manage-panel .bf-navigation { display:flex; gap:24px; padding:0 16px; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
+.bili-favs-manage-panel .bf-navigation button { border:0; border-bottom:3px solid transparent; border-radius:0; padding:10px 0 8px; background:none; color:var(--bf-muted); }
+.bili-favs-manage-panel .bf-navigation button[aria-pressed=true] { color:var(--bf-blue); font-weight:600; border-bottom-color:var(--bf-blue); }
+.bili-favs-manage-panel .bf-content { overflow-y:auto; overflow-x:hidden; padding:16px; min-height:80px; flex:0 1 auto; scrollbar-width:thin; scrollbar-color:var(--bf-control) transparent; scroll-padding:12px; }
+.bili-favs-manage-panel .bf-muted,.bili-favs-manage-panel .bf-help { color:var(--bf-muted); font-size:var(--bf-small); }
+.bili-favs-manage-panel .bf-task-heading { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:0 12px; }
+.bili-favs-manage-panel .bf-task-heading h2 { margin:0; }
+.bili-favs-manage-panel .bf-task-heading p { margin:0; }
+.bili-favs-manage-panel .bf-help { margin:4px 0 8px; }
 .bili-favs-manage-panel .bf-copy-columns,.bili-favs-manage-panel .signal-panel { display:grid; grid-template-columns:40px minmax(0,1fr) 24px minmax(0,1fr); align-items:center; gap:8px; }
-.bili-favs-manage-panel .bf-copy-columns { padding:7px 0; font-size:12px; color:#526879; border-bottom:1px solid #bbceda; }
-.bili-favs-manage-panel .bf-copy-columns button { padding:5px 1px; min-height:28px; font-size:11px; border-color:transparent; color:var(--bf-blue); }
+.bili-favs-manage-panel .bf-copy-columns { padding:4px 0; font-size:var(--bf-small); color:var(--bf-muted); border-bottom:1px solid var(--bf-control); }
+.bili-favs-manage-panel .bf-copy-columns button { padding:6px 0; min-height:32px; font-size:var(--bf-small); border-color:transparent; color:var(--bf-blue); }
 .bili-favs-manage-panel .fav-panel { margin:0; }
-.bili-favs-manage-panel .signal-panel { padding:4px 0; border-bottom:1px solid var(--bf-line); }
-.bili-favs-manage-panel .fav-panel>[data-selected=true] { background:#eaf7fc; }
+.bili-favs-manage-panel .signal-panel { padding:6px 0; border-bottom:1px solid var(--bf-line); }
+.bili-favs-manage-panel .fav-panel>[data-selected=true] { background:var(--bf-selected); }
 .bili-favs-manage-panel .signal-panel label { overflow-wrap:anywhere; min-width:0; cursor:pointer; }
-.bili-favs-manage-panel .bf-direction { text-align:center; color:#6d8999; }
-.bili-favs-manage-panel input[type=text] { width:100%; min-width:0; min-height:32px; padding:5px 8px; border:1px solid #b7c9d5; border-radius:5px; background:#fff; color:var(--bf-ink); font:inherit; }
-.bili-favs-manage-panel input[aria-invalid=true] { border-color:#aa4332; }
+.bili-favs-manage-panel .bf-direction { text-align:center; color:var(--bf-muted); }
+.bili-favs-manage-panel input[type=text] { width:100%; min-width:0; min-height:36px; padding:6px 8px; border:1px solid var(--bf-control); border-radius:6px; background:var(--bf-surface); }
+.bili-favs-manage-panel input[aria-invalid=true] { border-color:var(--bf-danger); }
 .bili-favs-manage-panel input[type=checkbox] { accent-color:var(--bf-blue); width:17px; height:17px; margin:2px 0; flex-shrink:0; cursor:pointer; }
 .bili-favs-manage-panel .signal-panel input[type=checkbox] { justify-self:center; }
-.bili-favs-manage-panel .bf-footer { border-top:1px solid var(--bf-line); background:#fff; padding:10px 20px; flex-shrink:0; }
+.bili-favs-manage-panel .bf-footer { border-top:1px solid var(--bf-line); background:var(--bf-surface); padding:12px 16px; flex-shrink:0; max-height:45%; overflow:auto; }
 .bili-favs-manage-panel .bf-action-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.bili-favs-manage-panel .bf-selection-count { flex:1; color:#526879; min-width:90px; font-size:13px; }
-.bili-favs-manage-panel .bf-primary { background:var(--bf-blue); border-color:var(--bf-blue); color:white; font-weight:600; }
-.bili-favs-manage-panel .bf-primary:hover:not(:disabled) { background:#006989; color:#fff; }
-.bili-favs-manage-panel .bf-danger { background:#aa4332; border-color:#aa4332; color:white; }
-.bili-favs-manage-panel .bf-status { display:flex; align-items:center; flex-wrap:wrap; gap:4px 10px; padding:0 0 6px; margin-bottom:6px; border-bottom:1px solid var(--bf-line); font-size:12px; }
-.bili-favs-manage-panel .bf-status strong { font-size:12px; }
-.bili-favs-manage-panel .bf-status>span { color:#526879; }
-.bili-favs-manage-panel .bf-status[data-status=failed] strong,.bili-favs-manage-panel .bf-status[data-status=interrupted] strong { color:#aa4332; }
-.bili-favs-manage-panel .bf-status[data-status=completed] strong { color:#24734b; }
-.bili-favs-manage-panel .bf-status-message { color:#8d382a; width:100%; margin:0; }
-.bili-favs-manage-panel .bf-progress-detail { padding:4px 8px; border-left:2px solid var(--bf-blue); background:#f2f8fb; margin-bottom:8px; }
-.bili-favs-manage-panel .bf-progress-detail p { font-size:12px; margin:2px 0; }
+.bili-favs-manage-panel .bf-selection-count { flex:1; color:var(--bf-muted); min-width:90px; font-size:var(--bf-small); font-variant-numeric:tabular-nums; }
+.bili-favs-manage-panel .bf-primary { background:var(--bf-blue); border-color:var(--bf-blue); color:var(--bf-surface); font-weight:600; }
+.bili-favs-manage-panel .bf-primary:hover:not(:disabled) { background:var(--bf-hover); color:var(--bf-surface); }
+.bili-favs-manage-panel .bf-danger { background:var(--bf-danger); border-color:var(--bf-danger); color:var(--bf-surface); }
+.bili-favs-manage-panel .bf-danger:hover:not(:disabled) { color:var(--bf-danger); border-color:var(--bf-danger); background:var(--bf-danger-soft); }
+.bili-favs-manage-panel .bf-status { display:flex; align-items:center; flex-wrap:wrap; gap:2px 12px; padding:0 0 6px; margin-bottom:6px; border-bottom:1px solid var(--bf-line); font-size:var(--bf-small); }
+.bili-favs-manage-panel .bf-status>span { color:var(--bf-muted); font-variant-numeric:tabular-nums; }
+.bili-favs-manage-panel .bf-status[data-status=failed] strong,.bili-favs-manage-panel .bf-status[data-status=interrupted] strong { color:var(--bf-danger); }
+.bili-favs-manage-panel .bf-status[data-status=completed] strong { color:var(--bf-success); }
+.bili-favs-manage-panel .bf-progress-detail { width:100%; color:var(--bf-muted); }
+.bili-favs-manage-panel .bf-progress-detail p { display:inline; margin:0; }
+.bili-favs-manage-panel .bf-progress-detail p+p::before { content:' · '; }
 .bili-favs-manage-panel .bf-tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:12px 0; }
 .bili-favs-manage-panel .bf-tools select { min-width:0; max-width:100%; }
-.bili-favs-manage-panel .bf-tools label { display:flex; align-items:center; gap:6px; }
-.bili-favs-manage-panel .bf-empty { padding:28px 12px; text-align:center; color:#526879; line-height:1.8; }
-.bili-favs-manage-panel .bf-folder-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:3px 14px; border-bottom:1px solid var(--bf-line); padding:8px 0; }
+.bili-favs-manage-panel .bf-tools label { display:flex; align-items:center; gap:8px; }
+.bili-favs-manage-panel .bf-catalog-tools { background:var(--bf-soft); border:1px solid var(--bf-line); padding:8px; border-radius:6px; }
+.bili-favs-manage-panel .bf-scope-label { flex:1; flex-wrap:wrap; font-size:var(--bf-small); color:var(--bf-muted); }
+.bili-favs-manage-panel .bf-scope-label select { flex:1; font-size:var(--bf-text); }
+.bili-favs-manage-panel .bf-empty { padding:24px 12px; text-align:center; color:var(--bf-muted); line-height:1.8; }
+.bili-favs-manage-panel .bf-folder-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:4px 12px; border-bottom:1px solid var(--bf-line); padding:8px 0; }
 .bili-favs-manage-panel .bf-folder-row { display:flex; align-items:flex-start; gap:8px; overflow-wrap:anywhere; min-width:0; }
 .bili-favs-manage-panel .bf-folder-item>.bf-folder-row { display:grid; grid-template-columns:20px minmax(0,1fr) max-content; align-items:center; }
 .bili-favs-manage-panel .bf-folder-name { min-width:0; overflow-wrap:anywhere; }
-.bili-favs-manage-panel .bf-folder-count { font-size:12px; color:#526879; text-align:right; }
-.bili-favs-manage-panel .bf-folder-identity { font-size:11px; color:#526879; overflow-wrap:anywhere; }
-.bili-favs-manage-panel .bf-folder-reason { grid-column:1/-1; margin-left:28px; font-size:12px; color:#805500; }
+.bili-favs-manage-panel .bf-folder-count { font-size:var(--bf-small); color:var(--bf-muted); text-align:right; font-variant-numeric:tabular-nums; }
+.bili-favs-manage-panel .bf-folder-identity { font-size:var(--bf-small); color:var(--bf-muted); overflow-wrap:anywhere; }
+.bili-favs-manage-panel .bf-folder-reason { grid-column:1/-1; margin-left:28px; font-size:var(--bf-small); color:var(--bf-warning); }
 .bili-favs-manage-panel .bf-inventory-result:not(:empty) { margin-top:16px; padding:12px 0; border-top:1px solid var(--bf-line); }
-.bili-favs-manage-panel .bf-mutation-review:not(:empty) { border-left:3px solid #aa4332; padding:12px; margin:16px 0; background:#fff6f3; }
-.bili-favs-manage-panel .output-text-box { padding:0; border-top:1px solid var(--bf-line); font-size:12px; line-height:1.6; }
+.bili-favs-manage-panel .bf-mutation-review:not(:empty) { border-left:3px solid var(--bf-danger); padding:12px; margin:16px 0; background:var(--bf-danger-soft); }
+.bili-favs-manage-panel .bf-diagnostics { border-top:1px solid var(--bf-line); background:var(--bf-soft); padding:8px 16px; display:flex; flex-direction:column; min-height:0; flex:0 0 auto; }
 .bili-favs-manage-panel .bf-log-heading { display:flex; align-items:baseline; justify-content:space-between; gap:8px; flex-wrap:wrap; }
-.bili-favs-manage-panel .bf-record-tools { position:sticky; top:-12px; padding-top:4px; background:#fff; z-index:1; }
-.bili-favs-manage-panel .bf-diagnostics .bf-tools { margin:6px 0 10px; gap:6px 10px; }
-.bili-favs-manage-panel .bf-diagnostics .bf-tools button,.bili-favs-manage-panel .bf-diagnostics .bf-tools select { font-size:12px; min-height:30px; padding:5px 8px; }
-.bili-favs-manage-panel .bf-log-row { display:grid; grid-template-columns:58px 30px minmax(0,1fr); gap:8px; padding:6px 0; border-bottom:1px solid #edf2f6; align-items:baseline; }
-.bili-favs-manage-panel .bf-log-row time { color:#526879; font-variant-numeric:tabular-nums; }
+.bili-favs-manage-panel .bf-log-heading h2 { font-size:var(--bf-text); margin:0; }
+.bili-favs-manage-panel .bf-record-tools { flex-shrink:0; }
+.bili-favs-manage-panel .bf-diagnostics .bf-tools { margin:4px 0 8px; gap:4px 8px; font-size:var(--bf-small); }
+.bili-favs-manage-panel .bf-diagnostics .bf-tools button,.bili-favs-manage-panel .bf-diagnostics .bf-tools select { font-size:var(--bf-small); min-height:32px; padding:6px 8px; }
+.bili-favs-manage-panel .output-text-box { overflow:auto; min-height:48px; max-height:96px; border-top:1px solid var(--bf-line); font-size:var(--bf-small); line-height:1.5; scrollbar-width:thin; scroll-padding:8px; }
+.bili-favs-manage-panel .bf-log-row { display:grid; grid-template-columns:58px 28px minmax(0,1fr); gap:8px; padding:6px 0; border-bottom:1px solid var(--bf-line); align-items:baseline; }
+.bili-favs-manage-panel .bf-log-row time { color:var(--bf-muted); font-variant-numeric:tabular-nums; }
 .bili-favs-manage-panel .bf-log-level { font-weight:600; }
 .bili-favs-manage-panel .bf-log-message { white-space:pre-wrap; overflow-wrap:anywhere; min-width:0; }
-.bili-favs-manage-panel .bf-log-error { color:#aa4332; }
-.bili-favs-manage-panel .bf-log-warn { color:#805500; }
-.bili-favs-manage-panel .bf-log-debug { color:#526879; }
-.bili-favs-manage-panel .bf-export { position:absolute; inset:0; background:#fff; z-index:2; padding:20px; display:flex; align-content:flex-start; flex-wrap:wrap; gap:10px; overflow:auto; }
+.bili-favs-manage-panel .bf-log-error { color:var(--bf-danger); }
+.bili-favs-manage-panel .bf-log-warn { color:var(--bf-warning); }
+.bili-favs-manage-panel .bf-log-debug { color:var(--bf-muted); }
+.bili-favs-manage-panel .bf-export { position:absolute; inset:0; background:var(--bf-surface); z-index:2; padding:20px; display:flex; align-content:flex-start; flex-wrap:wrap; gap:12px; overflow:auto; }
 .bili-favs-manage-panel .bf-export h3,.bili-favs-manage-panel .bf-export p { width:100%; }
-.bili-favs-manage-panel textarea { display:block; width:100%; height:55%; min-height:140px; resize:vertical; padding:10px; margin:0; border:1px solid #b7c9d5; color:var(--bf-ink); background:#fff; font:12px/1.6 monospace; }
+.bili-favs-manage-panel textarea { display:block; width:100%; height:55%; min-height:140px; resize:vertical; padding:12px; margin:0; border:1px solid var(--bf-control); background:var(--bf-surface); }
 @container (max-width:500px) {
- .bili-favs-manage-panel .bf-folder-item { grid-template-columns:minmax(0,1fr); gap:1px; }
+ .bili-favs-manage-panel .bf-folder-item { grid-template-columns:minmax(0,1fr); }
  .bili-favs-manage-panel .bf-folder-identity { margin-left:28px; }
- .bili-favs-manage-panel .bf-log-row { grid-template-columns:52px 26px minmax(0,1fr); gap:5px; font-size:11px; }
- .bili-favs-manage-panel .bf-header { padding:9px 12px; gap:1px; }
- .bili-favs-manage-panel .bf-header strong { font-size:15px; }
- .bili-favs-manage-panel .bf-navigation { padding:0 14px; gap:20px; }
- .bili-favs-manage-panel .bf-content { padding:14px; }
- .bili-favs-manage-panel .bf-footer { padding:10px 14px; }
- .bili-favs-manage-panel .bf-copy-columns,.bili-favs-manage-panel .signal-panel { grid-template-columns:28px minmax(0,1fr) 14px minmax(0,1fr); gap:5px; }
- .bili-favs-manage-panel .bf-copy-columns { font-size:11px; }
- .bili-favs-manage-panel input[type=text] { font-size:13px; padding:7px 5px; }
- .bili-favs-manage-panel .bf-action-bar button { padding:7px 9px; font-size:13px; }
+ .bili-favs-manage-panel .bf-header { padding:8px; gap:0; }
+ .bili-favs-manage-panel .bf-header button { padding:6px; }
+ .bili-favs-manage-panel .bf-navigation { padding:0 12px; }
+ .bili-favs-manage-panel .bf-content { padding:12px; }
+ .bili-favs-manage-panel .bf-footer,.bili-favs-manage-panel .bf-diagnostics { padding:8px 12px; }
+ .bili-favs-manage-panel .bf-copy-columns,.bili-favs-manage-panel .signal-panel { grid-template-columns:32px minmax(0,1fr) 12px minmax(0,1fr); gap:4px; }
+ .bili-favs-manage-panel input[type=text] { padding:6px 4px; }
+ .bili-favs-manage-panel .bf-log-row { grid-template-columns:54px 26px minmax(0,1fr); gap:4px; }
 }
 @media(max-width:650px) { .bili-favs-manage-panel { top:8px; left:8px; } }
+@media(max-height:500px) {
+ .bili-favs-manage-panel .bf-content { min-height:48px; }
+ .bili-favs-manage-panel .bf-footer { max-height:22dvh; }
+ .bili-favs-manage-panel .bf-diagnostics { max-height:36dvh; overflow:auto; }
+ .bili-favs-manage-panel .output-text-box { min-height:32px; max-height:44px; }
+}
+@media(prefers-reduced-motion:reduce) {
+ .bili-favs-manage-panel button,.bili-favs-manage-panel select { transition:none; }
+ .bili-favs-manage-panel * { scroll-behavior:auto; }
+}
 `;
 
   function element(tag, className = '', text = '') {
@@ -2132,10 +2159,10 @@
   const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
   const descriptions = {
     delete: { verb: '删除', title: '删除自己创建的收藏夹',
-      detail: '与统计分开勾选。默认/特殊收藏夹不可选。删除会移除收藏夹及其中的收藏关系，请自行备份；这里不提供撤销。不会删除原作者上传的视频。',
+      detail: '加载列表后勾选目标。默认/特殊收藏夹不可选。删除会移除收藏夹及收藏关系，无法撤销；原视频不受影响，请先备份。',
       agreement: '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。' },
     unsubscribe: { verb: '退订', title: '取消我的收藏夹订阅',
-      detail: '只管理当前登录账号的收藏夹订阅，不改变原作者的收藏夹内容。合集、所有者未知或不可用的条目暂不支持。与统计分开勾选。',
+      detail: '只取消当前账号的收藏夹订阅，原作者内容不受影响。合集、所有者未知或不可用的条目不可选。',
       agreement: '我已检查以上 ID 和所有者，确认取消当前账号对这些收藏夹的订阅；原作者的内容不受影响。' }
   };
 
@@ -2200,7 +2227,7 @@
         this.agreement.addEventListener('change', () => this.updateBusy());
         this.confirmButton = button(`确认${description.verb}以上目标`, () => this.execute());
         this.confirmButton.classList.add('bf-danger');
-        const actions = element('div', 'bf-tools'); actions.append(this.confirmButton, button('放弃本次操作', () => this.invalidate()));
+        const actions = element('div', 'bf-tools'); actions.append(this.confirmButton, button('放弃本次操作', () => { this.invalidate(); this.previewButton.focus(); }));
         this.review.append(label, actions);
         this.review.scrollIntoView?.({ block: 'nearest', behavior: 'instant' });
         this.updateBusy(); this.agreement.focus();
@@ -2214,11 +2241,11 @@
         const report = await this.engine.execute(ticket, { confirmed: true, signal, onResult: result => {
           if (result.status === 'confirmed') this.panel.operation.confirm(`ID ${result.id}：平台已确认`);
         } });
+        this.inventoryUI.resetCatalog('本次操作后列表需要更新，请重新加载。');
         this.results.replaceChildren(element('p', '', report.complete ? '本次目标均已确认。请刷新平台列表核对。' : report.cancelled ? '已取消后续操作。请核对已提交项目。' : '已停止；请检查下列结果后再决定后续操作。'));
         for (const result of report.results) this.results.append(element('p', '', `${result.name} · ID ${result.id} · ${statuses[result.status]}：${result.detail}`));
         this.results.append(button('检查并导出操作结果', () => this.panel.reviewExport(JSON.stringify(report, null, 2), 'bili-operation.json')));
         this.panel.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : 'failed', '本次确认已用完；再次操作须重新加载列表、选择并确认。未知结果请先在平台核对，勿直接重试。');
-        this.setCatalog([]); this.inventoryUI.folders = []; this.inventoryUI.rows = []; this.inventoryUI.list.replaceChildren();
       });
     }
 
@@ -2231,9 +2258,8 @@
       this.mode = 'statistics';
       this.root = element('section', 'bf-inventory');
       this.heading = element('h2', '', '查看收藏夹统计');
-      this.intro = element('p', 'bf-intro', '加载列表并勾选收藏夹，查看视频数量、重复项和时长。不会修改收藏。');
-      const help = element('p', 'bf-help', '只统计选中范围；缺失信息保留为未知，合集暂不支持。请求间隔 400ms，每夹最多 100 页，总计最多 10000 条；取消或失败会保留部分结果。');
-      this.root.append(this.heading, this.intro, help); this.help = help;
+      this.intro = element('p', 'bf-help', '只读取选中收藏夹，不修改收藏；缺失信息显示未知，取消或失败保留部分结果。合集暂不支持。');
+      this.root.append(this.heading, this.intro);
       this.kind = element('select'); this.kind.setAttribute('aria-label', '加载范围');
       for (const [value, label] of [['created', '当前空间创建的收藏夹'], ['subscribed', '我的收藏夹订阅']]) {
         const option = element('option', '', label); option.value = value; this.kind.append(option);
@@ -2242,7 +2268,9 @@
       this.scanButton = button('统计选中收藏夹', () => this.scan());
       this.cancelButton = button('停止后续操作', () => { this.controller?.abort(); this.updateBusy(); });
       this.exportButton = button('检查并导出统计', () => { if (this.report) panel.reviewExport(JSON.stringify(this.report, null, 2), 'bili-inventory.json'); });
-      const tools = element('div', 'bf-tools'); tools.append(this.kind, this.loadButton);
+      const tools = element('div', 'bf-tools bf-catalog-tools');
+      const scopeLabel = element('label', 'bf-scope-label', '列表范围');
+      scopeLabel.append(this.kind); tools.append(scopeLabel, this.loadButton);
       this.selectionCount = element('p', 'bf-selection-count', '尚未选择收藏夹');
       this.actions = element('div', 'bf-action-bar');
       this.actions.append(this.selectionCount, this.exportButton, this.scanButton, this.cancelButton);
@@ -2257,25 +2285,31 @@
         this.actions.insertBefore(this.mutations.previewButton, this.cancelButton);
       }
       this.kind.addEventListener('change', () => {
-        this.folders = []; this.rows = []; this.report = null; this.result.replaceChildren();
-        this.list.replaceChildren(element('p', 'bf-empty', '范围已更换，请重新加载列表。'));
-        this.mutations?.setCatalog([], this.kind.value); this.mutations?.results.replaceChildren(); this.updateBusy();
+        this.resetCatalog('范围已更换，请重新加载列表。'); this.updateBusy();
         this.panel.operation.update({ status: 'idle', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '' });
       });
+      this.mutations?.setCatalog([], this.kind.value);
       this.updateBusy();
+    }
+
+    resetCatalog(message) {
+      this.panel.viewScroll.delete('statistics'); this.panel.viewScroll.delete('manage');
+      if (this.panel.activeView !== 'copy') this.panel.content.scrollTop = 0;
+      this.folders = []; this.rows = []; this.report = null; this.result.replaceChildren();
+      this.catalogOwner = null; this.catalogKind = null;
+      this.list.replaceChildren(element('p', 'bf-empty', message));
+      this.mutations?.setCatalog([], this.kind.value); this.mutations?.results.replaceChildren();
     }
 
     setMode(mode) {
       if (this.mode !== mode) {
         this.mutations?.invalidate();
-        for (const row of this.rows) row.input.checked = false;
-        for (const row of this.mutations?.rows || []) row.input.checked = false;
       }
       this.mode = mode;
       const manage = mode === 'manage';
       this.heading.textContent = manage ? '管理我的收藏夹' : '查看收藏夹统计';
-      this.intro.textContent = manage ? '先加载列表，再选择要删除的收藏夹或要取消的订阅。执行前会逐项确认。' : '加载列表并勾选收藏夹，查看视频数量、重复项和时长。不会修改收藏。';
-      this.help.hidden = manage;
+      this.intro.textContent = '只读取选中收藏夹，不修改收藏；缺失信息显示未知，取消或失败保留部分结果。合集暂不支持。';
+      this.intro.hidden = manage;
       this.list.hidden = manage; this.result.hidden = manage;
       if (this.mutations) this.mutations.root.hidden = !manage;
       this.updateBusy();
@@ -2284,6 +2318,7 @@
     updateBusy() {
       const busy = this.panel.busy;
       this.kind.disabled = busy; this.loadButton.disabled = busy;
+      this.loadButton.textContent = busy ? '操作中…' : this.folders.length ? '重新加载列表' : '加载列表（只读）';
       this.scanButton.disabled = busy || !this.selected().length;
       this.cancelButton.disabled = !busy || !this.controller || this.controller.signal.aborted;
       this.exportButton.disabled = busy || !this.report;
@@ -2316,12 +2351,20 @@
 
     load() {
       return this.run('读取收藏夹列表', async signal => {
-        this.folders = []; this.rows = []; this.list.replaceChildren(); this.report = null; this.result.textContent = '';
-        this.mutations?.setCatalog([], this.kind.value);
+        this.resetCatalog('正在读取列表，请稍候…');
         const kind = this.kind.value;
         const owner = kind === 'created' ? PageDetector.getCurrentPageUID() : PageDetector.getLoginUserUID();
-        const folders = await this.service.client.folders(owner, kind, signal);
-        if (signal.aborted) return;
+        let folders;
+        try { folders = await this.service.client.folders(owner, kind, signal); }
+        catch (err) {
+          this.list.replaceChildren(element('p', 'bf-empty', signal.aborted ? '已停止读取，可以重新加载列表。' : '列表未能加载，请检查下方原因后重新加载。'));
+          throw err;
+        }
+        if (signal.aborted) {
+          this.list.replaceChildren(element('p', 'bf-empty', '已停止读取，可以重新加载列表。'));
+          return;
+        }
+        this.list.replaceChildren();
         this.folders = folders; this.catalogOwner = owner; this.catalogKind = kind;
         this.mutations?.setCatalog(folders, kind);
         for (const folder of folders) {
@@ -2337,7 +2380,7 @@
     scan() {
       const folders = this.selected();
       return this.run('只读统计', async signal => {
-        this.report = null;
+        this.report = null; this.result.replaceChildren();
         const report = await this.service.scan(folders, { signal, onPage: ({ page, loaded }) => this.panel.operation.confirm(`第 ${page} 页，当前夹已读取 ${loaded} 条`) });
         this.report = report;
         this.result.replaceChildren(element('p', '', `${report.complete ? '完整扫描' : report.cancelled ? '已取消 · 部分结果' : '扫描不完整'}：覆盖 ${report.folders.length}/${report.scope.length} 个收藏夹，读取 ${report.entries} 条。`),
@@ -2351,7 +2394,7 @@
     destroy() { this.controller?.abort(); this.mutations?.destroy(); }
   }
 
-  const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止 · 请检查', interrupted: '已中断 · 请核对结果' };
+  const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止', interrupted: '已中断' };
   const logLevels = { info: '信息', warn: '警告', error: '错误', debug: '调试' };
 
   class FloatingPanel {
@@ -2369,7 +2412,8 @@
       this.minW = 280;
       this.minH = 64;
       this.activeView = 'copy';
-      this.previousView = 'copy';
+      this.viewScroll = new Map();
+      this.logsOpen = false;
     }
 
     init() {
@@ -2381,8 +2425,9 @@
       this.floatingPanel = root;
       this.header = element('header', 'bf-header');
       this.header.append(element('strong', '', '收藏夹管理'));
-      this.logsButton = button('记录', () => this.showView(this.activeView === 'logs' ? this.previousView : 'logs'), 'bf-quiet');
+      this.logsButton = button('操作记录', () => this.toggleLogs(), 'bf-quiet');
       this.logsButton.setAttribute('aria-label', '查看操作记录');
+      this.logsButton.setAttribute('aria-expanded', 'false');
       this.minimizeButton = button('最小化', () => this.toggleMinimize());
       this.dismissButton = button('关闭', () => { this.onDismiss?.(); this.destroy(); });
       this.header.append(this.logsButton, this.minimizeButton, this.dismissButton);
@@ -2397,9 +2442,10 @@
       this.content = element('div', 'bf-content');
       this.scope = element('p', 'bf-muted');
       this.workspace = element('section', 'bf-workspace');
-      this.workspace.append(element('h2', '', '复制到我的收藏夹'), element('p', 'bf-intro', '勾选来源，在同一行填写目标名称。复制后，来源内容仍会保留。'), this.scope);
-      const help = element('p', 'bf-help', '目标同名则复用，不存在则新建；名称只去掉首尾空白。从他人空间复制需往返我的空间准备目标，请保持页面打开。');
-      this.workspace.append(help);
+      const heading = element('div', 'bf-task-heading');
+      heading.append(element('h2', '', '复制到我的收藏夹'), this.scope);
+      const help = element('p', 'bf-help', '勾选来源并编辑目标名。同名则复用，否则新建；仅去掉首尾空白，保留来源。跨空间复制请保持页面打开。');
+      this.workspace.append(heading, help);
       this.leftPanel = element('section', 'bf-sources');
       this.selectAllButton = button('全选', () => this.toggleSelectAll());
       const columns = element('div', 'bf-copy-columns');
@@ -2420,19 +2466,18 @@
       this.progressDetails = element('section', 'bf-progress-detail');
       this.progressDetails.hidden = true;
       this.progressLast = element('p'); this.progressMessage = element('p');
-      this.progressDetails.append(this.progressLast, this.progressMessage);
-      this.statusMessage = element('p', 'bf-status-message');
-      this.statusBox.append(this.statusTitle, this.statusCount, this.statusMessage);
-      this.content.prepend(this.progressDetails);
+      this.progressDetails.append(this.progressMessage, this.progressLast);
+      this.statusBox.append(this.statusTitle, this.statusCount);
       if (this.manager.inventory) {
         this.inventoryPanel = new InventoryPanel(this, this.manager.inventory);
         this.content.append(this.inventoryPanel.root);
       }
       this.createDiagnostics();
       this.footer = element('footer', 'bf-footer');
+      this.statusBox.append(this.progressDetails);
       this.footer.append(this.statusBox, this.copyActions);
       if (this.inventoryPanel) this.footer.append(this.inventoryPanel.actions);
-      root.append(style, this.header, this.navigation, this.content, this.footer);
+      root.append(style, this.header, this.navigation, this.content, this.footer, this.diagnostics);
       document.body.append(root);
       this.unsubscribe = this.operation.subscribe(state => this.renderOperation(state));
       this.onBodyMove = event => {
@@ -2449,41 +2494,48 @@
       this.updateSelectionReview();
       this.showPageTypeIndicator();
       this.appendLog('面板已就绪。诊断记录仅保存在当前页面，最多 500 条。');
-      this.showView('copy');
+      this.renderView();
     }
 
     showView(view) {
-      if (!['copy', 'statistics', 'manage', 'logs'].includes(view) || (this.busy && view !== 'logs' && view !== this.previousView && view !== this.activeView)) return;
+      if (!['copy', 'statistics', 'manage'].includes(view) || this.busy || view === this.activeView) return;
       if ((view === 'statistics' || view === 'manage') && !this.inventoryPanel) return;
-      if (this.activeView === 'logs') this.logScrollTop = this.content.scrollTop;
-      if (view === 'logs') { if (this.activeView !== 'logs') this.previousView = this.activeView; }
-      else {
-        if (view !== this.previousView || this.activeView !== 'logs') this.inventoryPanel?.mutations?.invalidate();
-        this.previousView = view;
-      }
+      this.viewScroll.set(this.activeView, this.content.scrollTop);
+      this.inventoryPanel?.mutations?.invalidate();
       this.activeView = view;
+      this.renderView();
+      this.content.scrollTop = this.viewScroll.get(view) || 0;
+    }
+
+    renderView() {
+      const view = this.activeView;
       this.workspace.hidden = view !== 'copy';
       if (this.inventoryPanel) {
         this.inventoryPanel.root.hidden = !['statistics', 'manage'].includes(view);
         if (view === 'statistics' || view === 'manage') this.inventoryPanel.setMode(view);
         this.inventoryPanel.actions.hidden = !['statistics', 'manage'].includes(view);
       }
-      this.diagnostics.hidden = view !== 'logs';
       this.copyActions.hidden = view !== 'copy';
-      this.content.classList.toggle('bf-show-logs', view === 'logs');
-      this.content.scrollTop = 0;
-      this.footer.hidden = this.minimized || (view === 'logs' && this.statusBox.hidden);
-      for (const [name, control] of this.viewButtons) control.setAttribute('aria-pressed', String(name === (view === 'logs' ? this.previousView : view)));
-      this.logsButton.textContent = view === 'logs' ? '返回' : '记录';
-      this.logsButton.setAttribute('aria-label', view === 'logs' ? '返回当前功能' : '查看操作记录');
-      if (view === 'logs') this.renderLogs();
+      this.footer.hidden = !!this.minimized;
+      for (const [name, control] of this.viewButtons) control.setAttribute('aria-pressed', String(name === view));
+    }
+
+    toggleLogs() {
+      this.logsOpen = !this.logsOpen;
+      // Opening diagnostics from a minimized window restores the working context.
+      if (this.logsOpen && this.minimized) this.toggleMinimize();
+      this.diagnostics.hidden = !this.logsOpen;
+      this.logsButton.setAttribute('aria-expanded', String(this.logsOpen));
+      this.logsButton.setAttribute('aria-label', this.logsOpen ? '收起操作记录' : '查看操作记录');
+      if (this.logsOpen) this.renderLogs();
+      else if (this.diagnostics.contains(document.activeElement)) this.logsButton.focus();
     }
 
     showPageTypeIndicator() {
       const pageUID = PageDetector.getCurrentPageUID();
       const loginUID = PageDetector.getLoginUserUID();
-      this.scope.textContent = !pageUID ? '虚构数据预览，不连接真实账号。' :
-        `来源：${pageUID === loginUID ? '我的空间' : '当前浏览的空间'}已加载的创建收藏夹。目标：${loginUID ? '我的空间' : '登录后可复制到我的空间'}。`;
+      this.scope.textContent = !pageUID ? '虚构预览 · 不连接账号' :
+        `${pageUID === loginUID ? '我的空间' : '当前空间'} → ${loginUID ? '我的空间' : '请先登录'}`;
       this.sourceColumn.textContent = pageUID && pageUID === loginUID ? '来源（我的空间）' : '来源（当前空间）';
     }
 
@@ -2532,6 +2584,7 @@
       }
       this.selectAllButton.textContent = tasks.length && tasks.length === this.favorites.length ? '清除' : '全选';
       this.selectAllButton.setAttribute('aria-label', tasks.length && tasks.length === this.favorites.length ? '取消全选来源' : '全选来源收藏夹');
+      this.selectAllButton.disabled = this.busy || !this.favorites.length;
       this.startBatchTransferButton.textContent = this.busy ? '操作中…' : tasks.length ? `复制 ${tasks.length} 个收藏夹` : '开始复制';
       this.startBatchTransferButton.disabled = this.busy || !tasks.length || missing;
     }
@@ -2539,7 +2592,7 @@
     setBusy(busy) {
       this.busy = busy;
       this.floatingPanel?.setAttribute('aria-busy', String(busy));
-      this.selectAllButton.disabled = busy;
+      this.selectAllButton.disabled = busy || !this.favorites.length;
       this.dismissButton.disabled = busy;
       for (const control of this.viewButtons.values()) control.disabled = busy;
       for (const item of this.favCheckboxItemList) { item.checkbox.disabled = busy; item.inputText.disabled = busy; }
@@ -2550,18 +2603,21 @@
     }
 
     renderOperation(state) {
+      const transition = `${state.action}:${state.status}`;
+      if (state.status !== 'idle' && transition !== this.lastOperationTransition) {
+        this.appendLog(`${statusNames[state.status]}：${state.action || '操作'}。${state.detail}`, state.status === 'failed' ? this.errorCode : state.status === 'interrupted' ? this.warnCode : this.normalCode);
+      }
+      this.lastOperationTransition = transition;
       this.statusBox.hidden = state.status === 'idle';
       this.statusBox.dataset.status = state.status;
       this.progressDetails.hidden = state.status === 'idle';
-      this.statusTitle.textContent = `${statusNames[state.status]}${state.action ? `：${state.action}` : ''}`;
+      this.statusTitle.textContent = `${statusNames[state.status]}${state.action ? ` · ${state.action}` : ''}`;
       this.statusCount.textContent = `已确认 ${state.confirmed}${state.total === null ? ' 项，总数未知' : ` / ${state.total} 项`}`;
       this.statusCount.hidden = state.confirmed === 0 && state.total === null;
       this.progressLast.textContent = `最后确认：${state.lastConfirmed || '尚无已确认步骤'}`;
       this.progressLast.hidden = !state.lastConfirmed;
       this.progressMessage.textContent = state.detail;
-      this.statusMessage.hidden = !['failed', 'interrupted'].includes(state.status);
-      this.statusMessage.textContent = this.statusMessage.hidden ? '' : '请先核对页面结果，再决定后续操作。';
-      if (this.footer) this.footer.hidden = this.minimized || (this.activeView === 'logs' && this.statusBox.hidden);
+      if (this.footer) this.footer.hidden = !!this.minimized;
     }
 
     async startBatchTransfer() {
@@ -2580,6 +2636,10 @@
     createDiagnostics() {
       const details = element('section', 'bf-diagnostics');
       this.diagnostics = details;
+      details.hidden = true;
+      details.id = 'bili-favs-records';
+      details.setAttribute('aria-label', '操作记录');
+      this.logsButton.setAttribute('aria-controls', details.id);
       const title = element('div', 'bf-log-heading');
       this.logCount = element('span', 'bf-muted');
       title.append(element('h2', '', '操作记录'), this.logCount);
@@ -2595,25 +2655,24 @@
       this.followCheckbox = element('input'); this.followCheckbox.type = 'checkbox'; this.followCheckbox.checked = true;
       const followLabel = element('label', '', '跟随最新'); followLabel.prepend(this.followCheckbox);
       this.followCheckbox.addEventListener('change', () => { this.scrollTopEnabled = this.followCheckbox.checked; this.renderLogs(); });
-      tools.append(this.logFilter, followLabel, button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('检查并导出', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')));
+      tools.append(this.logFilter, followLabel, button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('检查并导出', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')), button('收起记录', () => this.toggleLogs()));
       this.outputTextBox = element('div', 'output-text-box');
       this.outputTextBox.tabIndex = 0;
+      this.outputTextBox.setAttribute('role', 'region');
       this.outputTextBox.setAttribute('aria-label', '诊断记录内容');
-      this.content.addEventListener('scroll', () => {
-        if (this.activeView !== 'logs') return;
-        if (this.content.scrollHeight - this.content.clientHeight - this.content.scrollTop > 24) {
+      this.outputTextBox.addEventListener('scroll', () => {
+        if (this.outputTextBox.scrollHeight - this.outputTextBox.clientHeight - this.outputTextBox.scrollTop > 24) {
           this.scrollTopEnabled = false; this.followCheckbox.checked = false;
         }
-        this.logScrollTop = this.content.scrollTop;
+        this.logScrollTop = this.outputTextBox.scrollTop;
       });
       recordTools.append(tools);
       details.append(recordTools, this.outputTextBox);
-      this.content.append(details);
     }
 
     appendLog(message, type = this.normalCode) {
       this.logs.add(message, type === this.errorCode ? 'error' : type === this.warnCode ? 'warn' : type === this.debugCode ? 'debug' : 'info');
-      if (this.outputTextBox && this.activeView === 'logs') this.renderLogs();
+      if (this.outputTextBox && this.logsOpen && !this.minimized) this.renderLogs();
     }
 
     renderLogs() {
@@ -2626,7 +2685,7 @@
       }));
       if (!entries.length) this.outputTextBox.append(element('p', 'bf-empty', this.logs.entries.length ? '此级别没有记录，可切换到全部级别。' : '暂无记录。后续操作会显示在这里。'));
       this.logCount.textContent = `${entries.length} / ${this.logs.entries.length} 条${this.logs.dropped ? ` · 已淘汰 ${this.logs.dropped} 条` : ''}`;
-      this.content.scrollTop = this.scrollTopEnabled ? this.content.scrollHeight : top;
+      this.outputTextBox.scrollTop = this.scrollTopEnabled ? this.outputTextBox.scrollHeight : top;
     }
 
     reviewExport(text, filename) {
@@ -2638,7 +2697,7 @@
       const previousFocus = document.activeElement;
       const close = () => {
         section.remove(); this.exportReview = null;
-        this.content.inert = false; this.navigation.inert = false; this.footer.inert = false; this.header.inert = false;
+        this.content.inert = false; this.navigation.inert = false; this.footer.inert = false; this.header.inert = false; this.diagnostics.inert = false;
         previousFocus?.focus();
       };
       section.append(area, button('下载此内容', () => {
@@ -2655,7 +2714,7 @@
         }
       });
       this.floatingPanel.append(section); this.exportReview = section;
-      this.content.inert = true; this.navigation.inert = true; this.footer.inert = true; this.header.inert = true;
+      this.content.inert = true; this.navigation.inert = true; this.footer.inert = true; this.header.inert = true; this.diagnostics.inert = true;
       area.focus();
     }
 
@@ -2663,10 +2722,11 @@
       this.minimized = !this.minimized;
       this.content.hidden = this.minimized;
       this.navigation.hidden = this.minimized; this.footer.hidden = this.minimized;
+      this.diagnostics.hidden = this.minimized || !this.logsOpen;
       this.minimizeButton.textContent = this.minimized ? '恢复面板' : '最小化';
       this.minimizeButton.setAttribute('aria-expanded', String(!this.minimized));
       if (this.minimized) { this.hiddenHeight = this.floatingPanel.style.height; this.floatingPanel.style.height = '64px'; }
-      else { this.floatingPanel.style.height = this.hiddenHeight || ''; this.footer.hidden = this.activeView === 'logs' && this.statusBox.hidden; this.clampToViewport(); }
+      else { this.floatingPanel.style.height = this.hiddenHeight || ''; if (this.logsOpen) this.renderLogs(); this.clampToViewport(); }
     }
 
     recordPanelSize() { this.clampToViewport(); }

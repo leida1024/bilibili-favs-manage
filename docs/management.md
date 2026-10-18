@@ -6,9 +6,9 @@ These capabilities are in the local development build. The published Greasy Fork
 
 The panel opens on **复制收藏夹** in a compact window whose height follows the content up to a limit. Select sources on the left and edit each destination name alongside it on the right. Destinations belong to your own space: existing normalized-name folders are reused and missing folders are created. Copy preserves the source. The fixed bottom bar shows the selection and starts the copy; a selected empty destination must be filled first. Naming, cross-page guidance and progress details are displayed directly, with no expand/collapse controls.
 
-Progress shows confirmed steps and stops when a result cannot be confirmed. Check the destination before submitting again. Open **记录** in the header to filter, clear or review/export local logs; **返回** returns to the current task, including while busy. Export opens an editable review overlay: download explicitly or press Escape to return. Exported names and IDs may identify collections; edit before sharing.
+Progress and the last confirmed step remain in the fixed bottom bar, including on failure. Check the destination before submitting again. Open **操作记录** in the header to show the secondary records area below the task. It includes operation starts and outcomes, filtering, clearing and reviewed export. Opening or closing records keeps the current task, selections, edits and pending confirmation, including while busy. Export opens an editable review overlay: download explicitly or press Escape to return. Exported names and IDs may identify collections; edit before sharing.
 
-Records align time, level and message, with tools kept at the top while scrolling. Reading earlier entries disables **跟随最新**; returning to records preserves your reading position. Copy, statistics, management and records share one scrolling content area per view.
+Records align time, level and message, with tools above their own bounded scroll area. Reading earlier entries disables **跟随最新**; reopening records preserves your reading position. Each task keeps its own body scroll position. The interface uses one local system font stack with 12px secondary text, 14px body/controls and 16px headings; it does not download fonts.
 
 ![Fictional records view](assets/panel-records.png)
 
@@ -16,7 +16,7 @@ Drag the header, resize from the panel edge, or minimize. **关闭** dismisses t
 
 ## Read-only statistics
 
-Open **统计**, choose current-space created folders or your own subscriptions, and click **加载列表（只读）**. Nothing is selected initially. Select only the folders to inspect, then start statistics from the bottom bar. Opening a task view does not start requests. This does not copy, create, delete or unsubscribe. Folder names, counts, IDs and owners share a desktop row and wrap on narrow screens. Changing scope clears old results and requires loading the new list.
+Open **统计**, choose current-space created folders or your own subscriptions, and click **加载列表（只读）**. Nothing is selected initially. Select only the folders to inspect, then start statistics from the bottom bar. Opening a task view does not start requests. This does not copy, create, delete or unsubscribe. Folder names, counts, IDs and owners share a desktop row and wrap on narrow screens. Changing scope or explicitly reloading clears old results, reports and selections. Failed or cancelled loading shows guidance to load again.
 
 The summary separates entries, unique video IDs, duplicate occurrences, unavailable markers and unknown identities. Duration is a subtotal of known durations for unique videos; missing values stay unknown. Each folder shows pages, loaded count, expected count and any incomplete reason. Only a completed selected-scope scan is labelled complete. Results are not an atomic snapshot or an account-wide total. Seasons are unsupported. Requests are sequential, paced at 400ms, bounded to 100 pages per folder and 10000 entries in a scan. Cancel stops current/future reads. Export requires a separate review/download action; nothing is uploaded.
 
@@ -24,7 +24,7 @@ The summary separates entries, unique video IDs, duplicate occurrences, unavaila
 
 ## Delete owned folders
 
-Open **管理**, use your own space and load created folders. The deletion list excludes the first/default entry, special playlists, unknown ownership and unavailable entries. Its checkboxes are independent of statistics. Select exact targets, preview names/IDs/owners/counts, read the consequences and tick the agreement before confirmation. Exact identity remains visible in the final review. Switching task views invalidates pending confirmation and clears management selections; copy name edits are preserved. Operation navigation is locked while work is running.
+Open **管理**, use your own space and load created folders. The deletion list excludes the first/default entry, special playlists, unknown ownership and unavailable entries. Its checkboxes are independent of statistics. Select exact targets, preview names/IDs/owners/counts, read the consequences and tick the agreement before confirmation. Exact identity remains visible in the final review. Switching tasks preserves each task's selection and copy edits, but invalidates pending destructive confirmation; returning to management requires a new preview and agreement. Clicking the already active tab keeps the confirmation. Operation navigation is locked while work is running. After a deletion or unsubscribe attempt, the catalog and statistics report are cleared and must be loaded again.
 
 Deletion removes a folder and its saved references; it does not delete uploaded videos. Back up anything needed first. No undo is provided. Each item is revalidated before submission; changed names, counts, ownership or protection stop the batch for a new preview. Items run sequentially. Cancel stops subsequent items, but an already submitted request may still complete.
 

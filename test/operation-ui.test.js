@@ -56,12 +56,12 @@ test('failed copy releases busy and preserves source/target; repeated clicks can
 
 test('reading earlier logs disables follow; filters/clear and export review work without downloading', t => {
   const { panel } = panelFixture(t);
-  panel.showView('logs');
-  Object.defineProperties(panel.content, { scrollHeight: { value: 1000 }, clientHeight: { value: 100 } });
-  panel.content.scrollTop = 50;
-  panel.content.dispatchEvent(new window.Event('scroll'));
+  panel.toggleLogs();
+  Object.defineProperties(panel.outputTextBox, { scrollHeight: { value: 1000 }, clientHeight: { value: 100 } });
+  panel.outputTextBox.scrollTop = 50;
+  panel.outputTextBox.dispatchEvent(new window.Event('scroll'));
   panel.appendLog('虚构错误', panel.errorCode);
-  assert.equal(panel.content.scrollTop, 50); assert.equal(panel.followCheckbox.checked, false);
+  assert.equal(panel.outputTextBox.scrollTop, 50); assert.equal(panel.followCheckbox.checked, false);
   panel.logFilter.value = 'error'; panel.renderLogs(); assert.equal(panel.outputTextBox.children.length, 1);
   panel.reviewExport(panel.logs.export(), 'test.json');
   assert.match(panel.exportReview.querySelector('textarea').value, /虚构错误/);
