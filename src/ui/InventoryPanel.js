@@ -2,34 +2,38 @@ import { element, button } from './elements.js';
 import { PageDetector } from '../core/PageDetector.js';
 import { MutationPanel } from './MutationPanel.js';
 import { folderRow } from './folderRow.js';
+import { SelectionToolbar } from './SelectionToolbar.js';
 
 export class InventoryPanel {
   constructor(panel, service) {
     this.panel = panel; this.service = service; this.folders = []; this.rows = [];
     this.mode = 'statistics';
     this.root = element('section', 'bf-inventory');
-    this.heading = element('h2', '', '查看收藏夹统计');
-    this.intro = element('p', 'bf-help', '只读取选中收藏夹，不修改收藏；缺失信息显示未知，取消或失败保留部分结果。合集暂不支持。');
-    this.root.append(this.heading, this.intro);
+    this.intro = element('p', 'bf-help', '只读统计所选范围，缺失信息记为未知。');
+    this.root.append(this.intro);
     this.kind = element('select'); this.kind.setAttribute('aria-label', '加载范围');
-    for (const [value, label] of [['created', '当前空间创建的收藏夹'], ['subscribed', '我的收藏夹订阅']]) {
+    for (const [value, label] of [['created', '当前空间创建'], ['subscribed', '我的订阅']]) {
       const option = element('option', '', label); option.value = value; this.kind.append(option);
     }
-    this.loadButton = button('加载列表（只读）', () => this.load());
+    this.loadButton = button('加载列表', () => this.load());
     this.scanButton = button('统计选中收藏夹', () => this.scan());
     this.cancelButton = button('停止后续操作', () => { this.controller?.abort(); this.updateBusy(); });
     this.exportButton = button('检查并导出统计', () => { if (this.report) panel.reviewExport(JSON.stringify(this.report, null, 2), 'bili-inventory.json'); });
     const tools = element('div', 'bf-tools bf-catalog-tools');
     const scopeLabel = element('label', 'bf-scope-label', '列表范围');
     scopeLabel.append(this.kind); tools.append(scopeLabel, this.loadButton);
-    this.selectionCount = element('p', 'bf-selection-count', '尚未选择收藏夹');
+    this.selectionTools = new SelectionToolbar({
+      rows: () => this.rows.map(row => ({ ...row, name: row.folder.name, eligible: row.folder.kind !== 'unsupported' })),
+      busy: () => panel.busy, change: () => this.updateBusy()
+    });
+    this.selectionCount = this.selectionTools.count;
     this.actions = element('div', 'bf-action-bar');
-    this.actions.append(this.selectionCount, this.exportButton, this.scanButton, this.cancelButton);
+    this.actions.append(this.exportButton, this.scanButton, this.cancelButton);
     this.scanButton.classList.add('bf-primary');
     this.list = element('div', 'bf-folder-list');
     this.list.append(element('p', 'bf-empty', '点击“加载列表”，读取当前选择的范围。不会自动扫描。'));
     this.result = element('div', 'bf-inventory-result'); this.result.setAttribute('role', 'status');
-    this.root.append(tools, this.list, this.result);
+    this.root.append(tools, this.selectionTools.root, this.list, this.result);
     if (panel.manager.batchOperations) {
       this.mutations = new MutationPanel(this, panel.manager.batchOperations);
       this.root.append(this.mutations.root);
@@ -58,9 +62,8 @@ export class InventoryPanel {
     }
     this.mode = mode;
     const manage = mode === 'manage';
-    this.heading.textContent = manage ? '管理我的收藏夹' : '查看收藏夹统计';
-    this.intro.textContent = '只读取选中收藏夹，不修改收藏；缺失信息显示未知，取消或失败保留部分结果。合集暂不支持。';
     this.intro.hidden = manage;
+    this.selectionTools.root.hidden = manage;
     this.list.hidden = manage; this.result.hidden = manage;
     if (this.mutations) this.mutations.root.hidden = !manage;
     this.updateBusy();
@@ -69,7 +72,7 @@ export class InventoryPanel {
   updateBusy() {
     const busy = this.panel.busy;
     this.kind.disabled = busy; this.loadButton.disabled = busy;
-    this.loadButton.textContent = busy ? '操作中…' : this.folders.length ? '重新加载列表' : '加载列表（只读）';
+    this.loadButton.textContent = busy ? '操作中…' : this.folders.length ? '重新加载' : '加载列表';
     this.scanButton.disabled = busy || !this.selected().length;
     this.cancelButton.disabled = !busy || !this.controller || this.controller.signal.aborted;
     this.exportButton.disabled = busy || !this.report;
@@ -78,8 +81,7 @@ export class InventoryPanel {
     this.exportButton.hidden = manage || !this.report || busy;
     this.cancelButton.hidden = !this.controller;
     if (this.mutations) this.mutations.previewButton.hidden = !manage || busy;
-    const selected = manage ? this.mutations?.selected().length || 0 : this.selected().length;
-    this.selectionCount.textContent = busy ? '操作中，请保持页面打开' : `已选 ${selected} 个收藏夹`;
+    this.selectionTools.update();
     for (const row of this.rows) row.input.disabled = busy || row.folder.kind === 'unsupported';
     this.mutations?.updateBusy();
   }
@@ -121,7 +123,8 @@ export class InventoryPanel {
       for (const folder of folders) {
         const input = element('input'); input.type = 'checkbox'; input.disabled = folder.kind === 'unsupported';
         input.addEventListener('change', () => this.updateBusy());
-        this.list.append(folderRow(folder, input, folder.kind === 'unsupported' ? '合集暂不支持' : '')); this.rows.push({ input, folder });
+        const node = folderRow(folder, input, folder.kind === 'unsupported' ? '合集暂不支持' : '');
+        this.list.append(node); this.rows.push({ input, folder, node });
       }
       if (!folders.length) this.list.append(element('p', 'bf-empty', '这个范围没有可读取的收藏夹。可以更换范围后重新加载。'));
       this.panel.operation.finish('completed', `列表读取完成：${folders.length} 项；尚未选择或扫描。`);

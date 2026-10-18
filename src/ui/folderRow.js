@@ -6,7 +6,10 @@ export function folderRow(folder, input, reason = '') {
   const label = element('label', 'bf-folder-row');
   label.append(input, element('span', 'bf-folder-name', folder.name),
     element('span', 'bf-folder-count', folder.count == null ? '数量未知' : `${folder.count} 条`));
-  row.append(label, element('span', 'bf-folder-identity', `ID ${folder.id} / 所有者 ${folder.ownerId || '未知'}`));
+  const identity = `ID ${folder.id} / 所有者 ${folder.ownerId || '未知'}`;
+  label.title = `${folder.name} · ${identity}`;
+  input.setAttribute('aria-label', `${folder.name} · ${identity}${reason ? ` · 不可选：${reason}` : ''}`);
+  row.append(label);
   if (reason) row.append(element('span', 'bf-folder-reason', `不可选：${reason}`));
   return row;
 }

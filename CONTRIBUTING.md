@@ -14,7 +14,7 @@ npm test
 
 `npm run dev` 监听源码变化并构建。油猴只能安装构建后的单文件 `dist/BilibiliFavsManage.user.js`，不能直接安装包含 ES 模块导入的 `src/main.js`。
 
-构建版本来自 `package.json`，发布时同步更新 `src/config/config.js` 的日志版本、锁文件和更新日志，再重新构建。构建不会自动发布至 Greasy Fork。
+每次可交付的产品迭代递增本地开发版本，例如 `2.2.0-dev.1` → `2.2.0-dev.2`，同步更新 `package.json`、锁文件和 `src/config/config.js`。构建使用配置中的运行时版本，并校验它与包版本相等；面板标题、控制台和 userscript 元数据显示相同版本。先构建再测试，因为测试会检查生成的脚本。发布时使用正式版本并更新日志；本地构建不会自动发布至 Greasy Fork。
 
 ## 发布与自动同步
 
@@ -36,7 +36,7 @@ README 是 GitHub 与 Greasy Fork 介绍的共同来源，安装、使用、联�
 
 后续发布：
 
-1. 更新版本号和更新日志，执行 `npm test` 与 `npm run build`。
+1. 更新版本号和更新日志，依次执行 `npm run build` 与 `npm test`。
 2. 将源码及 `dist/BilibiliFavsManage.user.js` 一起提交并推送到 `master`。
 3. 检查 GitHub Webhook 的 Recent Deliveries，以及 Greasy Fork 的同步状态和脚本版本。
 

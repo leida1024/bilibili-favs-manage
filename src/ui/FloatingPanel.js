@@ -7,6 +7,8 @@ import { normalizeCopyTasks } from '../utils/favoriteNames.js';
 import { panelStyles } from './panelStyles.js';
 import { element, button } from './elements.js';
 import { InventoryPanel } from './InventoryPanel.js';
+import { SelectionToolbar } from './SelectionToolbar.js';
+import { CONFIG } from '../config/config.js';
 export { element, button } from './elements.js';
 
 const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止', interrupted: '已中断' };
@@ -28,7 +30,7 @@ export class FloatingPanel {
     this.minH = 64;
     this.activeView = 'copy';
     this.viewScroll = new Map();
-    this.logsOpen = false;
+    this.logsOpen = true;
   }
 
   init() {
@@ -40,9 +42,11 @@ export class FloatingPanel {
     this.floatingPanel = root;
     this.header = element('header', 'bf-header');
     this.header.append(element('strong', '', '收藏夹管理'));
+    this.versionLabel = element('span', 'bf-version', `v${CONFIG.SCRIPT.VERSION}`);
+    this.header.append(this.versionLabel);
     this.logsButton = button('操作记录', () => this.toggleLogs(), 'bf-quiet');
-    this.logsButton.setAttribute('aria-label', '查看操作记录');
-    this.logsButton.setAttribute('aria-expanded', 'false');
+    this.logsButton.setAttribute('aria-expanded', 'true');
+    this.logsButton.setAttribute('aria-label', '收起操作记录');
     this.minimizeButton = button('最小化', () => this.toggleMinimize());
     this.dismissButton = button('关闭', () => { this.onDismiss?.(); this.destroy(); });
     this.header.append(this.logsButton, this.minimizeButton, this.dismissButton);
@@ -58,19 +62,25 @@ export class FloatingPanel {
     this.scope = element('p', 'bf-muted');
     this.workspace = element('section', 'bf-workspace');
     const heading = element('div', 'bf-task-heading');
-    heading.append(element('h2', '', '复制到我的收藏夹'), this.scope);
-    const help = element('p', 'bf-help', '勾选来源并编辑目标名。同名则复用，否则新建；仅去掉首尾空白，保留来源。跨空间复制请保持页面打开。');
-    this.workspace.append(heading, help);
+    heading.append(this.scope);
+    const help = element('p', 'bf-help', '同名则复用，否则新建；来源保留。');
+    heading.append(help);
+    this.workspace.append(heading);
     this.leftPanel = element('section', 'bf-sources');
-    this.selectAllButton = button('全选', () => this.toggleSelectAll());
+    this.selectionTools = new SelectionToolbar({
+      rows: () => this.favCheckboxItemList.map(item => ({ input: item.checkbox, node: item.checkboxContainer, name: item.getLabelValue(), eligible: true })),
+      busy: () => this.busy, change: () => this.updateSelectionReview()
+    });
+    this.selectionTools.search.addEventListener('input', () => this.updateSelectionReview());
+    this.selectAllButton = this.selectionTools.allButton;
     const columns = element('div', 'bf-copy-columns');
     this.sourceColumn = element('span', '', '来源收藏夹');
-    columns.append(this.selectAllButton, this.sourceColumn, element('span', 'bf-direction', ''), element('span', '', '目标收藏夹（我的）'));
-    this.leftPanel.append(columns, this.createFavPanel());
-    this.selectionReview = element('p', 'bf-selection-count');
+    columns.append(element('span'), this.sourceColumn, element('span', 'bf-direction', ''), element('span', '', '目标（我的收藏夹）'));
+    this.leftPanel.append(this.selectionTools.root, columns, this.createFavPanel());
+    this.selectionReview = this.selectionTools.count;
     this.startBatchTransferButton = button('开始批量复制', () => this.startBatchTransfer(), 'bf-primary');
     this.copyActions = element('div', 'bf-action-bar');
-    this.copyActions.append(this.selectionReview, this.startBatchTransferButton);
+    this.copyActions.append(this.startBatchTransferButton);
     this.workspace.append(this.leftPanel);
     this.content.append(this.workspace);
     this.statusBox = element('section', 'bf-status');
@@ -92,8 +102,11 @@ export class FloatingPanel {
     this.statusBox.append(this.progressDetails);
     this.footer.append(this.statusBox, this.copyActions);
     if (this.inventoryPanel) this.footer.append(this.inventoryPanel.actions);
-    root.append(style, this.header, this.navigation, this.content, this.footer, this.diagnostics);
+    this.body = element('div', 'bf-body');
+    this.body.append(this.content, this.footer, this.diagnostics);
+    root.append(style, this.header, this.navigation, this.body);
     document.body.append(root);
+    root.dataset.logsOpen = String(this.logsOpen);
     this.unsubscribe = this.operation.subscribe(state => this.renderOperation(state));
     this.onBodyMove = event => {
       EventHandlers.mouseMove(this, event);
@@ -108,7 +121,7 @@ export class FloatingPanel {
     this.clampToViewport();
     this.updateSelectionReview();
     this.showPageTypeIndicator();
-    this.appendLog('面板已就绪。诊断记录仅保存在当前页面，最多 500 条。');
+    this.appendLog('准备就绪。请选择收藏夹。');
     this.renderView();
   }
 
@@ -140,6 +153,7 @@ export class FloatingPanel {
     // Opening diagnostics from a minimized window restores the working context.
     if (this.logsOpen && this.minimized) this.toggleMinimize();
     this.diagnostics.hidden = !this.logsOpen;
+    this.floatingPanel.dataset.logsOpen = String(this.logsOpen);
     this.logsButton.setAttribute('aria-expanded', String(this.logsOpen));
     this.logsButton.setAttribute('aria-label', this.logsOpen ? '收起操作记录' : '查看操作记录');
     if (this.logsOpen) this.renderLogs();
@@ -149,7 +163,7 @@ export class FloatingPanel {
   showPageTypeIndicator() {
     const pageUID = PageDetector.getCurrentPageUID();
     const loginUID = PageDetector.getLoginUserUID();
-    this.scope.textContent = !pageUID ? '虚构预览 · 不连接账号' :
+    this.scope.textContent = !pageUID ? '当前空间 → 我的收藏夹' :
       `${pageUID === loginUID ? '我的空间' : '当前空间'} → ${loginUID ? '我的空间' : '请先登录'}`;
     this.sourceColumn.textContent = pageUID && pageUID === loginUID ? '来源（我的空间）' : '来源（当前空间）';
   }
@@ -180,9 +194,7 @@ export class FloatingPanel {
   }
 
   toggleSelectAll() {
-    const checked = !this.favCheckboxItemList.every(item => item.checkbox.checked);
-    this.favCheckboxItemList.forEach(item => { item.checkbox.checked = checked; });
-    this.updateSelectionReview();
+    this.selectionTools.toggle();
   }
 
   getSelectedTasks() {
@@ -192,14 +204,12 @@ export class FloatingPanel {
   updateSelectionReview() {
     const tasks = this.getSelectedTasks();
     const missing = tasks.some(task => !task.target.trim());
-    this.selectionReview.textContent = missing ? '请填好已选来源的目标名称' : `已选 ${tasks.length} / ${this.favorites.length} 个收藏夹`;
+    this.selectionTools.update();
+    if (missing) this.selectionReview.textContent = '请填好已选来源的目标名称';
     for (const item of this.favCheckboxItemList) {
       item.checkboxContainer.dataset.selected = String(item.checkbox.checked);
       item.inputText.setAttribute('aria-invalid', String(item.checkbox.checked && !item.inputText.value.trim()));
     }
-    this.selectAllButton.textContent = tasks.length && tasks.length === this.favorites.length ? '清除' : '全选';
-    this.selectAllButton.setAttribute('aria-label', tasks.length && tasks.length === this.favorites.length ? '取消全选来源' : '全选来源收藏夹');
-    this.selectAllButton.disabled = this.busy || !this.favorites.length;
     this.startBatchTransferButton.textContent = this.busy ? '操作中…' : tasks.length ? `复制 ${tasks.length} 个收藏夹` : '开始复制';
     this.startBatchTransferButton.disabled = this.busy || !tasks.length || missing;
   }
@@ -251,7 +261,7 @@ export class FloatingPanel {
   createDiagnostics() {
     const details = element('section', 'bf-diagnostics');
     this.diagnostics = details;
-    details.hidden = true;
+    details.hidden = !this.logsOpen;
     details.id = 'bili-favs-records';
     details.setAttribute('aria-label', '操作记录');
     this.logsButton.setAttribute('aria-controls', details.id);
@@ -270,7 +280,9 @@ export class FloatingPanel {
     this.followCheckbox = element('input'); this.followCheckbox.type = 'checkbox'; this.followCheckbox.checked = true;
     const followLabel = element('label', '', '跟随最新'); followLabel.prepend(this.followCheckbox);
     this.followCheckbox.addEventListener('change', () => { this.scrollTopEnabled = this.followCheckbox.checked; this.renderLogs(); });
-    tools.append(this.logFilter, followLabel, button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('检查并导出', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')), button('收起记录', () => this.toggleLogs()));
+    tools.append(this.logFilter, followLabel);
+    const actions = element('div', 'bf-log-actions');
+    actions.append(button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('导出记录', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')));
     this.outputTextBox = element('div', 'output-text-box');
     this.outputTextBox.tabIndex = 0;
     this.outputTextBox.setAttribute('role', 'region');
@@ -282,7 +294,7 @@ export class FloatingPanel {
       this.logScrollTop = this.outputTextBox.scrollTop;
     });
     recordTools.append(tools);
-    details.append(recordTools, this.outputTextBox);
+    details.append(recordTools, this.outputTextBox, actions);
   }
 
   appendLog(message, type = this.normalCode) {
@@ -335,6 +347,7 @@ export class FloatingPanel {
 
   toggleMinimize() {
     this.minimized = !this.minimized;
+    this.floatingPanel.dataset.minimized = String(this.minimized);
     this.content.hidden = this.minimized;
     this.navigation.hidden = this.minimized; this.footer.hidden = this.minimized;
     this.diagnostics.hidden = this.minimized || !this.logsOpen;

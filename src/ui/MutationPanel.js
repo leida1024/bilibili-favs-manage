@@ -1,14 +1,15 @@
 import { element, button } from './elements.js';
 import { eligibility } from '../core/BatchOperations.js';
 import { folderRow } from './folderRow.js';
+import { SelectionToolbar } from './SelectionToolbar.js';
 
 const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
 const descriptions = {
   delete: { verb: '删除', title: '删除自己创建的收藏夹',
-    detail: '加载列表后勾选目标。默认/特殊收藏夹不可选。删除会移除收藏夹及收藏关系，无法撤销；原视频不受影响，请先备份。',
+    detail: '删除收藏夹及收藏关系，无法撤销；原视频保留。',
     agreement: '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。' },
   unsubscribe: { verb: '退订', title: '取消我的收藏夹订阅',
-    detail: '只取消当前账号的收藏夹订阅，原作者内容不受影响。合集、所有者未知或不可用的条目不可选。',
+    detail: '取消我的订阅，原作者内容不受影响。',
     agreement: '我已检查以上 ID 和所有者，确认取消当前账号对这些收藏夹的订阅；原作者的内容不受影响。' }
 };
 
@@ -16,14 +17,19 @@ export class MutationPanel {
   constructor(inventoryUI, engine) {
     this.inventoryUI = inventoryUI; this.panel = inventoryUI.panel; this.engine = engine; this.rows = []; this.action = 'delete';
     this.root = element('section', 'bf-mutations');
-    this.heading = element('h3', '', descriptions.delete.title);
+    this.heading = element('h2', 'bf-sr-only', descriptions.delete.title);
     this.explanation = element('p', 'bf-muted', descriptions.delete.detail);
     this.root.append(this.heading, this.explanation);
     this.list = element('div', 'bf-folder-list');
     this.previewButton = button('预览删除目标', () => this.preview());
     this.review = element('section', 'bf-mutation-review');
     this.results = element('div'); this.results.setAttribute('role', 'status');
-    this.root.append(this.list, this.previewButton, this.review, this.results);
+    this.selectionTools = new SelectionToolbar({
+      rows: () => this.rows.map(row => ({ ...row, name: row.folder.name, eligible: !row.reason })),
+      busy: () => this.panel.busy,
+      change: () => { this.invalidate(); this.inventoryUI.updateBusy(); }
+    });
+    this.root.append(this.selectionTools.root, this.list, this.previewButton, this.review, this.results);
     this.updateBusy();
   }
 
@@ -44,7 +50,8 @@ export class MutationPanel {
       const reason = eligibility(this.action, folder, actor, pageOwner);
       const input = element('input'); input.type = 'checkbox';
       input.addEventListener('change', () => { this.invalidate(); this.inventoryUI.updateBusy(); });
-      this.list.append(folderRow(folder, input, reason)); this.rows.push({ folder, input, reason });
+      const node = folderRow(folder, input, reason);
+      this.list.append(node); this.rows.push({ folder, input, reason, node });
     }
     this.updateBusy();
   }
@@ -53,6 +60,7 @@ export class MutationPanel {
 
   updateBusy() {
     const busy = this.panel.busy;
+    this.selectionTools?.update();
     this.previewButton.disabled = busy || !this.selected().length;
     this.previewButton.hidden = this.inventoryUI.mode !== 'manage' || busy || !!this.ticket;
     for (const row of this.rows) row.input.disabled = busy || !!row.reason;
@@ -67,6 +75,7 @@ export class MutationPanel {
       const description = descriptions[this.action];
       this.ticket = this.engine.prepare(this.action, this.selected());
       this.review.append(element('h3', '', `将${description.verb} ${this.ticket.targets.length} 个收藏夹`));
+      this.review.append(element('p', '', description.detail));
       for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ID ${target.id} · 所有者 ${target.ownerId} · ${target.count ?? '未知'} 条`));
       this.agreement = element('input'); this.agreement.type = 'checkbox';
       const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', description.agreement));
