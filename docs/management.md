@@ -1,14 +1,16 @@
 # Local management build
 
-These capabilities are in the local development build. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
+These capabilities are in local development build **2.2.0-dev.1**, visible in the panel title. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
 
 ## Copy and diagnostics
 
-The panel opens on **复制收藏夹** in a compact window whose height follows the content up to a limit. Select sources on the left and edit each destination name alongside it on the right. Destinations belong to your own space: existing normalized-name folders are reused and missing folders are created. Copy preserves the source. The fixed bottom bar shows the selection and starts the copy; a selected empty destination must be filled first. Naming, cross-page guidance and progress details are displayed directly, with no expand/collapse controls.
+The panel opens on **复制收藏夹** in a 640×600 desktop window bounded by the viewport. Select sources and edit each destination alongside it. Destinations belong to your own space: existing normalized-name folders are reused and missing folders are created. Copy preserves the source. The fixed bottom bar starts copying; a selected empty destination must be filled first. Keep the page open during cross-space navigation.
 
-Progress and the last confirmed step remain in the fixed bottom bar, including on failure. Check the destination before submitting again. Open **操作记录** in the header to show the secondary records area below the task. It includes operation starts and outcomes, filtering, clearing and reviewed export. Opening or closing records keeps the current task, selections, edits and pending confirmation, including while busy. Export opens an editable review overlay: download explicitly or press Escape to return. Exported names and IDs may identify collections; edit before sharing.
+All three tasks share **搜索收藏夹**, **全选 / 取消全选**, and a selected/total count. Bulk selection affects only matching, eligible rows. Filtering preserves edits and selected items; a warning identifies selected items outside the filter, which are still included when executing. Clear the search to review them. Each task keeps independent selections. Search and selection are disabled during work.
 
-Records align time, level and message, with tools above their own bounded scroll area. Reading earlier entries disables **跟随最新**; reopening records preserves your reading position. Each task keeps its own body scroll position. The interface uses one local system font stack with 12px secondary text, 14px body/controls and 16px headings; it does not download fonts.
+Progress and the last confirmed step remain in the fixed bottom bar, including on failure. Check the destination before submitting again. **操作记录** is visible beside the task by default; at panel widths below 580px it moves below the task. The header button hides or restores it. Records include operation starts and outcomes, filtering, clearing and reviewed export. Opening or closing records keeps the current task, selections, edits and pending confirmation, including while busy. Export opens an editable review overlay: download explicitly or press Escape to return. Exported names and IDs may identify collections; edit before sharing.
+
+Records align time and level above each message, with their own scroll area. Reading earlier entries disables **跟随最新**; reopening records preserves your reading position. Each task keeps its own body scroll position. The interface uses one local system font stack with 12px secondary text, 14px body/controls and 15px headings; it does not download fonts.
 
 ![Fictional records view](assets/panel-records.png)
 
@@ -16,7 +18,7 @@ Drag the header, resize from the panel edge, or minimize. **关闭** dismisses t
 
 ## Read-only statistics
 
-Open **统计**, choose current-space created folders or your own subscriptions, and click **加载列表（只读）**. Nothing is selected initially. Select only the folders to inspect, then start statistics from the bottom bar. Opening a task view does not start requests. This does not copy, create, delete or unsubscribe. Folder names, counts, IDs and owners share a desktop row and wrap on narrow screens. Changing scope or explicitly reloading clears old results, reports and selections. Failed or cancelled loading shows guidance to load again.
+Open **统计**, choose current-space created folders or your own subscriptions, and click **加载列表**. Nothing is selected initially. Select only the folders to inspect, then start statistics from the bottom bar. Opening a task view does not start requests. This does not copy, create, delete or unsubscribe. List rows prioritize names and counts; hover a name for exact IDs/owners, also included in each checkbox's accessible name. Changing scope or explicitly reloading clears old results, reports and selections. Failed or cancelled loading shows guidance to load again.
 
 The summary separates entries, unique video IDs, duplicate occurrences, unavailable markers and unknown identities. Duration is a subtotal of known durations for unique videos; missing values stay unknown. Each folder shows pages, loaded count, expected count and any incomplete reason. Only a completed selected-scope scan is labelled complete. Results are not an atomic snapshot or an account-wide total. Seasons are unsupported. Requests are sequential, paced at 400ms, bounded to 100 pages per folder and 10000 entries in a scan. Cancel stops current/future reads. Export requires a separate review/download action; nothing is uploaded.
 
@@ -30,7 +32,7 @@ Deletion removes a folder and its saved references; it does not delete uploaded 
 
 ## Unsubscribe
 
-Load **我的收藏夹订阅** in **管理**. The management section switches to subscription cancellation. Only available folder subscriptions with known other owners are eligible; seasons and unknown owners are excluded. Review and explicitly confirm exact IDs and owners. This cancels your subscription and does not edit the original owner's folder contents.
+Load **我的订阅** in **管理**. The management section switches to subscription cancellation. Only available folder subscriptions with known other owners are eligible; seasons and unknown owners are excluded. Review and explicitly confirm exact IDs and owners. This cancels your subscription and does not edit the original owner's folder contents.
 
 ## Outcomes and limits
 

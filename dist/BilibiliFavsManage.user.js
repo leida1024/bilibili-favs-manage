@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.1.2
+// @version      2.2.0-dev.1
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       leida1024
 // @match        https://space.bilibili.com/*
@@ -195,7 +195,7 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.1.2',
+      VERSION: '2.2.0-dev.1',
       NAME: 'BiliBili 收藏夹批量管理',
       DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
     }
@@ -2014,14 +2014,21 @@
   const panelStyles = `
 .bili-favs-manage-panel {
  --bf-font:system-ui,-apple-system,"Segoe UI","Microsoft YaHei UI","PingFang SC","Noto Sans CJK SC",sans-serif;
- --bf-text:14px; --bf-small:12px; --bf-title:16px;
+ --bf-text:14px; --bf-small:12px; --bf-title:15px;
  --bf-ink:#243544; --bf-muted:#526575; --bf-blue:#00789b; --bf-hover:#006581;
- --bf-line:#dce4eb; --bf-control:#8295a5; --bf-surface:#fff; --bf-soft:#f5f8fa; --bf-selected:#edf7fb;
+ --bf-line:#dce4eb; --bf-control:#8295a5; --bf-surface:#fff; --bf-soft:#f5f7f9; --bf-selected:#edf7fb;
  --bf-danger:#a8382b; --bf-danger-soft:#fff5f2; --bf-success:#236846; --bf-warning:#795200;
- box-sizing:border-box; position:fixed; top:36px; left:36px; width:680px; height:auto; max-width:calc(100vw - 16px); max-height:min(700px,calc(100dvh - 16px)); min-width:280px; min-height:64px;
- z-index:99999; background:var(--bf-surface); color:var(--bf-ink); border:1px solid var(--bf-line); border-radius:12px; box-shadow:0 12px 42px #20334424;
- font:400 var(--bf-text)/1.5 var(--bf-font); overflow:hidden; resize:both; display:flex; flex-direction:column; text-align:left; container-type:inline-size; isolation:isolate; color-scheme:light;
+ box-sizing:border-box; position:fixed; top:24px; left:24px; width:640px; height:600px;
+ max-width:calc(100vw - 16px); max-height:calc(100dvh - 16px); min-width:280px; min-height:64px;
+ z-index:99999; background:var(--bf-surface); color:var(--bf-ink); border:1px solid var(--bf-control); border-radius:6px;
+ box-shadow:0 4px 20px #20334424; font:400 var(--bf-text)/1.5 var(--bf-font); overflow:hidden; resize:both;
+ display:flex; flex-direction:column;
+ text-align:left; container-type:inline-size; isolation:isolate; color-scheme:light;
 }
+.bili-favs-manage-panel .bf-body { display:grid; grid-template-columns:minmax(0,1fr) 220px; grid-template-rows:minmax(0,1fr) auto; flex:1; min-height:0; }
+.bili-favs-manage-panel[data-logs-open=false] .bf-body { grid-template-columns:minmax(0,1fr); }
+.bili-favs-manage-panel[data-minimized=true] { display:block; resize:none; }
+.bili-favs-manage-panel[data-minimized=true] .bf-body { display:none; }
 .bili-favs-manage-panel * { box-sizing:border-box; font-family:inherit; letter-spacing:normal; }
 .bili-favs-manage-panel [hidden] { display:none !important; }
 .bili-favs-manage-panel h2,.bili-favs-manage-panel h3 { color:var(--bf-ink); font:600 var(--bf-title)/1.5 var(--bf-font); margin:0 0 8px; }
@@ -2029,101 +2036,116 @@
 .bili-favs-manage-panel p { margin:4px 0; overflow-wrap:anywhere; }
 .bili-favs-manage-panel label { color:inherit; font:inherit; }
 .bili-favs-manage-panel button,.bili-favs-manage-panel select,.bili-favs-manage-panel input,.bili-favs-manage-panel textarea { font:inherit; color:var(--bf-ink); }
-.bili-favs-manage-panel button,.bili-favs-manage-panel select { width:auto; min-height:36px; margin:0; padding:7px 12px; border:1px solid var(--bf-control); border-radius:6px; background:var(--bf-surface); cursor:pointer; line-height:1.4; transition:background-color 140ms ease,border-color 140ms ease; }
+.bili-favs-manage-panel button,.bili-favs-manage-panel select { width:auto; min-height:30px; margin:0; padding:4px 8px; border:1px solid var(--bf-control); border-radius:4px; background:var(--bf-surface); cursor:pointer; line-height:1.4; transition:background-color 120ms ease,border-color 120ms ease; }
 .bili-favs-manage-panel button:hover:not(:disabled) { border-color:var(--bf-blue); background:var(--bf-selected); }
 .bili-favs-manage-panel button:active:not(:disabled) { background:var(--bf-line); }
 .bili-favs-manage-panel button:disabled { opacity:.5; cursor:default; }
-.bili-favs-manage-panel :focus-visible { outline:3px solid var(--bf-blue); outline-offset:2px; }
-.bili-favs-manage-panel .bf-header { display:flex; align-items:center; gap:4px; padding:10px 16px; background:var(--bf-soft); cursor:move; flex-shrink:0; }
-.bili-favs-manage-panel .bf-header strong { flex:1; min-width:0; font-size:var(--bf-title); }
-.bili-favs-manage-panel .bf-header button { font-size:var(--bf-small); min-height:32px; padding:6px 8px; border-color:transparent; background:transparent; }
-.bili-favs-manage-panel .bf-header button[aria-expanded=true] { color:var(--bf-blue); background:var(--bf-selected); border-color:var(--bf-control); }
-.bili-favs-manage-panel .bf-navigation { display:flex; gap:24px; padding:0 16px; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
-.bili-favs-manage-panel .bf-navigation button { border:0; border-bottom:3px solid transparent; border-radius:0; padding:10px 0 8px; background:none; color:var(--bf-muted); }
+.bili-favs-manage-panel :focus-visible { outline:3px solid var(--bf-blue); outline-offset:1px; }
+.bili-favs-manage-panel .bf-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
+.bili-favs-manage-panel .bf-header { display:flex; align-items:center; gap:4px; min-width:0; padding:8px 12px; cursor:move; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
+.bili-favs-manage-panel .bf-header strong { min-width:0; font-size:var(--bf-title); }
+.bili-favs-manage-panel .bf-version { margin-right:auto; font-size:var(--bf-small); color:var(--bf-muted); }
+.bili-favs-manage-panel .bf-header button { font-size:var(--bf-small); min-height:28px; padding:4px 6px; border-color:transparent; background:transparent; flex-shrink:0; }
+.bili-favs-manage-panel .bf-header button[aria-expanded=true] { color:var(--bf-blue); background:var(--bf-selected); }
+.bili-favs-manage-panel .bf-navigation { display:flex; gap:24px; padding:0 12px; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
+.bili-favs-manage-panel .bf-navigation button { border:0; border-bottom:2px solid transparent; border-radius:0; padding:8px 0 6px; background:none; color:var(--bf-muted); }
 .bili-favs-manage-panel .bf-navigation button[aria-pressed=true] { color:var(--bf-blue); font-weight:600; border-bottom-color:var(--bf-blue); }
-.bili-favs-manage-panel .bf-content { overflow-y:auto; overflow-x:hidden; padding:16px; min-height:80px; flex:0 1 auto; scrollbar-width:thin; scrollbar-color:var(--bf-control) transparent; scroll-padding:12px; }
+.bili-favs-manage-panel .bf-content { grid-column:1; grid-row:1; overflow-y:auto; overflow-x:hidden; padding:8px 12px; min-height:0; scrollbar-width:thin; scrollbar-color:var(--bf-control) transparent; scroll-padding:8px; }
 .bili-favs-manage-panel .bf-muted,.bili-favs-manage-panel .bf-help { color:var(--bf-muted); font-size:var(--bf-small); }
-.bili-favs-manage-panel .bf-task-heading { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:0 12px; }
-.bili-favs-manage-panel .bf-task-heading h2 { margin:0; }
-.bili-favs-manage-panel .bf-task-heading p { margin:0; }
-.bili-favs-manage-panel .bf-help { margin:4px 0 8px; }
-.bili-favs-manage-panel .bf-copy-columns,.bili-favs-manage-panel .signal-panel { display:grid; grid-template-columns:40px minmax(0,1fr) 24px minmax(0,1fr); align-items:center; gap:8px; }
+.bili-favs-manage-panel .bf-task-heading p { margin:0; font-size:var(--bf-small); color:var(--bf-muted); }
+.bili-favs-manage-panel .bf-task-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:0 8px; margin-bottom:6px; }
+.bili-favs-manage-panel .bf-help { margin:2px 0 8px; }
+.bili-favs-manage-panel .bf-selection-tools { display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px; padding:0 0 6px; }
+.bili-favs-manage-panel .bf-search { flex:1; min-width:100px; }
+.bili-favs-manage-panel input[type=search] { display:block; width:100%; min-width:0; min-height:30px; padding:4px 6px; border:1px solid var(--bf-control); border-radius:4px; background:var(--bf-surface); }
+.bili-favs-manage-panel input::placeholder { color:var(--bf-muted); opacity:1; }
+.bili-favs-manage-panel .bf-selection-tools button { font-size:var(--bf-small); }
+.bili-favs-manage-panel .bf-selection-count { color:var(--bf-muted); font-size:var(--bf-small); font-variant-numeric:tabular-nums; }
+.bili-favs-manage-panel .bf-filter-notice { flex-basis:100%; font-size:var(--bf-small); color:var(--bf-warning); }
+.bili-favs-manage-panel .bf-copy-columns,.bili-favs-manage-panel .signal-panel { display:grid; grid-template-columns:20px minmax(0,1fr) 12px minmax(0,1fr); align-items:center; gap:6px; }
 .bili-favs-manage-panel .bf-copy-columns { padding:4px 0; font-size:var(--bf-small); color:var(--bf-muted); border-bottom:1px solid var(--bf-control); }
-.bili-favs-manage-panel .bf-copy-columns button { padding:6px 0; min-height:32px; font-size:var(--bf-small); border-color:transparent; color:var(--bf-blue); }
 .bili-favs-manage-panel .fav-panel { margin:0; }
-.bili-favs-manage-panel .signal-panel { padding:6px 0; border-bottom:1px solid var(--bf-line); }
-.bili-favs-manage-panel .fav-panel>[data-selected=true] { background:var(--bf-selected); }
+.bili-favs-manage-panel .signal-panel { padding:3px 0; border-bottom:1px solid var(--bf-line); }
+.bili-favs-manage-panel [data-selected=true] { background:var(--bf-selected); }
 .bili-favs-manage-panel .signal-panel label { overflow-wrap:anywhere; min-width:0; cursor:pointer; }
 .bili-favs-manage-panel .bf-direction { text-align:center; color:var(--bf-muted); }
-.bili-favs-manage-panel input[type=text] { width:100%; min-width:0; min-height:36px; padding:6px 8px; border:1px solid var(--bf-control); border-radius:6px; background:var(--bf-surface); }
+.bili-favs-manage-panel input[type=text] { width:100%; min-width:0; min-height:30px; padding:4px 6px; border:1px solid var(--bf-control); border-radius:4px; background:var(--bf-surface); }
 .bili-favs-manage-panel input[aria-invalid=true] { border-color:var(--bf-danger); }
-.bili-favs-manage-panel input[type=checkbox] { accent-color:var(--bf-blue); width:17px; height:17px; margin:2px 0; flex-shrink:0; cursor:pointer; }
+.bili-favs-manage-panel input[type=checkbox] { accent-color:var(--bf-blue); width:17px; height:17px; margin:3px 0; flex-shrink:0; cursor:pointer; }
 .bili-favs-manage-panel .signal-panel input[type=checkbox] { justify-self:center; }
-.bili-favs-manage-panel .bf-footer { border-top:1px solid var(--bf-line); background:var(--bf-surface); padding:12px 16px; flex-shrink:0; max-height:45%; overflow:auto; }
-.bili-favs-manage-panel .bf-action-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.bili-favs-manage-panel .bf-selection-count { flex:1; color:var(--bf-muted); min-width:90px; font-size:var(--bf-small); font-variant-numeric:tabular-nums; }
+.bili-favs-manage-panel .bf-footer { grid-column:1; grid-row:2; border-top:1px solid var(--bf-line); background:var(--bf-surface); padding:8px 12px; max-height:35dvh; overflow:auto; }
+.bili-favs-manage-panel .bf-action-bar { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
 .bili-favs-manage-panel .bf-primary { background:var(--bf-blue); border-color:var(--bf-blue); color:var(--bf-surface); font-weight:600; }
 .bili-favs-manage-panel .bf-primary:hover:not(:disabled) { background:var(--bf-hover); color:var(--bf-surface); }
 .bili-favs-manage-panel .bf-danger { background:var(--bf-danger); border-color:var(--bf-danger); color:var(--bf-surface); }
 .bili-favs-manage-panel .bf-danger:hover:not(:disabled) { color:var(--bf-danger); border-color:var(--bf-danger); background:var(--bf-danger-soft); }
-.bili-favs-manage-panel .bf-status { display:flex; align-items:center; flex-wrap:wrap; gap:2px 12px; padding:0 0 6px; margin-bottom:6px; border-bottom:1px solid var(--bf-line); font-size:var(--bf-small); }
+.bili-favs-manage-panel .bf-status { display:flex; align-items:center; flex-wrap:wrap; gap:2px 8px; padding:0 0 4px; margin-bottom:4px; font-size:var(--bf-small); }
 .bili-favs-manage-panel .bf-status>span { color:var(--bf-muted); font-variant-numeric:tabular-nums; }
 .bili-favs-manage-panel .bf-status[data-status=failed] strong,.bili-favs-manage-panel .bf-status[data-status=interrupted] strong { color:var(--bf-danger); }
 .bili-favs-manage-panel .bf-status[data-status=completed] strong { color:var(--bf-success); }
 .bili-favs-manage-panel .bf-progress-detail { width:100%; color:var(--bf-muted); }
 .bili-favs-manage-panel .bf-progress-detail p { display:inline; margin:0; }
 .bili-favs-manage-panel .bf-progress-detail p+p::before { content:' · '; }
-.bili-favs-manage-panel .bf-tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.bili-favs-manage-panel .bf-tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:8px 0; }
 .bili-favs-manage-panel .bf-tools select { min-width:0; max-width:100%; }
-.bili-favs-manage-panel .bf-tools label { display:flex; align-items:center; gap:8px; }
-.bili-favs-manage-panel .bf-catalog-tools { background:var(--bf-soft); border:1px solid var(--bf-line); padding:8px; border-radius:6px; }
-.bili-favs-manage-panel .bf-scope-label { flex:1; flex-wrap:wrap; font-size:var(--bf-small); color:var(--bf-muted); }
-.bili-favs-manage-panel .bf-scope-label select { flex:1; font-size:var(--bf-text); }
-.bili-favs-manage-panel .bf-empty { padding:24px 12px; text-align:center; color:var(--bf-muted); line-height:1.8; }
-.bili-favs-manage-panel .bf-folder-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:4px 12px; border-bottom:1px solid var(--bf-line); padding:8px 0; }
+.bili-favs-manage-panel .bf-tools label { display:flex; align-items:center; gap:4px; }
+.bili-favs-manage-panel .bf-catalog-tools { margin:0 0 8px; }
+.bili-favs-manage-panel .bf-scope-label { flex:1; min-width:0; font-size:var(--bf-small); color:var(--bf-muted); }
+.bili-favs-manage-panel .bf-scope-label select { flex:1; }
+.bili-favs-manage-panel .bf-empty { padding:20px 8px; text-align:center; color:var(--bf-muted); line-height:1.8; }
+.bili-favs-manage-panel .bf-folder-item { border-bottom:1px solid var(--bf-line); padding:6px 0; }
 .bili-favs-manage-panel .bf-folder-row { display:flex; align-items:flex-start; gap:8px; overflow-wrap:anywhere; min-width:0; }
-.bili-favs-manage-panel .bf-folder-item>.bf-folder-row { display:grid; grid-template-columns:20px minmax(0,1fr) max-content; align-items:center; }
+.bili-favs-manage-panel .bf-folder-item>.bf-folder-row { display:grid; grid-template-columns:20px minmax(0,1fr) max-content; align-items:center; cursor:pointer; min-height:24px; }
 .bili-favs-manage-panel .bf-folder-name { min-width:0; overflow-wrap:anywhere; }
 .bili-favs-manage-panel .bf-folder-count { font-size:var(--bf-small); color:var(--bf-muted); text-align:right; font-variant-numeric:tabular-nums; }
-.bili-favs-manage-panel .bf-folder-identity { font-size:var(--bf-small); color:var(--bf-muted); overflow-wrap:anywhere; }
-.bili-favs-manage-panel .bf-folder-reason { grid-column:1/-1; margin-left:28px; font-size:var(--bf-small); color:var(--bf-warning); }
-.bili-favs-manage-panel .bf-inventory-result:not(:empty) { margin-top:16px; padding:12px 0; border-top:1px solid var(--bf-line); }
-.bili-favs-manage-panel .bf-mutation-review:not(:empty) { border-left:3px solid var(--bf-danger); padding:12px; margin:16px 0; background:var(--bf-danger-soft); }
-.bili-favs-manage-panel .bf-diagnostics { border-top:1px solid var(--bf-line); background:var(--bf-soft); padding:8px 16px; display:flex; flex-direction:column; min-height:0; flex:0 0 auto; }
-.bili-favs-manage-panel .bf-log-heading { display:flex; align-items:baseline; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.bili-favs-manage-panel .bf-folder-reason { display:block; margin-left:28px; font-size:var(--bf-small); color:var(--bf-warning); overflow-wrap:anywhere; }
+.bili-favs-manage-panel .bf-inventory-result:not(:empty) { margin-top:12px; padding:8px 0; border-top:1px solid var(--bf-line); }
+.bili-favs-manage-panel .bf-mutation-review:not(:empty) { border-left:3px solid var(--bf-danger); padding:8px; margin:12px 0; background:var(--bf-danger-soft); }
+.bili-favs-manage-panel .bf-diagnostics { grid-column:2; grid-row:1/3; border-left:1px solid var(--bf-line); background:var(--bf-soft); padding:8px; display:flex; flex-direction:column; min-height:0; min-width:0; }
+.bili-favs-manage-panel .bf-log-heading { display:flex; align-items:baseline; justify-content:space-between; gap:4px; flex-wrap:wrap; }
 .bili-favs-manage-panel .bf-log-heading h2 { font-size:var(--bf-text); margin:0; }
-.bili-favs-manage-panel .bf-record-tools { flex-shrink:0; }
-.bili-favs-manage-panel .bf-diagnostics .bf-tools { margin:4px 0 8px; gap:4px 8px; font-size:var(--bf-small); }
-.bili-favs-manage-panel .bf-diagnostics .bf-tools button,.bili-favs-manage-panel .bf-diagnostics .bf-tools select { font-size:var(--bf-small); min-height:32px; padding:6px 8px; }
-.bili-favs-manage-panel .output-text-box { overflow:auto; min-height:48px; max-height:96px; border-top:1px solid var(--bf-line); font-size:var(--bf-small); line-height:1.5; scrollbar-width:thin; scroll-padding:8px; }
-.bili-favs-manage-panel .bf-log-row { display:grid; grid-template-columns:58px 28px minmax(0,1fr); gap:8px; padding:6px 0; border-bottom:1px solid var(--bf-line); align-items:baseline; }
+.bili-favs-manage-panel .bf-diagnostics .bf-tools { margin:4px 0 6px; gap:4px 8px; font-size:var(--bf-small); }
+.bili-favs-manage-panel .bf-diagnostics button,.bili-favs-manage-panel .bf-diagnostics select { font-size:var(--bf-small); min-height:28px; padding:4px 6px; }
+.bili-favs-manage-panel .bf-diagnostics label { gap:4px; }
+.bili-favs-manage-panel .output-text-box { flex:1; overflow:auto; min-height:32px; border-top:1px solid var(--bf-line); font-size:var(--bf-small); line-height:1.5; scrollbar-width:thin; scroll-padding:8px; }
+.bili-favs-manage-panel .bf-log-row { display:grid; grid-template-columns:54px minmax(0,1fr); gap:0 6px; padding:6px 0; border-bottom:1px solid var(--bf-line); align-items:baseline; }
 .bili-favs-manage-panel .bf-log-row time { color:var(--bf-muted); font-variant-numeric:tabular-nums; }
 .bili-favs-manage-panel .bf-log-level { font-weight:600; }
-.bili-favs-manage-panel .bf-log-message { white-space:pre-wrap; overflow-wrap:anywhere; min-width:0; }
+.bili-favs-manage-panel .bf-log-message { grid-column:1/-1; white-space:pre-wrap; overflow-wrap:anywhere; min-width:0; }
 .bili-favs-manage-panel .bf-log-error { color:var(--bf-danger); }
 .bili-favs-manage-panel .bf-log-warn { color:var(--bf-warning); }
 .bili-favs-manage-panel .bf-log-debug { color:var(--bf-muted); }
-.bili-favs-manage-panel .bf-export { position:absolute; inset:0; background:var(--bf-surface); z-index:2; padding:20px; display:flex; align-content:flex-start; flex-wrap:wrap; gap:12px; overflow:auto; }
+.bili-favs-manage-panel .bf-log-actions { display:flex; gap:8px; padding-top:6px; }
+.bili-favs-manage-panel .bf-export { position:absolute; inset:0; background:var(--bf-surface); z-index:2; padding:16px; display:flex; align-content:flex-start; flex-wrap:wrap; gap:12px; overflow:auto; }
 .bili-favs-manage-panel .bf-export h3,.bili-favs-manage-panel .bf-export p { width:100%; }
-.bili-favs-manage-panel textarea { display:block; width:100%; height:55%; min-height:140px; resize:vertical; padding:12px; margin:0; border:1px solid var(--bf-control); background:var(--bf-surface); }
-@container (max-width:500px) {
- .bili-favs-manage-panel .bf-folder-item { grid-template-columns:minmax(0,1fr); }
- .bili-favs-manage-panel .bf-folder-identity { margin-left:28px; }
- .bili-favs-manage-panel .bf-header { padding:8px; gap:0; }
- .bili-favs-manage-panel .bf-header button { padding:6px; }
- .bili-favs-manage-panel .bf-navigation { padding:0 12px; }
- .bili-favs-manage-panel .bf-content { padding:12px; }
- .bili-favs-manage-panel .bf-footer,.bili-favs-manage-panel .bf-diagnostics { padding:8px 12px; }
- .bili-favs-manage-panel .bf-copy-columns,.bili-favs-manage-panel .signal-panel { grid-template-columns:32px minmax(0,1fr) 12px minmax(0,1fr); gap:4px; }
- .bili-favs-manage-panel input[type=text] { padding:6px 4px; }
- .bili-favs-manage-panel .bf-log-row { grid-template-columns:54px 26px minmax(0,1fr); gap:4px; }
+.bili-favs-manage-panel textarea { display:block; width:100%; height:55%; min-height:140px; resize:vertical; padding:8px; margin:0; border:1px solid var(--bf-control); background:var(--bf-surface); }
+@container (max-width:579px) {
+ .bili-favs-manage-panel .bf-body { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto auto; }
+ .bili-favs-manage-panel .bf-diagnostics { grid-column:1; grid-row:3; border-left:0; border-top:1px solid var(--bf-line); height:130px; }
+ .bili-favs-manage-panel .bf-record-tools { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+ .bili-favs-manage-panel .bf-log-heading .bf-muted { display:none; }
+ .bili-favs-manage-panel .bf-diagnostics .bf-tools { margin:0; }
+ .bili-favs-manage-panel .bf-log-actions { padding:4px 0 0; }
+ .bili-favs-manage-panel .bf-log-row { grid-template-columns:54px 28px minmax(0,1fr); gap:4px; padding:4px 0; }
+ .bili-favs-manage-panel .bf-log-message { grid-column:auto; }
+ .bili-favs-manage-panel .bf-header { padding:6px; gap:2px; flex-wrap:wrap; }
+ .bili-favs-manage-panel .bf-header strong { font-size:14px; }
+ .bili-favs-manage-panel .bf-header button { padding:4px; }
+ .bili-favs-manage-panel .bf-version { font-size:12px; }
+ .bili-favs-manage-panel .bf-content { padding:8px; }
+ .bili-favs-manage-panel .bf-footer { padding:6px 8px; }
+ @media(max-height:500px) {
+  .bili-favs-manage-panel .bf-diagnostics { height:96px; padding:4px 8px; }
+  .bili-favs-manage-panel .bf-diagnostics button,.bili-favs-manage-panel .bf-diagnostics select { min-height:24px; padding:2px 6px; }
+  .bili-favs-manage-panel .output-text-box { min-height:24px; }
+ }
 }
-@media(max-width:650px) { .bili-favs-manage-panel { top:8px; left:8px; } }
+@media(max-width:595px) { .bili-favs-manage-panel { top:8px; left:8px; } }
 @media(max-height:500px) {
- .bili-favs-manage-panel .bf-content { min-height:48px; }
- .bili-favs-manage-panel .bf-footer { max-height:22dvh; }
- .bili-favs-manage-panel .bf-diagnostics { max-height:36dvh; overflow:auto; }
- .bili-favs-manage-panel .output-text-box { min-height:32px; max-height:44px; }
+ .bili-favs-manage-panel .bf-header { padding-top:4px; padding-bottom:4px; }
+ .bili-favs-manage-panel .bf-navigation button { padding-top:4px; padding-bottom:4px; }
+ .bili-favs-manage-panel .bf-footer { max-height:28dvh; }
+ .bili-favs-manage-panel .bf-diagnostics { max-height:none; }
 }
 @media(prefers-reduced-motion:reduce) {
  .bili-favs-manage-panel button,.bili-favs-manage-panel select { transition:none; }
@@ -2151,18 +2173,73 @@
     const label = element('label', 'bf-folder-row');
     label.append(input, element('span', 'bf-folder-name', folder.name),
       element('span', 'bf-folder-count', folder.count == null ? '数量未知' : `${folder.count} 条`));
-    row.append(label, element('span', 'bf-folder-identity', `ID ${folder.id} / 所有者 ${folder.ownerId || '未知'}`));
+    const identity = `ID ${folder.id} / 所有者 ${folder.ownerId || '未知'}`;
+    label.title = `${folder.name} · ${identity}`;
+    input.setAttribute('aria-label', `${folder.name} · ${identity}${reason ? ` · 不可选：${reason}` : ''}`);
+    row.append(label);
     if (reason) row.append(element('span', 'bf-folder-reason', `不可选：${reason}`));
     return row;
+  }
+
+  /** Shared, local-only filtering and bulk selection. Hosts own selection side effects. */
+  class SelectionToolbar {
+    constructor({ rows, busy, change }) {
+      this.rows = rows; this.busy = busy; this.change = change;
+      this.root = element('div', 'bf-selection-tools');
+      const label = element('label', 'bf-search');
+      this.search = element('input'); this.search.type = 'search';
+      this.search.placeholder = '搜索收藏夹';
+      label.append(element('span', 'bf-sr-only', '搜索收藏夹'), this.search);
+      this.allButton = button('全选', () => this.toggle(), 'bf-select-all');
+      this.count = element('span', 'bf-selection-count');
+      this.notice = element('span', 'bf-filter-notice');
+      this.notice.hidden = true;
+      this.root.append(label, this.allButton, this.count, this.notice);
+      this.search.addEventListener('input', () => this.update());
+    }
+
+    visibleRows(rows = this.rows()) {
+      const query = this.search.value.trim().toLocaleLowerCase();
+      return rows.filter(row => row.name.toLocaleLowerCase().includes(query));
+    }
+
+    toggle() {
+      if (this.busy()) return;
+      const rows = this.visibleRows().filter(row => row.eligible);
+      if (!rows.length) return;
+      const checked = !rows.every(row => row.input.checked);
+      for (const row of rows) row.input.checked = checked;
+      this.update(); this.change();
+    }
+
+    update() {
+      const rows = this.rows();
+      const visible = new Set(this.visibleRows(rows));
+      const eligible = [...visible].filter(row => row.eligible);
+      const selected = rows.filter(row => row.eligible && row.input.checked);
+      const outside = selected.filter(row => !visible.has(row)).length;
+      for (const row of rows) {
+        row.node.hidden = !visible.has(row);
+        row.node.dataset.selected = String(row.input.checked && row.eligible);
+      }
+      const all = eligible.length && eligible.every(row => row.input.checked);
+      this.allButton.textContent = all ? '取消全选' : '全选';
+      this.allButton.setAttribute('aria-label', `${all ? '取消全选' : '全选'}${this.search.value.trim() ? '搜索结果中' : ''}可选收藏夹`);
+      this.allButton.disabled = this.busy() || !eligible.length;
+      this.search.disabled = this.busy();
+      this.count.textContent = `已选 ${selected.length} / ${rows.length} 个收藏夹`;
+      this.notice.hidden = !this.search.value.trim();
+      this.notice.textContent = `${visible.size} 个匹配${outside ? ` · 筛选外已选 ${outside} 个，也会执行` : ''}`;
+    }
   }
 
   const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
   const descriptions = {
     delete: { verb: '删除', title: '删除自己创建的收藏夹',
-      detail: '加载列表后勾选目标。默认/特殊收藏夹不可选。删除会移除收藏夹及收藏关系，无法撤销；原视频不受影响，请先备份。',
+      detail: '删除收藏夹及收藏关系，无法撤销；原视频保留。',
       agreement: '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。' },
     unsubscribe: { verb: '退订', title: '取消我的收藏夹订阅',
-      detail: '只取消当前账号的收藏夹订阅，原作者内容不受影响。合集、所有者未知或不可用的条目不可选。',
+      detail: '取消我的订阅，原作者内容不受影响。',
       agreement: '我已检查以上 ID 和所有者，确认取消当前账号对这些收藏夹的订阅；原作者的内容不受影响。' }
   };
 
@@ -2170,14 +2247,19 @@
     constructor(inventoryUI, engine) {
       this.inventoryUI = inventoryUI; this.panel = inventoryUI.panel; this.engine = engine; this.rows = []; this.action = 'delete';
       this.root = element('section', 'bf-mutations');
-      this.heading = element('h3', '', descriptions.delete.title);
+      this.heading = element('h2', 'bf-sr-only', descriptions.delete.title);
       this.explanation = element('p', 'bf-muted', descriptions.delete.detail);
       this.root.append(this.heading, this.explanation);
       this.list = element('div', 'bf-folder-list');
       this.previewButton = button('预览删除目标', () => this.preview());
       this.review = element('section', 'bf-mutation-review');
       this.results = element('div'); this.results.setAttribute('role', 'status');
-      this.root.append(this.list, this.previewButton, this.review, this.results);
+      this.selectionTools = new SelectionToolbar({
+        rows: () => this.rows.map(row => ({ ...row, name: row.folder.name, eligible: !row.reason })),
+        busy: () => this.panel.busy,
+        change: () => { this.invalidate(); this.inventoryUI.updateBusy(); }
+      });
+      this.root.append(this.selectionTools.root, this.list, this.previewButton, this.review, this.results);
       this.updateBusy();
     }
 
@@ -2198,7 +2280,8 @@
         const reason = eligibility(this.action, folder, actor, pageOwner);
         const input = element('input'); input.type = 'checkbox';
         input.addEventListener('change', () => { this.invalidate(); this.inventoryUI.updateBusy(); });
-        this.list.append(folderRow(folder, input, reason)); this.rows.push({ folder, input, reason });
+        const node = folderRow(folder, input, reason);
+        this.list.append(node); this.rows.push({ folder, input, reason, node });
       }
       this.updateBusy();
     }
@@ -2207,6 +2290,7 @@
 
     updateBusy() {
       const busy = this.panel.busy;
+      this.selectionTools?.update();
       this.previewButton.disabled = busy || !this.selected().length;
       this.previewButton.hidden = this.inventoryUI.mode !== 'manage' || busy || !!this.ticket;
       for (const row of this.rows) row.input.disabled = busy || !!row.reason;
@@ -2221,6 +2305,7 @@
         const description = descriptions[this.action];
         this.ticket = this.engine.prepare(this.action, this.selected());
         this.review.append(element('h3', '', `将${description.verb} ${this.ticket.targets.length} 个收藏夹`));
+        this.review.append(element('p', '', description.detail));
         for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ID ${target.id} · 所有者 ${target.ownerId} · ${target.count ?? '未知'} 条`));
         this.agreement = element('input'); this.agreement.type = 'checkbox';
         const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', description.agreement));
@@ -2257,28 +2342,31 @@
       this.panel = panel; this.service = service; this.folders = []; this.rows = [];
       this.mode = 'statistics';
       this.root = element('section', 'bf-inventory');
-      this.heading = element('h2', '', '查看收藏夹统计');
-      this.intro = element('p', 'bf-help', '只读取选中收藏夹，不修改收藏；缺失信息显示未知，取消或失败保留部分结果。合集暂不支持。');
-      this.root.append(this.heading, this.intro);
+      this.intro = element('p', 'bf-help', '只读统计所选范围，缺失信息记为未知。');
+      this.root.append(this.intro);
       this.kind = element('select'); this.kind.setAttribute('aria-label', '加载范围');
-      for (const [value, label] of [['created', '当前空间创建的收藏夹'], ['subscribed', '我的收藏夹订阅']]) {
+      for (const [value, label] of [['created', '当前空间创建'], ['subscribed', '我的订阅']]) {
         const option = element('option', '', label); option.value = value; this.kind.append(option);
       }
-      this.loadButton = button('加载列表（只读）', () => this.load());
+      this.loadButton = button('加载列表', () => this.load());
       this.scanButton = button('统计选中收藏夹', () => this.scan());
       this.cancelButton = button('停止后续操作', () => { this.controller?.abort(); this.updateBusy(); });
       this.exportButton = button('检查并导出统计', () => { if (this.report) panel.reviewExport(JSON.stringify(this.report, null, 2), 'bili-inventory.json'); });
       const tools = element('div', 'bf-tools bf-catalog-tools');
       const scopeLabel = element('label', 'bf-scope-label', '列表范围');
       scopeLabel.append(this.kind); tools.append(scopeLabel, this.loadButton);
-      this.selectionCount = element('p', 'bf-selection-count', '尚未选择收藏夹');
+      this.selectionTools = new SelectionToolbar({
+        rows: () => this.rows.map(row => ({ ...row, name: row.folder.name, eligible: row.folder.kind !== 'unsupported' })),
+        busy: () => panel.busy, change: () => this.updateBusy()
+      });
+      this.selectionCount = this.selectionTools.count;
       this.actions = element('div', 'bf-action-bar');
-      this.actions.append(this.selectionCount, this.exportButton, this.scanButton, this.cancelButton);
+      this.actions.append(this.exportButton, this.scanButton, this.cancelButton);
       this.scanButton.classList.add('bf-primary');
       this.list = element('div', 'bf-folder-list');
       this.list.append(element('p', 'bf-empty', '点击“加载列表”，读取当前选择的范围。不会自动扫描。'));
       this.result = element('div', 'bf-inventory-result'); this.result.setAttribute('role', 'status');
-      this.root.append(tools, this.list, this.result);
+      this.root.append(tools, this.selectionTools.root, this.list, this.result);
       if (panel.manager.batchOperations) {
         this.mutations = new MutationPanel(this, panel.manager.batchOperations);
         this.root.append(this.mutations.root);
@@ -2307,9 +2395,8 @@
       }
       this.mode = mode;
       const manage = mode === 'manage';
-      this.heading.textContent = manage ? '管理我的收藏夹' : '查看收藏夹统计';
-      this.intro.textContent = '只读取选中收藏夹，不修改收藏；缺失信息显示未知，取消或失败保留部分结果。合集暂不支持。';
       this.intro.hidden = manage;
+      this.selectionTools.root.hidden = manage;
       this.list.hidden = manage; this.result.hidden = manage;
       if (this.mutations) this.mutations.root.hidden = !manage;
       this.updateBusy();
@@ -2318,7 +2405,7 @@
     updateBusy() {
       const busy = this.panel.busy;
       this.kind.disabled = busy; this.loadButton.disabled = busy;
-      this.loadButton.textContent = busy ? '操作中…' : this.folders.length ? '重新加载列表' : '加载列表（只读）';
+      this.loadButton.textContent = busy ? '操作中…' : this.folders.length ? '重新加载' : '加载列表';
       this.scanButton.disabled = busy || !this.selected().length;
       this.cancelButton.disabled = !busy || !this.controller || this.controller.signal.aborted;
       this.exportButton.disabled = busy || !this.report;
@@ -2327,8 +2414,7 @@
       this.exportButton.hidden = manage || !this.report || busy;
       this.cancelButton.hidden = !this.controller;
       if (this.mutations) this.mutations.previewButton.hidden = !manage || busy;
-      const selected = manage ? this.mutations?.selected().length || 0 : this.selected().length;
-      this.selectionCount.textContent = busy ? '操作中，请保持页面打开' : `已选 ${selected} 个收藏夹`;
+      this.selectionTools.update();
       for (const row of this.rows) row.input.disabled = busy || row.folder.kind === 'unsupported';
       this.mutations?.updateBusy();
     }
@@ -2370,7 +2456,8 @@
         for (const folder of folders) {
           const input = element('input'); input.type = 'checkbox'; input.disabled = folder.kind === 'unsupported';
           input.addEventListener('change', () => this.updateBusy());
-          this.list.append(folderRow(folder, input, folder.kind === 'unsupported' ? '合集暂不支持' : '')); this.rows.push({ input, folder });
+          const node = folderRow(folder, input, folder.kind === 'unsupported' ? '合集暂不支持' : '');
+          this.list.append(node); this.rows.push({ input, folder, node });
         }
         if (!folders.length) this.list.append(element('p', 'bf-empty', '这个范围没有可读取的收藏夹。可以更换范围后重新加载。'));
         this.panel.operation.finish('completed', `列表读取完成：${folders.length} 项；尚未选择或扫描。`);
@@ -2413,7 +2500,7 @@
       this.minH = 64;
       this.activeView = 'copy';
       this.viewScroll = new Map();
-      this.logsOpen = false;
+      this.logsOpen = true;
     }
 
     init() {
@@ -2425,9 +2512,11 @@
       this.floatingPanel = root;
       this.header = element('header', 'bf-header');
       this.header.append(element('strong', '', '收藏夹管理'));
+      this.versionLabel = element('span', 'bf-version', `v${CONFIG.SCRIPT.VERSION}`);
+      this.header.append(this.versionLabel);
       this.logsButton = button('操作记录', () => this.toggleLogs(), 'bf-quiet');
-      this.logsButton.setAttribute('aria-label', '查看操作记录');
-      this.logsButton.setAttribute('aria-expanded', 'false');
+      this.logsButton.setAttribute('aria-expanded', 'true');
+      this.logsButton.setAttribute('aria-label', '收起操作记录');
       this.minimizeButton = button('最小化', () => this.toggleMinimize());
       this.dismissButton = button('关闭', () => { this.onDismiss?.(); this.destroy(); });
       this.header.append(this.logsButton, this.minimizeButton, this.dismissButton);
@@ -2443,19 +2532,25 @@
       this.scope = element('p', 'bf-muted');
       this.workspace = element('section', 'bf-workspace');
       const heading = element('div', 'bf-task-heading');
-      heading.append(element('h2', '', '复制到我的收藏夹'), this.scope);
-      const help = element('p', 'bf-help', '勾选来源并编辑目标名。同名则复用，否则新建；仅去掉首尾空白，保留来源。跨空间复制请保持页面打开。');
-      this.workspace.append(heading, help);
+      heading.append(this.scope);
+      const help = element('p', 'bf-help', '同名则复用，否则新建；来源保留。');
+      heading.append(help);
+      this.workspace.append(heading);
       this.leftPanel = element('section', 'bf-sources');
-      this.selectAllButton = button('全选', () => this.toggleSelectAll());
+      this.selectionTools = new SelectionToolbar({
+        rows: () => this.favCheckboxItemList.map(item => ({ input: item.checkbox, node: item.checkboxContainer, name: item.getLabelValue(), eligible: true })),
+        busy: () => this.busy, change: () => this.updateSelectionReview()
+      });
+      this.selectionTools.search.addEventListener('input', () => this.updateSelectionReview());
+      this.selectAllButton = this.selectionTools.allButton;
       const columns = element('div', 'bf-copy-columns');
       this.sourceColumn = element('span', '', '来源收藏夹');
-      columns.append(this.selectAllButton, this.sourceColumn, element('span', 'bf-direction', ''), element('span', '', '目标收藏夹（我的）'));
-      this.leftPanel.append(columns, this.createFavPanel());
-      this.selectionReview = element('p', 'bf-selection-count');
+      columns.append(element('span'), this.sourceColumn, element('span', 'bf-direction', ''), element('span', '', '目标（我的收藏夹）'));
+      this.leftPanel.append(this.selectionTools.root, columns, this.createFavPanel());
+      this.selectionReview = this.selectionTools.count;
       this.startBatchTransferButton = button('开始批量复制', () => this.startBatchTransfer(), 'bf-primary');
       this.copyActions = element('div', 'bf-action-bar');
-      this.copyActions.append(this.selectionReview, this.startBatchTransferButton);
+      this.copyActions.append(this.startBatchTransferButton);
       this.workspace.append(this.leftPanel);
       this.content.append(this.workspace);
       this.statusBox = element('section', 'bf-status');
@@ -2477,8 +2572,11 @@
       this.statusBox.append(this.progressDetails);
       this.footer.append(this.statusBox, this.copyActions);
       if (this.inventoryPanel) this.footer.append(this.inventoryPanel.actions);
-      root.append(style, this.header, this.navigation, this.content, this.footer, this.diagnostics);
+      this.body = element('div', 'bf-body');
+      this.body.append(this.content, this.footer, this.diagnostics);
+      root.append(style, this.header, this.navigation, this.body);
       document.body.append(root);
+      root.dataset.logsOpen = String(this.logsOpen);
       this.unsubscribe = this.operation.subscribe(state => this.renderOperation(state));
       this.onBodyMove = event => {
         EventHandlers.mouseMove(this, event);
@@ -2493,7 +2591,7 @@
       this.clampToViewport();
       this.updateSelectionReview();
       this.showPageTypeIndicator();
-      this.appendLog('面板已就绪。诊断记录仅保存在当前页面，最多 500 条。');
+      this.appendLog('准备就绪。请选择收藏夹。');
       this.renderView();
     }
 
@@ -2525,6 +2623,7 @@
       // Opening diagnostics from a minimized window restores the working context.
       if (this.logsOpen && this.minimized) this.toggleMinimize();
       this.diagnostics.hidden = !this.logsOpen;
+      this.floatingPanel.dataset.logsOpen = String(this.logsOpen);
       this.logsButton.setAttribute('aria-expanded', String(this.logsOpen));
       this.logsButton.setAttribute('aria-label', this.logsOpen ? '收起操作记录' : '查看操作记录');
       if (this.logsOpen) this.renderLogs();
@@ -2534,7 +2633,7 @@
     showPageTypeIndicator() {
       const pageUID = PageDetector.getCurrentPageUID();
       const loginUID = PageDetector.getLoginUserUID();
-      this.scope.textContent = !pageUID ? '虚构预览 · 不连接账号' :
+      this.scope.textContent = !pageUID ? '当前空间 → 我的收藏夹' :
         `${pageUID === loginUID ? '我的空间' : '当前空间'} → ${loginUID ? '我的空间' : '请先登录'}`;
       this.sourceColumn.textContent = pageUID && pageUID === loginUID ? '来源（我的空间）' : '来源（当前空间）';
     }
@@ -2565,9 +2664,7 @@
     }
 
     toggleSelectAll() {
-      const checked = !this.favCheckboxItemList.every(item => item.checkbox.checked);
-      this.favCheckboxItemList.forEach(item => { item.checkbox.checked = checked; });
-      this.updateSelectionReview();
+      this.selectionTools.toggle();
     }
 
     getSelectedTasks() {
@@ -2577,14 +2674,12 @@
     updateSelectionReview() {
       const tasks = this.getSelectedTasks();
       const missing = tasks.some(task => !task.target.trim());
-      this.selectionReview.textContent = missing ? '请填好已选来源的目标名称' : `已选 ${tasks.length} / ${this.favorites.length} 个收藏夹`;
+      this.selectionTools.update();
+      if (missing) this.selectionReview.textContent = '请填好已选来源的目标名称';
       for (const item of this.favCheckboxItemList) {
         item.checkboxContainer.dataset.selected = String(item.checkbox.checked);
         item.inputText.setAttribute('aria-invalid', String(item.checkbox.checked && !item.inputText.value.trim()));
       }
-      this.selectAllButton.textContent = tasks.length && tasks.length === this.favorites.length ? '清除' : '全选';
-      this.selectAllButton.setAttribute('aria-label', tasks.length && tasks.length === this.favorites.length ? '取消全选来源' : '全选来源收藏夹');
-      this.selectAllButton.disabled = this.busy || !this.favorites.length;
       this.startBatchTransferButton.textContent = this.busy ? '操作中…' : tasks.length ? `复制 ${tasks.length} 个收藏夹` : '开始复制';
       this.startBatchTransferButton.disabled = this.busy || !tasks.length || missing;
     }
@@ -2636,7 +2731,7 @@
     createDiagnostics() {
       const details = element('section', 'bf-diagnostics');
       this.diagnostics = details;
-      details.hidden = true;
+      details.hidden = !this.logsOpen;
       details.id = 'bili-favs-records';
       details.setAttribute('aria-label', '操作记录');
       this.logsButton.setAttribute('aria-controls', details.id);
@@ -2655,7 +2750,9 @@
       this.followCheckbox = element('input'); this.followCheckbox.type = 'checkbox'; this.followCheckbox.checked = true;
       const followLabel = element('label', '', '跟随最新'); followLabel.prepend(this.followCheckbox);
       this.followCheckbox.addEventListener('change', () => { this.scrollTopEnabled = this.followCheckbox.checked; this.renderLogs(); });
-      tools.append(this.logFilter, followLabel, button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('检查并导出', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')), button('收起记录', () => this.toggleLogs()));
+      tools.append(this.logFilter, followLabel);
+      const actions = element('div', 'bf-log-actions');
+      actions.append(button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('导出记录', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')));
       this.outputTextBox = element('div', 'output-text-box');
       this.outputTextBox.tabIndex = 0;
       this.outputTextBox.setAttribute('role', 'region');
@@ -2667,7 +2764,7 @@
         this.logScrollTop = this.outputTextBox.scrollTop;
       });
       recordTools.append(tools);
-      details.append(recordTools, this.outputTextBox);
+      details.append(recordTools, this.outputTextBox, actions);
     }
 
     appendLog(message, type = this.normalCode) {
@@ -2720,6 +2817,7 @@
 
     toggleMinimize() {
       this.minimized = !this.minimized;
+      this.floatingPanel.dataset.minimized = String(this.minimized);
       this.content.hidden = this.minimized;
       this.navigation.hidden = this.minimized; this.footer.hidden = this.minimized;
       this.diagnostics.hidden = this.minimized || !this.logsOpen;

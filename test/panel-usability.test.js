@@ -5,6 +5,8 @@ import { FloatingPanel } from '../src/ui/FloatingPanel.js';
 import { InventoryService } from '../src/core/InventoryService.js';
 import { BatchOperations } from '../src/core/BatchOperations.js';
 import { OperationState } from '../src/core/OperationState.js';
+import { CONFIG } from '../src/config/config.js';
+import { readFileSync } from 'node:fs';
 
 function fixture(t) {
   const dom = new JSDOM('', { url: 'https://space.bilibili.com/50/favlist' });
@@ -22,7 +24,7 @@ function fixture(t) {
 
 test('copy is the uncluttered default; one source/destination pair, no duplicate review, persistent action', t => {
   const { panel, counts } = fixture(t);
-  assert.equal(panel.activeView, 'copy'); assert.equal(panel.inventoryPanel.root.hidden, true); assert.equal(panel.diagnostics.hidden, true);
+  assert.equal(panel.activeView, 'copy'); assert.equal(panel.inventoryPanel.root.hidden, true); assert.equal(panel.diagnostics.hidden, false);
   assert.equal(panel.statusBox.hidden, true); assert.equal(panel.favCheckboxItemList.length, 40);
   const row = panel.favCheckboxItemList[0];
   assert.deepEqual([...row.checkboxContainer.firstElementChild.children].map(el => el.tagName), ['INPUT', 'LABEL', 'SPAN', 'INPUT']);
@@ -62,7 +64,7 @@ test('same-tab and diagnostics toggles retain confirmation, edits and task scrol
   m.agreement.checked = true; m.updateBusy();
   const ticket = m.ticket; panel.content.scrollTop = 90;
   panel.showView('manage'); assert.equal(m.ticket, ticket); assert.equal(m.confirmButton.disabled, false);
-  panel.toggleLogs(); assert.equal(panel.activeView, 'manage'); assert.equal(m.ticket, ticket);
+  panel.toggleLogs(); panel.toggleLogs(); assert.equal(panel.activeView, 'manage'); assert.equal(m.ticket, ticket);
   assert.equal(panel.workspace.hidden, true); assert.equal(ui.root.hidden, false);
   assert.equal(panel.content.scrollTop, 90); assert.equal(panel.logsButton.getAttribute('aria-expanded'), 'true');
   panel.followCheckbox.focus(); panel.toggleLogs(); assert.equal(document.activeElement, panel.logsButton);
@@ -92,7 +94,7 @@ test('reload clears previous results immediately; mutation completion invalidate
 });
 
 test('diagnostics survive minimize and export modal without changing the task or unlocking the background', t => {
-  const { panel } = fixture(t); panel.toggleLogs(); panel.setBusy(true);
+  const { panel } = fixture(t); panel.setBusy(true);
   panel.toggleMinimize(); assert.equal(panel.diagnostics.hidden, true);
   panel.appendLog('Arrival while minimized'); panel.toggleMinimize();
   assert.equal(panel.diagnostics.hidden, false); assert.match(panel.outputTextBox.textContent, /Arrival while minimized/);
@@ -109,8 +111,8 @@ test('busy locks operation navigation but permits logs and return; empty selecte
   assert.equal(panel.startBatchTransferButton.disabled, true); assert.equal(item.inputText.getAttribute('aria-invalid'), 'true');
   item.inputText.value = 'Valid'; panel.updateSelectionReview(); assert.equal(panel.startBatchTransferButton.disabled, false);
   panel.setBusy(true); panel.showView('manage'); assert.equal(panel.activeView, 'copy');
-  panel.logsButton.click(); assert.equal(panel.activeView, 'copy'); assert.equal(panel.diagnostics.hidden, false);
-  panel.logsButton.click(); assert.equal(panel.activeView, 'copy'); assert.equal(panel.busy, true);
+  panel.logsButton.click(); assert.equal(panel.activeView, 'copy'); assert.equal(panel.diagnostics.hidden, true);
+  panel.logsButton.click(); assert.equal(panel.activeView, 'copy'); assert.equal(panel.diagnostics.hidden, false); assert.equal(panel.busy, true);
   panel.setBusy(false); panel.showView('manage'); assert.equal(panel.activeView, 'manage');
 });
 
@@ -142,7 +144,7 @@ test('help and progress are directly visible without disclosure; progress update
 });
 
 test('records preserve reading position across navigation and hidden arrivals; filters have explicit empty guidance', t => {
-  const { panel } = fixture(t); panel.toggleLogs();
+  const { panel } = fixture(t);
   panel.followCheckbox.checked = false; panel.followCheckbox.dispatchEvent(new window.Event('change'));
   panel.outputTextBox.scrollTop = 80; panel.outputTextBox.dispatchEvent(new window.Event('scroll'));
   panel.toggleLogs();
@@ -159,7 +161,7 @@ test('scope reset clears stale statistics and tickets; preview action returns on
   const { panel, counts } = fixture(t); const ui = panel.inventoryPanel;
   panel.showView('manage'); await ui.load();
   assert.equal(ui.mutations.list.querySelectorAll('details').length, 0);
-  assert.match(ui.mutations.list.textContent, /ID 100 \/ 所有者 50/);
+  assert.match(ui.mutations.rows[0].input.getAttribute('aria-label'), /ID 100 \/ 所有者 50/);
   const m = ui.mutations; m.rows[0].input.checked = true; ui.updateBusy(); m.preview();
   assert.equal(m.previewButton.hidden, true); assert.ok(m.ticket);
   m.invalidate(); assert.equal(m.previewButton.hidden, false); assert.equal(m.ticket, null);
@@ -202,4 +204,66 @@ test('failed or cancelled catalog load leaves recovery guidance instead of a per
   await ui.load();
   assert.match(ui.list.textContent, /已停止读取/); assert.equal(panel.operation.state.status, 'interrupted');
   assert.equal(ui.loadButton.disabled, false); assert.equal(ui.exportButton.disabled, true);
+});
+
+test('copy search preserves edits and hidden selection, bulk selection only affects matching rows', t => {
+  const { panel, counts } = fixture(t); const tools = panel.selectionTools;
+  const first = panel.favCheckboxItemList[0]; first.checkbox.checked = true; first.inputText.value = 'Edited'; panel.updateSelectionReview();
+  tools.search.value = 'source 2'; tools.search.dispatchEvent(new window.Event('input'));
+  assert.match(tools.notice.textContent, /筛选外已选 1 个，也会执行/);
+  tools.allButton.click();
+  assert.equal(panel.getSelectedTasks().length, 12); // 2,20-29 plus hidden 0
+  assert.equal(first.inputText.value, 'Edited'); assert.equal(first.checkboxContainer.hidden, true);
+  tools.allButton.click(); assert.deepEqual(panel.getSelectedTasks(), [{ source: 'Fictional source 0', target: 'Edited' }]);
+  panel.refreshFavorites(); assert.equal(panel.favCheckboxItemList[0].checkboxContainer.hidden, true);
+  panel.favCheckboxItemList[0].inputText.value = ' '; panel.updateSelectionReview();
+  tools.allButton.click();
+  assert.match(panel.selectionReview.textContent, /请填好/);
+  tools.search.value = 'no matches'; tools.search.dispatchEvent(new window.Event('input'));
+  assert.equal(tools.allButton.disabled, true); assert.match(tools.notice.textContent, /0 个匹配/);
+  assert.match(panel.selectionReview.textContent, /请填好/); assert.equal(panel.startBatchTransferButton.disabled, true);
+  tools.search.value = ''; tools.search.dispatchEvent(new window.Event('input'));
+  assert.equal(panel.favCheckboxItemList[0].checkboxContainer.hidden, false);
+  panel.setBusy(true); const before = panel.getSelectedTasks(); panel.toggleSelectAll();
+  assert.deepEqual(panel.getSelectedTasks(), before); assert.equal(tools.search.disabled, true);
+  assert.deepEqual(counts(), { reads: 0, mutations: 0 });
+});
+
+test('statistics and management share filtered selection semantics, exclude ineligible rows and invalidate tickets', async t => {
+  const { panel, counts } = fixture(t); const ui = panel.inventoryPanel;
+  ui.service.client.folders = async () => [
+    { id: '100', name: 'Alpha', ownerId: '50', kind: 'created', count: 2, protected: false, available: true },
+    { id: '101', name: 'Beta', ownerId: '50', kind: 'created', count: 3, protected: false, available: true },
+    { id: '102', name: 'Protected', ownerId: '50', kind: 'created', protected: true, available: true },
+    { id: '103', name: 'Season', ownerId: '50', kind: 'unsupported', available: true }
+  ];
+  panel.showView('statistics'); await ui.load(); ui.selectionTools.allButton.click();
+  assert.deepEqual(ui.selected().map(f => f.id), ['100', '101', '102']);
+  assert.equal(ui.rows[3].input.checked, false);
+  panel.showView('manage'); const m = ui.mutations; m.selectionTools.allButton.click();
+  assert.deepEqual(m.selected().map(f => f.id), ['100', '101']);
+  assert.equal(m.rows[2].input.checked, false); assert.equal(m.rows[3].input.checked, false);
+  m.preview(); const ticket = m.ticket; assert.ok(ticket);
+  assert.match(m.review.textContent, /无法撤销/); assert.match(m.review.textContent, /ID 100 · 所有者 50 · 2 条/);
+  m.selectionTools.search.value = 'Alpha'; m.selectionTools.search.dispatchEvent(new window.Event('input'));
+  assert.equal(m.ticket, ticket); assert.match(m.selectionTools.notice.textContent, /筛选外已选 1/);
+  m.selectionTools.allButton.click(); assert.equal(m.ticket, null);
+  assert.deepEqual(m.selected().map(f => f.id), ['101']);
+  await assert.rejects(m.engine.execute(ticket, { confirmed: true }));
+  panel.setBusy(true); m.selectionTools.toggle();
+  assert.deepEqual(m.selected().map(f => f.id), ['101']); assert.equal(m.selectionTools.search.disabled, true);
+  panel.setBusy(false); panel.showView('statistics'); assert.equal(ui.selected().length, 3);
+  ui.kind.value = 'subscribed'; ui.kind.dispatchEvent(new window.Event('change'));
+  assert.equal(ui.selectionTools.allButton.disabled, true); assert.equal(m.selectionTools.allButton.disabled, true);
+  assert.equal(counts().mutations, 0);
+});
+
+test('development version is visible and matches package, lock, runtime and generated userscript', t => {
+  const { panel } = fixture(t);
+  const read = name => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
+  const pkg = JSON.parse(read('package.json')); const lock = JSON.parse(read('package-lock.json'));
+  assert.equal(pkg.version, CONFIG.SCRIPT.VERSION); assert.equal(lock.version, pkg.version);
+  assert.equal(lock.packages[''].version, pkg.version);
+  assert.equal(panel.versionLabel.textContent, `v${pkg.version}`);
+  assert.ok(read('dist/BilibiliFavsManage.user.js').includes(`// @version      ${pkg.version}\n`));
 });
