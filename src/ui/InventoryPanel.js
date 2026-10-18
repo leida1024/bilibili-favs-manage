@@ -10,8 +10,7 @@ export class InventoryPanel {
     this.root = element('section', 'bf-inventory');
     this.heading = element('h2', '', '查看收藏夹统计');
     this.intro = element('p', 'bf-intro', '加载列表并勾选收藏夹，查看视频数量、重复项和时长。不会修改收藏。');
-    const help = element('details', 'bf-help');
-    help.append(element('summary', '', '统计范围与限制'), element('p', '', '只扫描选中的收藏夹，每次请求间隔 400ms；每夹最多 100 页，总计最多 10000 条。完整扫描仅表示所选范围；列表变化、读取失败或取消都会标明。缺失信息保留为未知，合集暂不支持。'));
+    const help = element('p', 'bf-help', '只统计选中范围；缺失信息保留为未知，合集暂不支持。请求间隔 400ms，每夹最多 100 页，总计最多 10000 条；取消或失败会保留部分结果。');
     this.root.append(this.heading, this.intro, help); this.help = help;
     this.kind = element('select'); this.kind.setAttribute('aria-label', '加载范围');
     for (const [value, label] of [['created', '当前空间创建的收藏夹'], ['subscribed', '我的收藏夹订阅']]) {
@@ -36,7 +35,10 @@ export class InventoryPanel {
       this.actions.insertBefore(this.mutations.previewButton, this.cancelButton);
     }
     this.kind.addEventListener('change', () => {
-      this.folders = []; this.rows = []; this.list.replaceChildren(); this.mutations?.setCatalog([], this.kind.value); this.updateBusy();
+      this.folders = []; this.rows = []; this.report = null; this.result.replaceChildren();
+      this.list.replaceChildren(element('p', 'bf-empty', '范围已更换，请重新加载列表。'));
+      this.mutations?.setCatalog([], this.kind.value); this.mutations?.results.replaceChildren(); this.updateBusy();
+      this.panel.operation.update({ status: 'idle', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '' });
     });
     this.updateBusy();
   }
@@ -83,7 +85,7 @@ export class InventoryPanel {
     try { await work(this.controller.signal); }
     catch (err) {
       this.panel.operation.finish(this.controller.signal.aborted ? 'interrupted' : 'failed', this.controller.signal.aborted ? '已取消，请重新选择后开始。' : err.message);
-      this.result.textContent = this.panel.operation.state.detail;
+      (this.mode === 'manage' && this.mutations ? this.mutations.results : this.result).textContent = this.panel.operation.state.detail;
     } finally {
       if (this.controller.signal.aborted && this.panel.operation.state.status === 'running') this.panel.operation.finish('interrupted', '已取消，未继续后续请求。');
       this.controller = null; this.panel.setBusy(false);
@@ -106,8 +108,7 @@ export class InventoryPanel {
         this.list.append(folderRow(folder, input, folder.kind === 'unsupported' ? '合集暂不支持' : '')); this.rows.push({ input, folder });
       }
       if (!folders.length) this.list.append(element('p', 'bf-empty', '这个范围没有可读取的收藏夹。可以更换范围后重新加载。'));
-      this.result.textContent = `列表读取完成：${folders.length} 项；尚未选择或扫描。`;
-      this.panel.operation.finish('completed', this.result.textContent);
+      this.panel.operation.finish('completed', `列表读取完成：${folders.length} 项；尚未选择或扫描。`);
     });
   }
 

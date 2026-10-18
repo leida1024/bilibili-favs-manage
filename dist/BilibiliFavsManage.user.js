@@ -2012,13 +2012,13 @@
   }
 
   const panelStyles = `
-.bili-favs-manage-panel { --bf-ink:#203344; --bf-blue:#007fa8; --bf-line:#dae5ec; position:fixed; top:36px; left:36px; width:800px; height:640px; max-width:calc(100vw - 16px); max-height:calc(100dvh - 16px); min-width:280px; min-height:64px; z-index:99999; background:#fff; color:var(--bf-ink); border:1px solid var(--bf-line); border-radius:10px; box-shadow:0 12px 42px #20334424; font:14px/1.5 "Microsoft YaHei UI","PingFang SC","Noto Sans CJK SC",sans-serif; overflow:hidden; resize:both; display:flex; flex-direction:column; text-align:left; container-type:inline-size; }
+.bili-favs-manage-panel { --bf-ink:#203344; --bf-blue:#007fa8; --bf-line:#dae5ec; position:fixed; top:36px; left:36px; width:680px; height:auto; max-width:calc(100vw - 16px); max-height:min(620px,calc(100dvh - 16px)); min-width:280px; min-height:64px; z-index:99999; background:#fff; color:var(--bf-ink); border:1px solid var(--bf-line); border-radius:10px; box-shadow:0 12px 42px #20334424; font:14px/1.5 "Microsoft YaHei UI","PingFang SC","Noto Sans CJK SC",sans-serif; overflow:hidden; resize:both; display:flex; flex-direction:column; text-align:left; container-type:inline-size; }
 .bili-favs-manage-panel * { box-sizing:border-box; }
 .bili-favs-manage-panel [hidden] { display:none !important; }
-.bili-favs-manage-panel h2 { color:var(--bf-ink); font-family:inherit; font-size:18px; line-height:1.4; font-weight:700; margin:0 0 6px; }
+.bili-favs-manage-panel h2 { color:var(--bf-ink); font-family:inherit; font-size:16px; line-height:1.4; font-weight:700; margin:0 0 6px; }
 .bili-favs-manage-panel h3 { color:var(--bf-ink); font-size:15px; font-weight:600; margin:0 0 6px; }
 .bili-favs-manage-panel p { margin:6px 0; overflow-wrap:anywhere; }
-.bili-favs-manage-panel .bf-header { display:flex; align-items:center; gap:6px; padding:10px 16px; background:#fff; cursor:move; flex-shrink:0; }
+.bili-favs-manage-panel .bf-header { display:flex; align-items:center; gap:6px; padding:7px 16px; background:#fff; cursor:move; flex-shrink:0; }
 .bili-favs-manage-panel .bf-header strong { flex:1; font-size:16px; letter-spacing:.03em; }
 .bili-favs-manage-panel button,.bili-favs-manage-panel select { width:auto; min-height:34px; margin:0; padding:6px 12px; border:1px solid #b7c9d5; border-radius:5px; background:#fff; color:var(--bf-ink); cursor:pointer; font:inherit; line-height:1.4; }
 .bili-favs-manage-panel button:hover:not(:disabled) { border-color:var(--bf-blue); background:#f2faff; }
@@ -2027,23 +2027,21 @@
 .bili-favs-manage-panel .bf-header button { font-size:12px; min-height:30px; padding:5px 8px; border-color:transparent; }
 .bili-favs-manage-panel .bf-header button:hover { background:#edf6fa; }
 .bili-favs-manage-panel .bf-navigation { display:flex; gap:20px; padding:0 20px; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
-.bili-favs-manage-panel .bf-navigation button { border:0; border-bottom:3px solid transparent; border-radius:0; padding:10px 2px; background:none; color:#526879; }
+.bili-favs-manage-panel .bf-navigation button { border:0; border-bottom:3px solid transparent; border-radius:0; padding:7px 2px; background:none; color:#526879; }
 .bili-favs-manage-panel .bf-navigation button[aria-pressed=true] { color:var(--bf-blue); font-weight:700; border-bottom-color:var(--bf-blue); }
-.bili-favs-manage-panel .bf-content { overflow-y:auto; overflow-x:hidden; padding:18px 20px; min-height:0; flex:1; scrollbar-width:thin; scrollbar-color:#a1b6c3 transparent; }
+.bili-favs-manage-panel .bf-content { overflow-y:auto; overflow-x:hidden; padding:12px 16px; min-height:0; flex:0 1 auto; scrollbar-width:thin; scrollbar-color:#a1b6c3 transparent; }
 .bili-favs-manage-panel .bf-muted { color:#526879; font-size:12px; }
 .bili-favs-manage-panel .bf-intro { color:#40596c; max-width:70ch; margin-bottom:6px; }
-.bili-favs-manage-panel .bf-help { font-size:12px; color:#526879; margin:6px 0 10px; max-width:75ch; }
-.bili-favs-manage-panel summary { cursor:pointer; padding:4px 0; }
-.bili-favs-manage-panel .bf-help summary { color:var(--bf-blue); }
+.bili-favs-manage-panel .bf-help { font-size:12px; color:#526879; margin:4px 0 8px; max-width:75ch; }
 .bili-favs-manage-panel .bf-copy-columns,.bili-favs-manage-panel .signal-panel { display:grid; grid-template-columns:40px minmax(0,1fr) 24px minmax(0,1fr); align-items:center; gap:8px; }
 .bili-favs-manage-panel .bf-copy-columns { padding:7px 0; font-size:12px; color:#526879; border-bottom:1px solid #bbceda; }
 .bili-favs-manage-panel .bf-copy-columns button { padding:5px 1px; min-height:28px; font-size:11px; border-color:transparent; color:var(--bf-blue); }
 .bili-favs-manage-panel .fav-panel { margin:0; }
-.bili-favs-manage-panel .signal-panel { padding:8px 0; border-bottom:1px solid var(--bf-line); }
+.bili-favs-manage-panel .signal-panel { padding:4px 0; border-bottom:1px solid var(--bf-line); }
 .bili-favs-manage-panel .fav-panel>[data-selected=true] { background:#eaf7fc; }
 .bili-favs-manage-panel .signal-panel label { overflow-wrap:anywhere; min-width:0; cursor:pointer; }
 .bili-favs-manage-panel .bf-direction { text-align:center; color:#6d8999; }
-.bili-favs-manage-panel input[type=text] { width:100%; min-width:0; min-height:36px; padding:7px 9px; border:1px solid #b7c9d5; border-radius:5px; background:#fff; color:var(--bf-ink); font:inherit; }
+.bili-favs-manage-panel input[type=text] { width:100%; min-width:0; min-height:32px; padding:5px 8px; border:1px solid #b7c9d5; border-radius:5px; background:#fff; color:var(--bf-ink); font:inherit; }
 .bili-favs-manage-panel input[aria-invalid=true] { border-color:#aa4332; }
 .bili-favs-manage-panel input[type=checkbox] { accent-color:var(--bf-blue); width:17px; height:17px; margin:2px 0; flex-shrink:0; cursor:pointer; }
 .bili-favs-manage-panel .signal-panel input[type=checkbox] { justify-self:center; }
@@ -2053,32 +2051,36 @@
 .bili-favs-manage-panel .bf-primary { background:var(--bf-blue); border-color:var(--bf-blue); color:white; font-weight:600; }
 .bili-favs-manage-panel .bf-primary:hover:not(:disabled) { background:#006989; color:#fff; }
 .bili-favs-manage-panel .bf-danger { background:#aa4332; border-color:#aa4332; color:white; }
-.bili-favs-manage-panel .bf-status { padding:0 0 10px; margin-bottom:10px; border-bottom:1px solid var(--bf-line); font-size:12px; }
-.bili-favs-manage-panel .bf-status strong { display:block; font-size:13px; }
+.bili-favs-manage-panel .bf-status { display:flex; align-items:center; flex-wrap:wrap; gap:4px 10px; padding:0 0 6px; margin-bottom:6px; border-bottom:1px solid var(--bf-line); font-size:12px; }
+.bili-favs-manage-panel .bf-status strong { font-size:12px; }
 .bili-favs-manage-panel .bf-status>span { color:#526879; }
 .bili-favs-manage-panel .bf-status[data-status=failed] strong,.bili-favs-manage-panel .bf-status[data-status=interrupted] strong { color:#aa4332; }
 .bili-favs-manage-panel .bf-status[data-status=completed] strong { color:#24734b; }
-.bili-favs-manage-panel .bf-status-message { color:#8d382a; }
-.bili-favs-manage-panel .bf-progress-detail { display:inline; margin-left:12px; }
-.bili-favs-manage-panel .bf-progress-detail summary { display:inline; color:var(--bf-blue); }
-.bili-favs-manage-panel .bf-progress-detail[open] { display:block; margin:0; }
-.bili-favs-manage-panel .bf-progress-detail p { max-width:75ch; }
+.bili-favs-manage-panel .bf-status-message { color:#8d382a; width:100%; margin:0; }
+.bili-favs-manage-panel .bf-progress-detail { padding:4px 8px; border-left:2px solid var(--bf-blue); background:#f2f8fb; margin-bottom:8px; }
+.bili-favs-manage-panel .bf-progress-detail p { font-size:12px; margin:2px 0; }
 .bili-favs-manage-panel .bf-tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:12px 0; }
 .bili-favs-manage-panel .bf-tools select { min-width:0; max-width:100%; }
 .bili-favs-manage-panel .bf-tools label { display:flex; align-items:center; gap:6px; }
 .bili-favs-manage-panel .bf-empty { padding:28px 12px; text-align:center; color:#526879; line-height:1.8; }
-.bili-favs-manage-panel .bf-folder-item { border-bottom:1px solid var(--bf-line); padding:10px 0; }
-.bili-favs-manage-panel .bf-folder-row { display:flex; align-items:flex-start; gap:10px; overflow-wrap:anywhere; }
-.bili-favs-manage-panel .bf-folder-text { min-width:0; flex:1; }
-.bili-favs-manage-panel .bf-folder-text strong { display:block; font-weight:600; }
-.bili-favs-manage-panel .bf-folder-text small { color:#526879; display:block; font-size:12px; margin-top:3px; }
-.bili-favs-manage-panel .bf-object-details { margin-left:27px; font-size:12px; color:#526879; }
-.bili-favs-manage-panel .bf-object-details summary { padding:3px 0 0; }
+.bili-favs-manage-panel .bf-folder-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:3px 14px; border-bottom:1px solid var(--bf-line); padding:8px 0; }
+.bili-favs-manage-panel .bf-folder-row { display:flex; align-items:flex-start; gap:8px; overflow-wrap:anywhere; min-width:0; }
+.bili-favs-manage-panel .bf-folder-item>.bf-folder-row { display:grid; grid-template-columns:20px minmax(0,1fr) max-content; align-items:center; }
+.bili-favs-manage-panel .bf-folder-name { min-width:0; overflow-wrap:anywhere; }
+.bili-favs-manage-panel .bf-folder-count { font-size:12px; color:#526879; text-align:right; }
+.bili-favs-manage-panel .bf-folder-identity { font-size:11px; color:#526879; overflow-wrap:anywhere; }
+.bili-favs-manage-panel .bf-folder-reason { grid-column:1/-1; margin-left:28px; font-size:12px; color:#805500; }
 .bili-favs-manage-panel .bf-inventory-result:not(:empty) { margin-top:16px; padding:12px 0; border-top:1px solid var(--bf-line); }
 .bili-favs-manage-panel .bf-mutation-review:not(:empty) { border-left:3px solid #aa4332; padding:12px; margin:16px 0; background:#fff6f3; }
-.bili-favs-manage-panel .bf-show-logs { overflow:hidden; display:flex; flex-direction:column; }
-.bili-favs-manage-panel .bf-diagnostics { display:flex; flex-direction:column; flex:1; min-height:0; }
-.bili-favs-manage-panel .output-text-box { flex:1; min-height:0; white-space:pre-wrap; overflow-wrap:anywhere; overflow:auto; padding:12px; border:1px solid var(--bf-line); font-size:12px; line-height:1.8; scrollbar-width:thin; }
+.bili-favs-manage-panel .output-text-box { padding:0; border-top:1px solid var(--bf-line); font-size:12px; line-height:1.6; }
+.bili-favs-manage-panel .bf-log-heading { display:flex; align-items:baseline; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.bili-favs-manage-panel .bf-record-tools { position:sticky; top:-12px; padding-top:4px; background:#fff; z-index:1; }
+.bili-favs-manage-panel .bf-diagnostics .bf-tools { margin:6px 0 10px; gap:6px 10px; }
+.bili-favs-manage-panel .bf-diagnostics .bf-tools button,.bili-favs-manage-panel .bf-diagnostics .bf-tools select { font-size:12px; min-height:30px; padding:5px 8px; }
+.bili-favs-manage-panel .bf-log-row { display:grid; grid-template-columns:58px 30px minmax(0,1fr); gap:8px; padding:6px 0; border-bottom:1px solid #edf2f6; align-items:baseline; }
+.bili-favs-manage-panel .bf-log-row time { color:#526879; font-variant-numeric:tabular-nums; }
+.bili-favs-manage-panel .bf-log-level { font-weight:600; }
+.bili-favs-manage-panel .bf-log-message { white-space:pre-wrap; overflow-wrap:anywhere; min-width:0; }
 .bili-favs-manage-panel .bf-log-error { color:#aa4332; }
 .bili-favs-manage-panel .bf-log-warn { color:#805500; }
 .bili-favs-manage-panel .bf-log-debug { color:#526879; }
@@ -2086,6 +2088,9 @@
 .bili-favs-manage-panel .bf-export h3,.bili-favs-manage-panel .bf-export p { width:100%; }
 .bili-favs-manage-panel textarea { display:block; width:100%; height:55%; min-height:140px; resize:vertical; padding:10px; margin:0; border:1px solid #b7c9d5; color:var(--bf-ink); background:#fff; font:12px/1.6 monospace; }
 @container (max-width:500px) {
+ .bili-favs-manage-panel .bf-folder-item { grid-template-columns:minmax(0,1fr); gap:1px; }
+ .bili-favs-manage-panel .bf-folder-identity { margin-left:28px; }
+ .bili-favs-manage-panel .bf-log-row { grid-template-columns:52px 26px minmax(0,1fr); gap:5px; font-size:11px; }
  .bili-favs-manage-panel .bf-header { padding:9px 12px; gap:1px; }
  .bili-favs-manage-panel .bf-header strong { font-size:15px; }
  .bili-favs-manage-panel .bf-navigation { padding:0 14px; gap:20px; }
@@ -2117,12 +2122,10 @@
   function folderRow(folder, input, reason = '') {
     const row = element('div', 'bf-folder-item');
     const label = element('label', 'bf-folder-row');
-    const text = element('span', 'bf-folder-text');
-    text.append(element('strong', '', folder.name), element('small', '', `${folder.count == null ? '数量未知' : `${folder.count} 条内容`}${reason ? `；不可选：${reason}` : ''}`));
-    label.append(input, text);
-    const details = element('details', 'bf-object-details');
-    details.append(element('summary', '', 'ID 与所有者'), element('p', '', `ID ${folder.id}；所有者 ${folder.ownerId || '未知'}`));
-    row.append(label, details);
+    label.append(input, element('span', 'bf-folder-name', folder.name),
+      element('span', 'bf-folder-count', folder.count == null ? '数量未知' : `${folder.count} 条`));
+    row.append(label, element('span', 'bf-folder-identity', `ID ${folder.id} / 所有者 ${folder.ownerId || '未知'}`));
+    if (reason) row.append(element('span', 'bf-folder-reason', `不可选：${reason}`));
     return row;
   }
 
@@ -2151,7 +2154,10 @@
       this.updateBusy();
     }
 
-    invalidate() { this.engine.invalidate(); this.ticket = null; this.review.replaceChildren(); }
+    invalidate() {
+      this.engine.invalidate(); this.ticket = null; this.review.replaceChildren();
+      this.agreement = null; this.confirmButton = null; this.updateBusy();
+    }
 
     setCatalog(folders, kind) {
       this.invalidate(); this.rows = []; this.list.replaceChildren();
@@ -2175,6 +2181,7 @@
     updateBusy() {
       const busy = this.panel.busy;
       this.previewButton.disabled = busy || !this.selected().length;
+      this.previewButton.hidden = this.inventoryUI.mode !== 'manage' || busy || !!this.ticket;
       for (const row of this.rows) row.input.disabled = busy || !!row.reason;
       if (this.confirmButton) this.confirmButton.disabled = busy || !this.agreement?.checked || !this.ticket;
       if (this.agreement) this.agreement.disabled = busy;
@@ -2225,8 +2232,7 @@
       this.root = element('section', 'bf-inventory');
       this.heading = element('h2', '', '查看收藏夹统计');
       this.intro = element('p', 'bf-intro', '加载列表并勾选收藏夹，查看视频数量、重复项和时长。不会修改收藏。');
-      const help = element('details', 'bf-help');
-      help.append(element('summary', '', '统计范围与限制'), element('p', '', '只扫描选中的收藏夹，每次请求间隔 400ms；每夹最多 100 页，总计最多 10000 条。完整扫描仅表示所选范围；列表变化、读取失败或取消都会标明。缺失信息保留为未知，合集暂不支持。'));
+      const help = element('p', 'bf-help', '只统计选中范围；缺失信息保留为未知，合集暂不支持。请求间隔 400ms，每夹最多 100 页，总计最多 10000 条；取消或失败会保留部分结果。');
       this.root.append(this.heading, this.intro, help); this.help = help;
       this.kind = element('select'); this.kind.setAttribute('aria-label', '加载范围');
       for (const [value, label] of [['created', '当前空间创建的收藏夹'], ['subscribed', '我的收藏夹订阅']]) {
@@ -2251,7 +2257,10 @@
         this.actions.insertBefore(this.mutations.previewButton, this.cancelButton);
       }
       this.kind.addEventListener('change', () => {
-        this.folders = []; this.rows = []; this.list.replaceChildren(); this.mutations?.setCatalog([], this.kind.value); this.updateBusy();
+        this.folders = []; this.rows = []; this.report = null; this.result.replaceChildren();
+        this.list.replaceChildren(element('p', 'bf-empty', '范围已更换，请重新加载列表。'));
+        this.mutations?.setCatalog([], this.kind.value); this.mutations?.results.replaceChildren(); this.updateBusy();
+        this.panel.operation.update({ status: 'idle', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '' });
       });
       this.updateBusy();
     }
@@ -2298,7 +2307,7 @@
       try { await work(this.controller.signal); }
       catch (err) {
         this.panel.operation.finish(this.controller.signal.aborted ? 'interrupted' : 'failed', this.controller.signal.aborted ? '已取消，请重新选择后开始。' : err.message);
-        this.result.textContent = this.panel.operation.state.detail;
+        (this.mode === 'manage' && this.mutations ? this.mutations.results : this.result).textContent = this.panel.operation.state.detail;
       } finally {
         if (this.controller.signal.aborted && this.panel.operation.state.status === 'running') this.panel.operation.finish('interrupted', '已取消，未继续后续请求。');
         this.controller = null; this.panel.setBusy(false);
@@ -2321,8 +2330,7 @@
           this.list.append(folderRow(folder, input, folder.kind === 'unsupported' ? '合集暂不支持' : '')); this.rows.push({ input, folder });
         }
         if (!folders.length) this.list.append(element('p', 'bf-empty', '这个范围没有可读取的收藏夹。可以更换范围后重新加载。'));
-        this.result.textContent = `列表读取完成：${folders.length} 项；尚未选择或扫描。`;
-        this.panel.operation.finish('completed', this.result.textContent);
+        this.panel.operation.finish('completed', `列表读取完成：${folders.length} 项；尚未选择或扫描。`);
       });
     }
 
@@ -2343,7 +2351,8 @@
     destroy() { this.controller?.abort(); this.mutations?.destroy(); }
   }
 
-  const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止 · 请检查', interrupted: '已中断 / 等待继续' };
+  const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止 · 请检查', interrupted: '已中断 · 请核对结果' };
+  const logLevels = { info: '信息', warn: '警告', error: '错误', debug: '调试' };
 
   class FloatingPanel {
     constructor(manager) {
@@ -2389,8 +2398,7 @@
       this.scope = element('p', 'bf-muted');
       this.workspace = element('section', 'bf-workspace');
       this.workspace.append(element('h2', '', '复制到我的收藏夹'), element('p', 'bf-intro', '勾选来源，在同一行填写目标名称。复制后，来源内容仍会保留。'), this.scope);
-      const help = element('details', 'bf-help');
-      help.append(element('summary', '', '目标同名或不存在时会怎样？'), element('p', '', '在我的空间中，已有同名收藏夹会直接复用，不存在的会新建。名称首尾空白会去掉，内部空格保留。从他人空间复制时，需要跳转到我的空间准备目标，再返回继续；请保持页面打开。'));
+      const help = element('p', 'bf-help', '目标同名则复用，不存在则新建；名称只去掉首尾空白。从他人空间复制需往返我的空间准备目标，请保持页面打开。');
       this.workspace.append(help);
       this.leftPanel = element('section', 'bf-sources');
       this.selectAllButton = button('全选', () => this.toggleSelectAll());
@@ -2407,6 +2415,15 @@
       this.statusBox = element('section', 'bf-status');
       this.statusBox.setAttribute('role', 'status');
       this.statusBox.setAttribute('aria-live', 'polite');
+      this.statusTitle = element('strong');
+      this.statusCount = element('span');
+      this.progressDetails = element('section', 'bf-progress-detail');
+      this.progressDetails.hidden = true;
+      this.progressLast = element('p'); this.progressMessage = element('p');
+      this.progressDetails.append(this.progressLast, this.progressMessage);
+      this.statusMessage = element('p', 'bf-status-message');
+      this.statusBox.append(this.statusTitle, this.statusCount, this.statusMessage);
+      this.content.prepend(this.progressDetails);
       if (this.manager.inventory) {
         this.inventoryPanel = new InventoryPanel(this, this.manager.inventory);
         this.content.append(this.inventoryPanel.root);
@@ -2438,6 +2455,7 @@
     showView(view) {
       if (!['copy', 'statistics', 'manage', 'logs'].includes(view) || (this.busy && view !== 'logs' && view !== this.previousView && view !== this.activeView)) return;
       if ((view === 'statistics' || view === 'manage') && !this.inventoryPanel) return;
+      if (this.activeView === 'logs') this.logScrollTop = this.content.scrollTop;
       if (view === 'logs') { if (this.activeView !== 'logs') this.previousView = this.activeView; }
       else {
         if (view !== this.previousView || this.activeView !== 'logs') this.inventoryPanel?.mutations?.invalidate();
@@ -2454,6 +2472,7 @@
       this.copyActions.hidden = view !== 'copy';
       this.content.classList.toggle('bf-show-logs', view === 'logs');
       this.content.scrollTop = 0;
+      this.footer.hidden = this.minimized || (view === 'logs' && this.statusBox.hidden);
       for (const [name, control] of this.viewButtons) control.setAttribute('aria-pressed', String(name === (view === 'logs' ? this.previousView : view)));
       this.logsButton.textContent = view === 'logs' ? '返回' : '记录';
       this.logsButton.setAttribute('aria-label', view === 'logs' ? '返回当前功能' : '查看操作记录');
@@ -2533,12 +2552,16 @@
     renderOperation(state) {
       this.statusBox.hidden = state.status === 'idle';
       this.statusBox.dataset.status = state.status;
-      const details = element('details', 'bf-progress-detail');
-      details.append(element('summary', '', '查看进度详情'), element('p', '', `最后确认：${state.lastConfirmed || '尚无已确认步骤'}`), element('p', '', state.detail));
-      this.statusBox.replaceChildren(element('strong', '', `${statusNames[state.status]}${state.action ? `：${state.action}` : ''}`),
-        element('span', '', `已确认 ${state.confirmed}${state.total === null ? ' 项，总数未知' : ` / ${state.total} 项`}`));
-      if (state.status === 'failed' || state.status === 'interrupted') this.statusBox.append(element('p', 'bf-status-message', state.detail));
-      this.statusBox.append(details);
+      this.progressDetails.hidden = state.status === 'idle';
+      this.statusTitle.textContent = `${statusNames[state.status]}${state.action ? `：${state.action}` : ''}`;
+      this.statusCount.textContent = `已确认 ${state.confirmed}${state.total === null ? ' 项，总数未知' : ` / ${state.total} 项`}`;
+      this.statusCount.hidden = state.confirmed === 0 && state.total === null;
+      this.progressLast.textContent = `最后确认：${state.lastConfirmed || '尚无已确认步骤'}`;
+      this.progressLast.hidden = !state.lastConfirmed;
+      this.progressMessage.textContent = state.detail;
+      this.statusMessage.hidden = !['failed', 'interrupted'].includes(state.status);
+      this.statusMessage.textContent = this.statusMessage.hidden ? '' : '请先核对页面结果，再决定后续操作。';
+      if (this.footer) this.footer.hidden = this.minimized || (this.activeView === 'logs' && this.statusBox.hidden);
     }
 
     async startBatchTransfer() {
@@ -2557,44 +2580,53 @@
     createDiagnostics() {
       const details = element('section', 'bf-diagnostics');
       this.diagnostics = details;
-      details.append(element('h2', '', '操作记录'));
+      const title = element('div', 'bf-log-heading');
+      this.logCount = element('span', 'bf-muted');
+      title.append(element('h2', '', '操作记录'), this.logCount);
+      const recordTools = element('div', 'bf-record-tools');
+      recordTools.append(title);
       const tools = element('div', 'bf-tools');
       this.logFilter = element('select');
       this.logFilter.setAttribute('aria-label', '日志级别');
       for (const [value, text] of [['all', '全部级别'], ['error', '错误'], ['warn', '警告'], ['info', '信息'], ['debug', '调试']]) {
         const option = element('option', '', text); option.value = value; this.logFilter.append(option);
       }
-      this.logFilter.addEventListener('change', () => this.renderLogs());
+      this.logFilter.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
       this.followCheckbox = element('input'); this.followCheckbox.type = 'checkbox'; this.followCheckbox.checked = true;
       const followLabel = element('label', '', '跟随最新'); followLabel.prepend(this.followCheckbox);
       this.followCheckbox.addEventListener('change', () => { this.scrollTopEnabled = this.followCheckbox.checked; this.renderLogs(); });
       tools.append(this.logFilter, followLabel, button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('检查并导出', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')));
-      this.logCount = element('p', 'bf-muted');
       this.outputTextBox = element('div', 'output-text-box');
       this.outputTextBox.tabIndex = 0;
       this.outputTextBox.setAttribute('aria-label', '诊断记录内容');
-      this.outputTextBox.addEventListener('scroll', () => {
-        if (this.outputTextBox.scrollHeight - this.outputTextBox.clientHeight - this.outputTextBox.scrollTop > 24) {
+      this.content.addEventListener('scroll', () => {
+        if (this.activeView !== 'logs') return;
+        if (this.content.scrollHeight - this.content.clientHeight - this.content.scrollTop > 24) {
           this.scrollTopEnabled = false; this.followCheckbox.checked = false;
         }
+        this.logScrollTop = this.content.scrollTop;
       });
-      details.append(tools, this.logCount, this.outputTextBox);
+      recordTools.append(tools);
+      details.append(recordTools, this.outputTextBox);
       this.content.append(details);
     }
 
     appendLog(message, type = this.normalCode) {
       this.logs.add(message, type === this.errorCode ? 'error' : type === this.warnCode ? 'warn' : type === this.debugCode ? 'debug' : 'info');
-      if (this.outputTextBox) this.renderLogs();
+      if (this.outputTextBox && this.activeView === 'logs') this.renderLogs();
     }
 
     renderLogs() {
-      const top = this.outputTextBox.scrollTop;
-      this.outputTextBox.replaceChildren(...this.logs.filter(this.logFilter.value).map(entry => {
-        const row = element('div', `bf-log-${entry.level}`, `${entry.time.slice(11, 19)} [${entry.level}] ${entry.message}`);
+      const top = this.logScrollTop || 0;
+      const entries = this.logs.filter(this.logFilter.value);
+      this.outputTextBox.replaceChildren(...entries.map(entry => {
+        const row = element('div', `bf-log-row bf-log-${entry.level}`);
+        row.append(element('time', '', entry.time.slice(11, 19)), element('span', 'bf-log-level', logLevels[entry.level]), element('span', 'bf-log-message', entry.message));
         return row;
       }));
-      this.logCount.textContent = `保留 ${this.logs.entries.length} 条 · 已淘汰 ${this.logs.dropped} 条`;
-      this.outputTextBox.scrollTop = this.scrollTopEnabled ? this.outputTextBox.scrollHeight : top;
+      if (!entries.length) this.outputTextBox.append(element('p', 'bf-empty', this.logs.entries.length ? '此级别没有记录，可切换到全部级别。' : '暂无记录。后续操作会显示在这里。'));
+      this.logCount.textContent = `${entries.length} / ${this.logs.entries.length} 条${this.logs.dropped ? ` · 已淘汰 ${this.logs.dropped} 条` : ''}`;
+      this.content.scrollTop = this.scrollTopEnabled ? this.content.scrollHeight : top;
     }
 
     reviewExport(text, filename) {
@@ -2634,7 +2666,7 @@
       this.minimizeButton.textContent = this.minimized ? '恢复面板' : '最小化';
       this.minimizeButton.setAttribute('aria-expanded', String(!this.minimized));
       if (this.minimized) { this.hiddenHeight = this.floatingPanel.style.height; this.floatingPanel.style.height = '64px'; }
-      else { this.floatingPanel.style.height = this.hiddenHeight || '640px'; this.clampToViewport(); }
+      else { this.floatingPanel.style.height = this.hiddenHeight || ''; this.footer.hidden = this.activeView === 'logs' && this.statusBox.hidden; this.clampToViewport(); }
     }
 
     recordPanelSize() { this.clampToViewport(); }

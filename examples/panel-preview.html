@@ -61,7 +61,7 @@
       if (scenario !== 'running') manager.operation.finish(scenario,
         scenario === 'failed' ? '第 2 项未确认，请先检查页面结果。' : '模拟场景，不执行真实操作。');
       panel.setBusy(scenario === 'running');
-      panel.appendLog('可展开诊断记录查看详情。', scenario === 'failed' ? 0 : 1);
+      panel.appendLog('进度与结果直接显示；操作记录可从标题栏进入。', scenario === 'failed' ? 0 : 1);
     }
     document.documentElement.dataset.previewReady = 'true';
   }

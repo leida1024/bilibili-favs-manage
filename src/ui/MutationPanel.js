@@ -27,7 +27,10 @@ export class MutationPanel {
     this.updateBusy();
   }
 
-  invalidate() { this.engine.invalidate(); this.ticket = null; this.review.replaceChildren(); }
+  invalidate() {
+    this.engine.invalidate(); this.ticket = null; this.review.replaceChildren();
+    this.agreement = null; this.confirmButton = null; this.updateBusy();
+  }
 
   setCatalog(folders, kind) {
     this.invalidate(); this.rows = []; this.list.replaceChildren();
@@ -51,6 +54,7 @@ export class MutationPanel {
   updateBusy() {
     const busy = this.panel.busy;
     this.previewButton.disabled = busy || !this.selected().length;
+    this.previewButton.hidden = this.inventoryUI.mode !== 'manage' || busy || !!this.ticket;
     for (const row of this.rows) row.input.disabled = busy || !!row.reason;
     if (this.confirmButton) this.confirmButton.disabled = busy || !this.agreement?.checked || !this.ticket;
     if (this.agreement) this.agreement.disabled = busy;

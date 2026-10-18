@@ -4,17 +4,23 @@ These capabilities are in the local development build. The published Greasy Fork
 
 ## Copy and diagnostics
 
-The panel opens on **复制收藏夹**. Select sources on the left and edit each destination name alongside it on the right. Destinations belong to your own space: existing normalized-name folders are reused and missing folders are created. Copy preserves the source. The fixed bottom bar shows the selection and starts the copy; a selected empty destination must be filled first. Additional naming and cross-page guidance is under **目标同名或不存在时会怎样？**.
+The panel opens on **复制收藏夹** in a compact window whose height follows the content up to a limit. Select sources on the left and edit each destination name alongside it on the right. Destinations belong to your own space: existing normalized-name folders are reused and missing folders are created. Copy preserves the source. The fixed bottom bar shows the selection and starts the copy; a selected empty destination must be filled first. Naming, cross-page guidance and progress details are displayed directly, with no expand/collapse controls.
 
 Progress shows confirmed steps and stops when a result cannot be confirmed. Check the destination before submitting again. Open **记录** in the header to filter, clear or review/export local logs; **返回** returns to the current task, including while busy. Export opens an editable review overlay: download explicitly or press Escape to return. Exported names and IDs may identify collections; edit before sharing.
+
+Records align time, level and message, with tools kept at the top while scrolling. Reading earlier entries disables **跟随最新**; returning to records preserves your reading position. Copy, statistics, management and records share one scrolling content area per view.
+
+![Fictional records view](assets/panel-records.png)
 
 Drag the header, resize from the panel edge, or minimize. **关闭** dismisses the panel; the Tampermonkey menu can reopen it. Closing is disabled during work. Console injection has no menu command; refresh/reinject to reopen.
 
 ## Read-only statistics
 
-Open **统计**, choose current-space created folders or your own subscriptions, and click **加载列表（只读）**. Nothing is selected initially. Select only the folders to inspect, then start statistics from the bottom bar. Opening a task view does not start requests. This does not copy, create, delete or unsubscribe. Folder IDs and owners can be expanded in the list.
+Open **统计**, choose current-space created folders or your own subscriptions, and click **加载列表（只读）**. Nothing is selected initially. Select only the folders to inspect, then start statistics from the bottom bar. Opening a task view does not start requests. This does not copy, create, delete or unsubscribe. Folder names, counts, IDs and owners share a desktop row and wrap on narrow screens. Changing scope clears old results and requires loading the new list.
 
 The summary separates entries, unique video IDs, duplicate occurrences, unavailable markers and unknown identities. Duration is a subtotal of known durations for unique videos; missing values stay unknown. Each folder shows pages, loaded count, expected count and any incomplete reason. Only a completed selected-scope scan is labelled complete. Results are not an atomic snapshot or an account-wide total. Seasons are unsupported. Requests are sequential, paced at 400ms, bounded to 100 pages per folder and 10000 entries in a scan. Cancel stops current/future reads. Export requires a separate review/download action; nothing is uploaded.
+
+![Fictional loaded inventory view](assets/panel-inventory.png)
 
 ## Delete owned folders
 
