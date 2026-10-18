@@ -71,3 +71,60 @@ test('export opens focused review without growing the task list; Escape restores
   review.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(panel.exportReview, null); assert.equal(panel.content.inert, false); assert.equal(document.activeElement, panel.logsButton);
 });
+
+test('help and progress are directly visible without disclosure; progress updates retain nodes and focus', t => {
+  const { panel } = fixture(t);
+  assert.equal(panel.floatingPanel.querySelectorAll('details,summary').length, 0);
+  assert.match(panel.workspace.querySelector('.bf-help').textContent, /同名则复用/);
+  panel.operation.begin('Fictional read');
+  const progress = panel.progressDetails;
+  panel.logsButton.focus();
+  panel.operation.confirm('First confirmed page');
+  assert.equal(panel.progressDetails, progress); assert.equal(progress.hidden, false);
+  assert.match(progress.textContent, /First confirmed page/);
+  assert.equal(panel.content.contains(progress), true); assert.equal(panel.footer.contains(progress), false);
+  assert.equal(document.activeElement, panel.logsButton);
+  panel.operation.finish('failed', 'Fictional failure reason');
+  assert.match(progress.textContent, /Fictional failure reason/);
+  assert.equal(progress.hidden, false);
+});
+
+test('records preserve reading position across navigation and hidden arrivals; filters have explicit empty guidance', t => {
+  const { panel } = fixture(t); panel.showView('logs');
+  panel.followCheckbox.checked = false; panel.followCheckbox.dispatchEvent(new window.Event('change'));
+  panel.content.scrollTop = 80; panel.content.dispatchEvent(new window.Event('scroll'));
+  panel.showView('copy');
+  const row = panel.outputTextBox.firstElementChild; panel.appendLog('Hidden fictional arrival');
+  assert.equal(panel.outputTextBox.firstElementChild, row);
+  panel.showView('logs'); assert.equal(panel.content.scrollTop, 80);
+  assert.match(panel.outputTextBox.textContent, /Hidden fictional arrival/);
+  panel.logFilter.value = 'error'; panel.logFilter.dispatchEvent(new window.Event('change'));
+  assert.match(panel.outputTextBox.textContent, /此级别没有记录/);
+  panel.logs.clear(); panel.renderLogs(); assert.match(panel.outputTextBox.textContent, /暂无记录/);
+});
+
+test('scope reset clears stale statistics and tickets; preview action returns on abandon; management errors stay visible', async t => {
+  const { panel, counts } = fixture(t); const ui = panel.inventoryPanel;
+  panel.showView('manage'); await ui.load();
+  assert.equal(ui.mutations.list.querySelectorAll('details').length, 0);
+  assert.match(ui.mutations.list.textContent, /ID 100 \/ 所有者 50/);
+  const m = ui.mutations; m.rows[0].input.checked = true; ui.updateBusy(); m.preview();
+  assert.equal(m.previewButton.hidden, true); assert.ok(m.ticket);
+  m.invalidate(); assert.equal(m.previewButton.hidden, false); assert.equal(m.ticket, null);
+  ui.report = { complete: true }; ui.result.textContent = 'Stale statistics'; m.results.textContent = 'Previous result';
+  ui.kind.value = 'subscribed'; ui.kind.dispatchEvent(new window.Event('change'));
+  assert.equal(ui.report, null); assert.equal(ui.result.textContent, ''); assert.equal(m.results.textContent, '');
+  assert.equal(ui.exportButton.disabled, true); assert.equal(ui.selected().length, 0);
+  assert.deepEqual(counts(), { reads: 1, mutations: 0 });
+  await ui.run('Fictional failure', async () => { throw new Error('Visible management failure'); });
+  assert.match(m.results.textContent, /Visible management failure/);
+  assert.equal(panel.busy, false);
+});
+
+test('minimize restores automatic or manual dimensions without resetting them on task switches', t => {
+  const { panel } = fixture(t);
+  panel.toggleMinimize(); panel.toggleMinimize(); assert.equal(panel.floatingPanel.style.height, '');
+  panel.floatingPanel.style.width = '610px'; panel.floatingPanel.style.height = '480px';
+  panel.showView('statistics'); panel.toggleMinimize(); panel.toggleMinimize();
+  assert.equal(panel.floatingPanel.style.width, '610px'); assert.equal(panel.floatingPanel.style.height, '480px');
+});
