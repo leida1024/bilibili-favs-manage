@@ -103,3 +103,36 @@ Verified release boundary and dedicated browser panel smoke; fixed npm shim stdi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: Synthetic owned-folder deletion acceptance
+
+**Date**: 2026-10-18
+**Task**: Synthetic owned-folder deletion acceptance
+**Branch**: `develop`
+
+### Summary
+
+37 tests/build passed. One-use identity revalidation, cancellation and unknown-stop verified with fixtures; fictional browser confirmation passed. Live deletion pending disposable targets; no push.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0d3a754` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

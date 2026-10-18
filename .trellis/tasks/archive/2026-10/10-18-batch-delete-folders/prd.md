@@ -24,4 +24,4 @@ Implement after UI/logs and stable inventory/identity discovery in the statistic
 
 ## Scope and authorization
 
-Planning entry only. Create design.md and implement.md after inspecting platform semantics. The current request authorizes planning this capability, not deleting any real folders. No bulk video deletion or Greasy Fork release.
+Stage 3 implementation and synthetic testing authorized; design.md resolves platform evidence and safeguards. No real folders are authorized for deletion. Local commits only, no push. No bulk video deletion or Greasy Fork release.
