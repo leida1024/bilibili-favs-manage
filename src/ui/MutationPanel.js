@@ -6,11 +6,11 @@ import { SelectionToolbar } from './SelectionToolbar.js';
 const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
 const descriptions = {
   delete: { verb: '删除', title: '删除自己创建的收藏夹',
-    detail: '删除整个收藏夹，无法撤销；原视频保留。',
+    detail: '删除此收藏夹及其中的收藏关系，无法在此撤销。',
     agreement: '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。' },
   unsubscribe: { verb: '退订', title: '取消我的收藏夹订阅',
-    detail: '取消我的订阅，原作者内容不受影响。',
-    agreement: '我已检查以上 ID 和所有者，确认取消当前账号对这些收藏夹的订阅；原作者的内容不受影响。' }
+    detail: '取消当前账号对此收藏夹或合集的订阅。',
+    agreement: '我已检查以上类型、ID 和所有者，确认取消当前账号对这些目标的订阅。' }
 };
 
 export class MutationPanel {
@@ -73,10 +73,13 @@ export class MutationPanel {
     this.invalidate();
     try {
       const description = descriptions[this.action];
+      if (this.panel.manager.modes?.manage === 'web' && this.selected().some(folder => folder.available === false))
+        throw new Error('失效条目在网页不显示可核对 ID。请在设置中将“删除与取消订阅”改为 API，保存后重新加载；尚未提交。');
       this.ticket = this.engine.prepare(this.action, this.selected());
-      this.review.append(element('h3', '', `将${description.verb} ${this.ticket.targets.length} 个收藏夹`));
+      const mode = this.panel.manager.modes?.manage;
+      this.review.append(element('h3', '', `将${description.verb} ${this.ticket.targets.length} 项${mode ? `（${mode === 'api' ? 'API' : '网页'}）` : ''}`));
       this.review.append(element('p', '', description.detail));
-      for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ID ${target.id} · 所有者 ${target.ownerId} · ${target.count ?? '未知'} 条`));
+      for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ${target.kind === 'season' ? '合集' : '收藏夹'} · ID ${target.id} · 所有者 ${target.ownerId || '未知'} · ${target.count ?? '未知'} 条${target.available === false ? ' · 内容已失效' : ''}`));
       this.agreement = element('input'); this.agreement.type = 'checkbox';
       const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', description.agreement));
       this.agreement.addEventListener('change', () => this.updateBusy());

@@ -57,7 +57,8 @@ test('explicit zero-count null lists are empty; unknown totals and mismatched id
 test('client normalizes IDs, excludes unknown types, rejects incomplete and duplicate discovery', async () => {
   assert.equal(normalizeFolder({ id: 1, mid: 2, title: 'same', is_kid_playlist: 0 }, 'created').protected, true);
   assert.equal(normalizeFolder({ id: 2, mid: 2, title: 'same', is_kid_playlist: 0 }, 'created', 1).protected, false);
-  assert.equal(normalizeFolder({ id: 1, upper: { mid: 2 }, type: 21 }, 'subscribed').kind, 'unsupported');
+  assert.equal(normalizeFolder({ id: 1, upper: { mid: 2 }, type: 21 }, 'subscribed').kind, 'season');
+  assert.equal(normalizeFolder({ id: 1, upper: { mid: 2 }, type: 99 }, 'subscribed').kind, 'unsupported');
   let data = { count: 2, list: [{ id: 1 }] };
   const client = new FolderClient(async (url, options) => {
     assert.equal(options.credentials, 'include'); assert.equal(options.method, undefined);

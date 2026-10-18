@@ -14,14 +14,23 @@ import { OperationState } from './OperationState.js';
 import { InventoryService } from './InventoryService.js';
 import { BatchOperations } from './BatchOperations.js';
 import { LogStore } from '../utils/logStore.js';
+import { browserStore, panelPreferences, validModes } from '../utils/preferences.js';
+import { FolderClient } from './FolderClient.js';
+import { WebFolderClient } from './WebFolderClient.js';
+import { TransportClient } from './TransportClient.js';
+import { ApiCopyFlow } from './ApiCopyFlow.js';
 
 export class FavoriteManager {
   constructor() {
     this.api = BilibiliAPI;
     this.crossPageFlow = new CrossPageFlowManager(this);
     this.operation = new OperationState();
-    this.logs = new LogStore();
-    this.inventory = new InventoryService();
+    this.logs = new LogStore(500, browserStore('sessionStorage', `bili-favs-records-v2:${PageDetector.getLoginUserUID() || 'guest'}`));
+    this.modes = panelPreferences().modes;
+    this.http = new FolderClient(); this.web = new WebFolderClient();
+    this.transport = new TransportClient(this.http, this.web, this.modes);
+    this.inventory = new InventoryService(this.transport);
+    this.apiCopy = new ApiCopyFlow(this.http, () => ({ actor: PageDetector.getLoginUserUID(), pageOwner: PageDetector.getCurrentPageUID() }));
     this.batchOperations = new BatchOperations(this.inventory.client, () => ({ actor: PageDetector.getLoginUserUID(), pageOwner: PageDetector.getCurrentPageUID() }));
   }
 
@@ -239,6 +248,34 @@ export class FavoriteManager {
    * @returns {Promise<void>}
    */
   async batchCopy(copyList, options = {}) {
+    // A saved webpage handoff must never change execution transport on refresh.
+    if (options.skipCrossPage || options.operationId) return this.batchCopyWeb(copyList, options);
+    const modes = validModes(this.modes);
+    copyList = normalizeCopyTasks(copyList);
+    if (modes.copy === 'web' && modes.create === 'web') return this.batchCopyWeb(copyList, options);
+    this.operation.begin(`批量复制（${modes.copy === 'api' ? 'API' : '网页'}）`, copyList.length, { phase: 'copying' });
+    this.logs.setContext({ view: 'copy', operationId: this.operation.state.operationId, phase: 'copying' });
+    log(`本次方式：复制 ${modes.copy}，创建 ${modes.create}；不会自动切换或重试。`);
+    try {
+      const creator = modes.create === 'api' ? this.http : this.web;
+      if (modes.copy === 'api') {
+        await this.apiCopy.run(copyList, { creator, onProgress: event => {
+          if (event.complete) this.operation.confirm(`${event.task.source} → ${event.task.target}`);
+          else this.operation.update({ detail: `当前收藏夹已确认 ${event.copied} / ${event.total} 条（API）。` });
+        } });
+        this.operation.finish('completed', '所选任务已获得平台确认，请核对目标收藏夹。');
+        return { status: 'completed' };
+      }
+      const expected = this.apiCopy.context();
+      await this.apiCopy.prepareTargets([...new Set(copyList.map(task => task.target))], expected, creator);
+      return await this.batchCopyWeb(copyList, { skipCrossPage: true, operationId: this.operation.state.operationId });
+    } catch (error) {
+      if (!['failed', 'unknown'].includes(this.operation.state.status)) this.operation.finish(error.outcome === 'unknown' ? 'unknown' : 'failed', error.message);
+      throw error;
+    }
+  }
+
+  async batchCopyWeb(copyList, options = {}) {
     copyList = normalizeCopyTasks(copyList);
     const { skipCrossPage = false } = options;
     if (!options.operationId || this.operation.state.operationId !== options.operationId || this.operation.state.status !== 'running')

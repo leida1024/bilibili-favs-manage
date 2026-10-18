@@ -9,6 +9,8 @@ import { element, button } from './elements.js';
 import { InventoryPanel } from './InventoryPanel.js';
 import { SelectionToolbar } from './SelectionToolbar.js';
 import { CONFIG } from '../config/config.js';
+import { panelPreferences } from '../utils/preferences.js';
+import { PanelLayout } from './PanelLayout.js';
 export { element, button } from './elements.js';
 
 const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止', interrupted: '已中断', unknown: '待核对', waiting: '等待跳转' };
@@ -31,10 +33,12 @@ export class FloatingPanel {
     this.minH = 64;
     this.activeView = 'copy';
     this.viewScroll = new Map();
-    this.logsOpen = true;
+    this.preferences = panelPreferences();
+    this.logsOpen = this.preferences.logsOpen;
+    this.layout = new PanelLayout(this, this.preferences);
   }
 
-  get operation() { return this.operations[this.activeView]; }
+  get operation() { return this.operations[this.activeView] || this.operations.copy; }
 
   init() {
     this.favorites = this.manager.getAllFavoriteNames();
@@ -44,14 +48,28 @@ export class FloatingPanel {
     style.textContent = panelStyles;
     this.floatingPanel = root;
     this.header = element('header', 'bf-header');
+    this.header.tabIndex = 0;
+    this.header.title = '拖动标题移动；聚焦标题后方向键移动，Shift + 方向键调整大小';
+    this.header.setAttribute('aria-label', this.header.title);
+    this.header.addEventListener('keydown', event => {
+      if (event.target !== this.header || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+      event.preventDefault(); const r = this.layout.rect();
+      const dx = event.key === 'ArrowLeft' ? -10 : event.key === 'ArrowRight' ? 10 : 0;
+      const dy = event.key === 'ArrowUp' ? -10 : event.key === 'ArrowDown' ? 10 : 0;
+      if (event.shiftKey && !this.minimized) EventHandlers.judgePanelSizeAndUpdate(this, r.left, r.top, r.width + dx, r.height + dy);
+      else EventHandlers.judgePanelPosAndUpdate(this, r.left + dx, r.top + dy);
+      this.layout.save();
+    });
     this.header.append(element('strong', '', '收藏夹管理'));
     this.versionLabel = element('span', 'bf-version', `v${CONFIG.SCRIPT.VERSION}`);
     this.header.append(this.versionLabel);
-    this.logsButton = button('操作记录', () => this.toggleLogs(), 'bf-quiet');
-    this.logsButton.setAttribute('aria-expanded', 'true');
-    this.logsButton.setAttribute('aria-label', '收起操作记录');
-    this.minimizeButton = button('最小化', () => this.toggleMinimize());
-    this.dismissButton = button('关闭', () => { this.onDismiss?.(); this.destroy(); });
+    this.logsButton = button('记录', () => this.toggleLogs(), 'bf-quiet');
+    this.logsButton.setAttribute('aria-expanded', String(this.logsOpen));
+    this.logsButton.setAttribute('aria-label', this.logsOpen ? '收起操作记录' : '查看操作记录');
+    this.minimizeButton = button('−', () => this.toggleMinimize());
+    this.minimizeButton.setAttribute('aria-label', '最小化'); this.minimizeButton.title = '最小化';
+    this.dismissButton = button('×', () => { this.onDismiss?.(); this.destroy(); });
+    this.dismissButton.setAttribute('aria-label', '关闭'); this.dismissButton.title = '关闭';
     this.header.append(this.logsButton, this.minimizeButton, this.dismissButton);
     this.navigation = element('nav', 'bf-navigation');
     this.navigation.setAttribute('aria-label', '管理功能');
@@ -61,12 +79,19 @@ export class FloatingPanel {
       const control = button(label, () => this.showView(view));
       this.viewButtons.set(view, control); this.navigation.append(control);
     }
+    if (this.manager.modes) {
+      this.modeButton = button('设置', () => this.showView('settings'));
+      this.modeButton.dataset.settings = 'true';
+      this.viewButtons.set('settings', this.modeButton);
+      this.navigation.append(this.modeButton);
+    }
     this.content = element('div', 'bf-content');
     this.scope = element('p', 'bf-sr-only');
     this.workspace = element('section', 'bf-workspace');
     const heading = element('div', 'bf-task-heading');
     heading.append(this.scope);
     const help = element('p', 'bf-help', '同名则复用，否则新建；来源保留。');
+    this.copyHelp = help;
     heading.append(help);
     this.workspace.append(heading);
     this.leftPanel = element('section', 'bf-sources');
@@ -100,6 +125,7 @@ export class FloatingPanel {
       this.inventoryPanel = new InventoryPanel(this, this.manager.inventory);
       this.content.append(this.inventoryPanel.root);
     }
+    if (this.manager.modes) { this.createSettingsPanel(); this.content.append(this.settingsRoot); }
     this.createDiagnostics();
     this.footer = element('footer', 'bf-footer');
     this.statusBox.append(this.progressDetails);
@@ -107,7 +133,10 @@ export class FloatingPanel {
     if (this.inventoryPanel) this.footer.append(this.inventoryPanel.actions);
     this.body = element('div', 'bf-body');
     this.body.append(this.content, this.footer, this.diagnostics);
-    root.append(style, this.header, this.navigation, this.body);
+    this.resizeGrip = element('span', 'bf-resize-grip');
+    this.resizeGrip.setAttribute('aria-hidden', 'true');
+    this.resizeGrip.title = '拖动调整大小';
+    root.append(style, this.header, this.navigation, this.body, this.resizeGrip);
     document.body.append(root);
     root.dataset.logsOpen = String(this.logsOpen);
     this.unsubscribes = Object.entries(this.operations).map(([view, operation]) =>
@@ -116,21 +145,23 @@ export class FloatingPanel {
       EventHandlers.mouseMove(this, event);
       EventHandlers.dragOnPanel(this, event);
     };
-    this.onBodyUp = () => { this.resizeable = false; this.isDragging = false; };
+    this.onBodyUp = () => { this.resizeable = false; this.isDragging = false; this.dragStart = null; this.layout.save(); };
     root.addEventListener('mousedown', event => EventHandlers.mouseDown(this, event));
-    document.body.addEventListener('mousemove', this.onBodyMove);
-    document.body.addEventListener('mouseup', this.onBodyUp);
-    this.onViewportResize = () => this.clampToViewport();
+    document.addEventListener('mousemove', this.onBodyMove);
+    document.addEventListener('mouseup', this.onBodyUp);
+    window.addEventListener('blur', this.onBodyUp);
+    this.onViewportResize = () => { this.clampToViewport(); this.layout.save(); };
     window.addEventListener('resize', this.onViewportResize);
-    this.clampToViewport();
+    this.layout.restore();
     this.updateSelectionReview();
     this.showPageTypeIndicator();
     this.renderView();
   }
 
   showView(view) {
-    if (!['copy', 'statistics', 'manage'].includes(view) || this.busy || view === this.activeView) return;
+    if (!['copy', 'statistics', 'manage', 'settings'].includes(view) || this.busy || view === this.activeView) return;
     if ((view === 'statistics' || view === 'manage') && !this.inventoryPanel) return;
+    if (view === 'settings' && !this.settingsRoot) return;
     this.viewScroll.set(this.activeView, this.content.scrollTop);
     this.inventoryPanel?.mutations?.invalidate();
     this.activeView = view;
@@ -140,7 +171,9 @@ export class FloatingPanel {
 
   renderView() {
     const view = this.activeView;
+    this.updateModeSummary();
     this.workspace.hidden = view !== 'copy';
+    if (this.settingsRoot) this.settingsRoot.hidden = view !== 'settings';
     if (this.inventoryPanel) {
       this.inventoryPanel.root.hidden = !['statistics', 'manage'].includes(view);
       if (view === 'statistics' || view === 'manage') this.inventoryPanel.setMode(view);
@@ -149,11 +182,13 @@ export class FloatingPanel {
     this.copyActions.hidden = view !== 'copy';
     this.renderOperation(this.operation.state);
     if (this.outputTextBox && this.logsOpen && !this.minimized) this.renderLogs();
-    this.footer.hidden = !!this.minimized;
+    this.footer.hidden = !!this.minimized || view === 'settings';
     for (const [name, control] of this.viewButtons) control.setAttribute('aria-pressed', String(name === view));
   }
 
   toggleLogs() {
+    if (this.minimized) this.toggleMinimize();
+    this.layout.toggle(!this.logsOpen);
     this.logsOpen = !this.logsOpen;
     // Opening diagnostics from a minimized window restores the working context.
     if (this.logsOpen && this.minimized) this.toggleMinimize();
@@ -163,6 +198,7 @@ export class FloatingPanel {
     this.logsButton.setAttribute('aria-label', this.logsOpen ? '收起操作记录' : '查看操作记录');
     if (this.logsOpen) this.renderLogs();
     else if (this.diagnostics.contains(document.activeElement)) this.logsButton.focus();
+    this.clampToViewport(); this.layout.save();
   }
 
   showPageTypeIndicator() {
@@ -224,6 +260,7 @@ export class FloatingPanel {
     this.floatingPanel?.setAttribute('aria-busy', String(busy));
     this.selectAllButton.disabled = busy || !this.favorites.length;
     this.dismissButton.disabled = busy;
+    if (this.modeButton) this.modeButton.disabled = busy;
     for (const control of this.viewButtons.values()) control.disabled = busy;
     for (const item of this.favCheckboxItemList) { item.checkbox.disabled = busy; item.inputText.disabled = busy; }
     this.startBatchTransferButton.textContent = busy ? '操作中…' : '开始批量复制';
@@ -285,22 +322,24 @@ export class FloatingPanel {
     recordTools.append(title);
     const tools = element('div', 'bf-tools');
     this.logScope = element('select'); this.logScope.setAttribute('aria-label', '记录范围');
-    for (const [value, text] of [['current', '当前功能'], ['all', '全部功能']]) {
+    for (const [value, text] of [['current', '复制功能'], ['all', '全部功能']]) {
       const option = element('option', '', text); option.value = value; this.logScope.append(option);
     }
     this.logScope.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
     this.logFilter = element('select');
-    this.logFilter.setAttribute('aria-label', '日志级别');
-    for (const [value, text] of [['normal', '常规级别'], ['all', '全部级别'], ['error', '错误'], ['warn', '警告'], ['info', '信息'], ['debug', '调试']]) {
+    this.logFilter.setAttribute('aria-label', '记录内容');
+    for (const [value, text] of [['normal', '操作与结果'], ['all', '全部（含调试）'], ['error', '仅错误'], ['warn', '仅警告'], ['info', '仅提示'], ['debug', '仅调试信息']]) {
       const option = element('option', '', text); option.value = value; this.logFilter.append(option);
     }
     this.logFilter.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
     this.followCheckbox = element('input'); this.followCheckbox.type = 'checkbox'; this.followCheckbox.checked = true;
     const followLabel = element('label', '', '跟随最新'); followLabel.prepend(this.followCheckbox);
     this.followCheckbox.addEventListener('change', () => { this.scrollTopEnabled = this.followCheckbox.checked; this.renderLogs(); });
-    tools.append(this.logScope, this.logFilter, followLabel);
+    const scopeLabel = element('label', 'bf-log-filter', '范围'); scopeLabel.append(this.logScope);
+    const contentLabel = element('label', 'bf-log-filter', '内容'); contentLabel.append(this.logFilter);
+    tools.append(scopeLabel, contentLabel);
     const actions = element('div', 'bf-log-actions');
-    actions.append(button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('导出记录', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')));
+    actions.append(button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('导出记录', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')), followLabel);
     this.outputTextBox = element('div', 'output-text-box');
     this.outputTextBox.tabIndex = 0;
     this.outputTextBox.setAttribute('role', 'region');
@@ -368,34 +407,73 @@ export class FloatingPanel {
     area.focus();
   }
 
+  updateModeSummary() {
+    if (!this.manager.modes) return;
+    const name = value => value === 'api' ? 'API' : '网页';
+    const modes = this.manager.modes;
+    this.copyHelp.textContent = `${name(modes.copy)}复制 · ${name(modes.create)}创建 · 来源保留`;
+    this.modeButton.title = `读取/统计：${name(modes.read)}；复制：${name(modes.copy)}；创建：${name(modes.create)}；删除/退订：${name(modes.manage)}`;
+    this.modeButton.setAttribute('aria-label', `设置。${this.modeButton.title}`);
+    if (this.logScope) this.logScope.options[0].textContent = ({ copy: '复制功能', statistics: '统计功能', manage: '管理功能', settings: '设置' })[this.activeView];
+  }
+
+  showModeSettings() { this.showView('settings'); }
+
+  createSettingsPanel() {
+    const root = element('section', 'bf-settings'); this.settingsRoot = root; root.hidden = true;
+    root.setAttribute('aria-label', '设置');
+    root.append(element('h2', '', '操作方式'),
+      element('p', 'bf-muted', '网页方式操作页面按钮，较慢且依赖页面结构；API 直接请求 B 站网页接口，接口和权限可能变化。两种方式均使用当前登录账号。'),
+      element('p', 'bf-muted', '结果不明时停止，不自动切换或重试。API 复制也会读取来源；API 新建目标默认为私密。网页读取会依次查看条目，请勿同时操作页面。'));
+    this.modeChoices = new Map();
+    for (const [key, title] of [['read', '列表读取与统计'], ['copy', '复制内容'], ['create', '创建目标收藏夹'], ['manage', '删除与取消订阅']]) {
+      const label = element('label', 'bf-setting-row', title), select = element('select');
+      select.setAttribute('aria-label', title);
+      for (const [value, title] of [['web', '网页操作'], ['api', 'API']]) { const option = element('option', '', title); option.value = value; select.append(option); }
+      select.value = this.manager.modes[key]; label.append(select); root.append(label); this.modeChoices.set(key, select);
+    }
+    this.settingsStatus = element('p', 'bf-muted'); this.settingsStatus.setAttribute('role', 'status');
+    const controls = element('div', 'bf-tools');
+    this.saveModesButton = button('保存设置', () => {
+      if (this.busy) return;
+      for (const [key, control] of this.modeChoices) this.manager.modes[key] = control.value;
+      this.inventoryPanel?.resetCatalog('设置已更换，请重新加载列表。');
+      this.updateModeSummary(); this.layout.save(); this.settingsStatus.textContent = '已保存。新任务使用以上设置。';
+      this.logs.add(this.modeButton.title, 'info', { view: 'system', phase: 'settings' }); this.renderLogs();
+    }, 'bf-primary');
+    controls.append(this.saveModesButton, button('恢复默认位置和大小', () => this.layout.reset()));
+    root.append(controls, this.settingsStatus);
+  }
+
   toggleMinimize() {
     this.minimized = !this.minimized;
     this.floatingPanel.dataset.minimized = String(this.minimized);
     this.content.hidden = this.minimized;
-    this.navigation.hidden = this.minimized; this.footer.hidden = this.minimized;
+    this.navigation.hidden = this.minimized; this.footer.hidden = this.minimized || this.activeView === 'settings';
     this.diagnostics.hidden = this.minimized || !this.logsOpen;
-    this.minimizeButton.textContent = this.minimized ? '恢复面板' : '最小化';
+    this.minimizeButton.textContent = this.minimized ? '□' : '−';
+    this.minimizeButton.setAttribute('aria-label', this.minimized ? '恢复面板' : '最小化');
+    this.minimizeButton.title = this.minimized ? '恢复面板' : '最小化';
     this.minimizeButton.setAttribute('aria-expanded', String(!this.minimized));
     if (this.minimized) { this.hiddenHeight = this.floatingPanel.style.height; this.floatingPanel.style.height = '64px'; }
     else { this.floatingPanel.style.height = this.hiddenHeight || ''; if (this.logsOpen) this.renderLogs(); this.clampToViewport(); }
+    this.layout.save();
   }
 
-  recordPanelSize() { this.clampToViewport(); }
+  recordPanelSize() { this.clampToViewport(); this.layout.save(); }
 
   clampToViewport() {
-    if (!this.floatingPanel) return;
-    const panel = this.floatingPanel;
-    const rect = panel.getBoundingClientRect();
-    panel.style.left = Math.max(0, Math.min(rect.left, window.innerWidth - rect.width)) + 'px';
-    panel.style.top = Math.max(0, Math.min(rect.top, window.innerHeight - rect.height)) + 'px';
+    if (this.floatingPanel) this.layout.clamp();
   }
 
   destroy() {
+    if (this.floatingPanel) this.layout.save();
     this.inventoryPanel?.destroy();
     if (this.operation.state.status === 'running') this.operation.finish('interrupted', '面板已离开当前页面；请检查页面结果，不要直接重复提交。');
     this.unsubscribes?.forEach(unsubscribe => unsubscribe());
-    document.body.removeEventListener('mousemove', this.onBodyMove);
-    document.body.removeEventListener('mouseup', this.onBodyUp);
+    document.removeEventListener('mousemove', this.onBodyMove);
+    document.removeEventListener('mouseup', this.onBodyUp);
+    window.removeEventListener('blur', this.onBodyUp);
     window.removeEventListener('resize', this.onViewportResize);
     this.floatingPanel?.remove();
     this.floatingPanel = null;

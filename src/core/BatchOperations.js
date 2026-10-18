@@ -1,15 +1,17 @@
-import { stableId, pause } from './FolderClient.js';
+import { stableId, pause, folderKey } from './FolderClient.js';
 
 export function eligibility(action, folder, actor, pageOwner) {
-  if (!stableId(actor) || !stableId(folder.id) || !stableId(folder.ownerId)) return '身份未确认';
-  if (!folder.available) return '对象不可用';
+  if (!stableId(actor) || !stableId(folder.id)) return '身份未确认';
+  if (folder.identityConflict) return '身份信息冲突';
   if (action === 'unsubscribe') {
-    if (folder.kind !== 'subscribed') return '仅支持收藏夹订阅，合集暂不支持';
+    if (!['subscribed', 'season'].includes(folder.kind)) return '订阅类型未识别';
     if (folder.ownerId === actor) return '不能将自己的收藏夹当作订阅';
     if (folder.subscribed !== true) return '订阅状态未确认';
     return null;
   }
   if (action !== 'delete') return '操作类型不支持';
+  if (!stableId(folder.ownerId)) return '所有者未确认';
+  if (!folder.available) return '对象不可用';
   if (folder.kind !== 'created') return '不是创建的收藏夹';
   if (folder.ownerId !== actor || pageOwner !== actor) return '只能管理自己空间的收藏夹';
   if (folder.protected !== false) return { default: '默认收藏夹', special: '特殊收藏夹', unknown: '保护状态未确认' }[folder.protectionReason] || '默认、特殊或保护状态未确认';
@@ -24,12 +26,12 @@ export class BatchOperations {
   prepare(action, folders) {
     this.invalidate();
     const { actor, pageOwner } = this.context();
-    if (this.running || !folders.length || new Set(folders.map(f => f.id)).size !== folders.length) throw new Error('请选择有效且不重复的目标');
+    if (this.running || !folders.length || new Set(folders.map(folderKey)).size !== folders.length) throw new Error('请选择有效且不重复的目标');
     for (const folder of folders) {
       const reason = eligibility(action, folder, actor, pageOwner);
       if (reason) throw new Error(reason);
     }
-    this.ticket = Object.freeze({ action, actor, pageOwner, targets: Object.freeze(folders.map(folder => Object.freeze({ ...folder }))) });
+    this.ticket = Object.freeze({ action, actor, pageOwner, transport: this.client.capture?.(), targets: Object.freeze(folders.map(folder => Object.freeze({ ...folder }))) });
     return this.ticket;
   }
 
@@ -37,7 +39,8 @@ export class BatchOperations {
     if (!confirmed || !ticket || ticket !== this.ticket || this.running) throw new Error('请重新预览并明确确认本次目标');
     this.invalidate(); // Consume BEFORE any await or submission. Never persist/replay.
     this.running = true;
-    const results = ticket.targets.map(target => ({ id: target.id, ownerId: target.ownerId, name: target.name, status: 'not_started', detail: '尚未提交' }));
+    const results = ticket.targets.map(target => ({ id: target.id, kind: target.kind, ownerId: target.ownerId, name: target.name, status: 'not_started', detail: '尚未提交' }));
+    const client = ticket.transport || this.client;
     try {
       for (let index = 0; index < ticket.targets.length; index++) {
         if (signal?.aborted) break;
@@ -48,16 +51,16 @@ export class BatchOperations {
           if (index) await pause(this.pace, signal);
           const current = this.context();
           if (current.actor !== ticket.actor || current.pageOwner !== ticket.pageOwner) throw new Error('当前账号或空间变化，请重新预览');
-          const catalog = await this.client.folders(ticket.actor, ticket.action === 'delete' ? 'created' : 'subscribed', signal, this.pace);
+          const catalog = await client.folders(ticket.actor, ticket.action === 'delete' ? 'created' : 'subscribed', signal, this.pace, target);
           if (signal?.aborted) break;
-          const fresh = catalog.find(folder => folder.id === target.id);
+          const fresh = catalog.find(folder => folder.id === target.id && folder.kind === target.kind);
           if (!fresh || eligibility(ticket.action, fresh, current.actor, current.pageOwner) ||
-            ['id', 'ownerId', 'name', 'count', 'kind', 'protected', 'protectionReason', 'available', 'subscribed'].some(key => fresh[key] !== target[key])) throw new Error('目标身份、名称、数量或保护状态变化，请重新加载并预览');
+            ['id', 'ownerId', 'name', 'count', 'kind', 'protected', 'protectionReason', 'available', 'subscribed', 'identityConflict'].some(key => fresh[key] !== target[key])) throw new Error('目标身份、名称、数量或保护状态变化，请重新加载并预览');
           const latest = this.context();
           if (latest.actor !== ticket.actor || latest.pageOwner !== ticket.pageOwner) throw new Error('账号或空间变化，未提交');
           if (signal?.aborted) break;
           submitted = true;
-          result = await this.client.mutate(ticket.action, target, signal);
+          result = await client.mutate(ticket.action, target, signal);
           if (!['confirmed', 'failed', 'unknown', 'not_started'].includes(result?.status)) result = { status: 'unknown', detail: '结果未识别，已停止；请检查平台' };
         } catch (err) {
           if (!submitted && signal?.aborted) break;
