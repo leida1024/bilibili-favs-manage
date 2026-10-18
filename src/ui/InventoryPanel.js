@@ -9,9 +9,8 @@ export class InventoryPanel {
     this.mode = 'statistics';
     this.root = element('section', 'bf-inventory');
     this.heading = element('h2', '', '查看收藏夹统计');
-    this.intro = element('p', 'bf-intro', '加载列表并勾选收藏夹，查看视频数量、重复项和时长。不会修改收藏。');
-    const help = element('p', 'bf-help', '只统计选中范围；缺失信息保留为未知，合集暂不支持。请求间隔 400ms，每夹最多 100 页，总计最多 10000 条；取消或失败会保留部分结果。');
-    this.root.append(this.heading, this.intro, help); this.help = help;
+    this.intro = element('p', 'bf-help', '只读取选中收藏夹，不修改收藏；缺失信息显示未知，取消或失败保留部分结果。合集暂不支持。');
+    this.root.append(this.heading, this.intro);
     this.kind = element('select'); this.kind.setAttribute('aria-label', '加载范围');
     for (const [value, label] of [['created', '当前空间创建的收藏夹'], ['subscribed', '我的收藏夹订阅']]) {
       const option = element('option', '', label); option.value = value; this.kind.append(option);
@@ -20,7 +19,9 @@ export class InventoryPanel {
     this.scanButton = button('统计选中收藏夹', () => this.scan());
     this.cancelButton = button('停止后续操作', () => { this.controller?.abort(); this.updateBusy(); });
     this.exportButton = button('检查并导出统计', () => { if (this.report) panel.reviewExport(JSON.stringify(this.report, null, 2), 'bili-inventory.json'); });
-    const tools = element('div', 'bf-tools'); tools.append(this.kind, this.loadButton);
+    const tools = element('div', 'bf-tools bf-catalog-tools');
+    const scopeLabel = element('label', 'bf-scope-label', '列表范围');
+    scopeLabel.append(this.kind); tools.append(scopeLabel, this.loadButton);
     this.selectionCount = element('p', 'bf-selection-count', '尚未选择收藏夹');
     this.actions = element('div', 'bf-action-bar');
     this.actions.append(this.selectionCount, this.exportButton, this.scanButton, this.cancelButton);
@@ -35,25 +36,31 @@ export class InventoryPanel {
       this.actions.insertBefore(this.mutations.previewButton, this.cancelButton);
     }
     this.kind.addEventListener('change', () => {
-      this.folders = []; this.rows = []; this.report = null; this.result.replaceChildren();
-      this.list.replaceChildren(element('p', 'bf-empty', '范围已更换，请重新加载列表。'));
-      this.mutations?.setCatalog([], this.kind.value); this.mutations?.results.replaceChildren(); this.updateBusy();
+      this.resetCatalog('范围已更换，请重新加载列表。'); this.updateBusy();
       this.panel.operation.update({ status: 'idle', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '' });
     });
+    this.mutations?.setCatalog([], this.kind.value);
     this.updateBusy();
+  }
+
+  resetCatalog(message) {
+    this.panel.viewScroll.delete('statistics'); this.panel.viewScroll.delete('manage');
+    if (this.panel.activeView !== 'copy') this.panel.content.scrollTop = 0;
+    this.folders = []; this.rows = []; this.report = null; this.result.replaceChildren();
+    this.catalogOwner = null; this.catalogKind = null;
+    this.list.replaceChildren(element('p', 'bf-empty', message));
+    this.mutations?.setCatalog([], this.kind.value); this.mutations?.results.replaceChildren();
   }
 
   setMode(mode) {
     if (this.mode !== mode) {
       this.mutations?.invalidate();
-      for (const row of this.rows) row.input.checked = false;
-      for (const row of this.mutations?.rows || []) row.input.checked = false;
     }
     this.mode = mode;
     const manage = mode === 'manage';
     this.heading.textContent = manage ? '管理我的收藏夹' : '查看收藏夹统计';
-    this.intro.textContent = manage ? '先加载列表，再选择要删除的收藏夹或要取消的订阅。执行前会逐项确认。' : '加载列表并勾选收藏夹，查看视频数量、重复项和时长。不会修改收藏。';
-    this.help.hidden = manage;
+    this.intro.textContent = '只读取选中收藏夹，不修改收藏；缺失信息显示未知，取消或失败保留部分结果。合集暂不支持。';
+    this.intro.hidden = manage;
     this.list.hidden = manage; this.result.hidden = manage;
     if (this.mutations) this.mutations.root.hidden = !manage;
     this.updateBusy();
@@ -62,6 +69,7 @@ export class InventoryPanel {
   updateBusy() {
     const busy = this.panel.busy;
     this.kind.disabled = busy; this.loadButton.disabled = busy;
+    this.loadButton.textContent = busy ? '操作中…' : this.folders.length ? '重新加载列表' : '加载列表（只读）';
     this.scanButton.disabled = busy || !this.selected().length;
     this.cancelButton.disabled = !busy || !this.controller || this.controller.signal.aborted;
     this.exportButton.disabled = busy || !this.report;
@@ -94,12 +102,20 @@ export class InventoryPanel {
 
   load() {
     return this.run('读取收藏夹列表', async signal => {
-      this.folders = []; this.rows = []; this.list.replaceChildren(); this.report = null; this.result.textContent = '';
-      this.mutations?.setCatalog([], this.kind.value);
+      this.resetCatalog('正在读取列表，请稍候…');
       const kind = this.kind.value;
       const owner = kind === 'created' ? PageDetector.getCurrentPageUID() : PageDetector.getLoginUserUID();
-      const folders = await this.service.client.folders(owner, kind, signal);
-      if (signal.aborted) return;
+      let folders;
+      try { folders = await this.service.client.folders(owner, kind, signal); }
+      catch (err) {
+        this.list.replaceChildren(element('p', 'bf-empty', signal.aborted ? '已停止读取，可以重新加载列表。' : '列表未能加载，请检查下方原因后重新加载。'));
+        throw err;
+      }
+      if (signal.aborted) {
+        this.list.replaceChildren(element('p', 'bf-empty', '已停止读取，可以重新加载列表。'));
+        return;
+      }
+      this.list.replaceChildren();
       this.folders = folders; this.catalogOwner = owner; this.catalogKind = kind;
       this.mutations?.setCatalog(folders, kind);
       for (const folder of folders) {
@@ -115,7 +131,7 @@ export class InventoryPanel {
   scan() {
     const folders = this.selected();
     return this.run('只读统计', async signal => {
-      this.report = null;
+      this.report = null; this.result.replaceChildren();
       const report = await this.service.scan(folders, { signal, onPage: ({ page, loaded }) => this.panel.operation.confirm(`第 ${page} 页，当前夹已读取 ${loaded} 条`) });
       this.report = report;
       this.result.replaceChildren(element('p', '', `${report.complete ? '完整扫描' : report.cancelled ? '已取消 · 部分结果' : '扫描不完整'}：覆盖 ${report.folders.length}/${report.scope.length} 个收藏夹，读取 ${report.entries} 条。`),

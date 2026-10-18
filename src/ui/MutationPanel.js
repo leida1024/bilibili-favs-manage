@@ -5,10 +5,10 @@ import { folderRow } from './folderRow.js';
 const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
 const descriptions = {
   delete: { verb: '删除', title: '删除自己创建的收藏夹',
-    detail: '与统计分开勾选。默认/特殊收藏夹不可选。删除会移除收藏夹及其中的收藏关系，请自行备份；这里不提供撤销。不会删除原作者上传的视频。',
+    detail: '加载列表后勾选目标。默认/特殊收藏夹不可选。删除会移除收藏夹及收藏关系，无法撤销；原视频不受影响，请先备份。',
     agreement: '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。' },
   unsubscribe: { verb: '退订', title: '取消我的收藏夹订阅',
-    detail: '只管理当前登录账号的收藏夹订阅，不改变原作者的收藏夹内容。合集、所有者未知或不可用的条目暂不支持。与统计分开勾选。',
+    detail: '只取消当前账号的收藏夹订阅，原作者内容不受影响。合集、所有者未知或不可用的条目不可选。',
     agreement: '我已检查以上 ID 和所有者，确认取消当前账号对这些收藏夹的订阅；原作者的内容不受影响。' }
 };
 
@@ -73,7 +73,7 @@ export class MutationPanel {
       this.agreement.addEventListener('change', () => this.updateBusy());
       this.confirmButton = button(`确认${description.verb}以上目标`, () => this.execute());
       this.confirmButton.classList.add('bf-danger');
-      const actions = element('div', 'bf-tools'); actions.append(this.confirmButton, button('放弃本次操作', () => this.invalidate()));
+      const actions = element('div', 'bf-tools'); actions.append(this.confirmButton, button('放弃本次操作', () => { this.invalidate(); this.previewButton.focus(); }));
       this.review.append(label, actions);
       this.review.scrollIntoView?.({ block: 'nearest', behavior: 'instant' });
       this.updateBusy(); this.agreement.focus();
@@ -87,11 +87,11 @@ export class MutationPanel {
       const report = await this.engine.execute(ticket, { confirmed: true, signal, onResult: result => {
         if (result.status === 'confirmed') this.panel.operation.confirm(`ID ${result.id}：平台已确认`);
       } });
+      this.inventoryUI.resetCatalog('本次操作后列表需要更新，请重新加载。');
       this.results.replaceChildren(element('p', '', report.complete ? '本次目标均已确认。请刷新平台列表核对。' : report.cancelled ? '已取消后续操作。请核对已提交项目。' : '已停止；请检查下列结果后再决定后续操作。'));
       for (const result of report.results) this.results.append(element('p', '', `${result.name} · ID ${result.id} · ${statuses[result.status]}：${result.detail}`));
       this.results.append(button('检查并导出操作结果', () => this.panel.reviewExport(JSON.stringify(report, null, 2), 'bili-operation.json')));
       this.panel.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : 'failed', '本次确认已用完；再次操作须重新加载列表、选择并确认。未知结果请先在平台核对，勿直接重试。');
-      this.setCatalog([]); this.inventoryUI.folders = []; this.inventoryUI.rows = []; this.inventoryUI.list.replaceChildren();
     });
   }
 

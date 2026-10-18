@@ -35,7 +35,7 @@ test('copy is the uncluttered default; one source/destination pair, no duplicate
   assert.deepEqual(counts(), { reads: 0, mutations: 0 });
 });
 
-test('switching operations preserves copy edits, separates lists, clears pending destructive confirmation and does no I/O', async t => {
+test('switching operations preserves copy edits and independent selections, invalidates confirmation and does no I/O', async t => {
   const { panel, counts } = fixture(t); const item = panel.favCheckboxItemList[0];
   item.checkbox.checked = true; item.inputText.value = 'Keep this edit'; panel.updateSelectionReview();
   panel.showView('manage'); const ui = panel.inventoryPanel; await ui.load();
@@ -44,11 +44,63 @@ test('switching operations preserves copy edits, separates lists, clears pending
   const ticket = m.ticket; assert.ok(ticket);
   panel.showView('statistics');
   assert.equal(m.ticket, null); assert.equal(m.engine.ticket, null); assert.equal(ui.mutations.root.hidden, true); assert.equal(ui.list.hidden, false);
-  assert.equal(m.selected().length, 0); assert.equal(ui.selected().length, 0);
+  assert.equal(m.selected().length, 1); assert.equal(ui.selected().length, 0);
   await assert.rejects(m.engine.execute(ticket, { confirmed: true }));
   panel.showView('copy'); assert.deepEqual(panel.getSelectedTasks(), [{ source: 'Fictional source 0', target: 'Keep this edit' }]);
   panel.refreshFavorites(); assert.equal(panel.favCheckboxItemList[0].inputText.value, 'Keep this edit');
   assert.deepEqual(counts(), { reads: 1, mutations: 0 });
+});
+
+test('same-tab and diagnostics toggles retain confirmation, edits and task scroll; leaving requires a new preview', async t => {
+  const { panel, counts } = fixture(t); const ui = panel.inventoryPanel;
+  panel.content.scrollTop = 160;
+  panel.showView('statistics'); await ui.load();
+  ui.rows[0].input.checked = true; ui.updateBusy(); panel.content.scrollTop = 70;
+  panel.showView('manage');
+  assert.equal(ui.selected().length, 1);
+  const m = ui.mutations; m.rows[0].input.checked = true; ui.updateBusy(); m.preview();
+  m.agreement.checked = true; m.updateBusy();
+  const ticket = m.ticket; panel.content.scrollTop = 90;
+  panel.showView('manage'); assert.equal(m.ticket, ticket); assert.equal(m.confirmButton.disabled, false);
+  panel.toggleLogs(); assert.equal(panel.activeView, 'manage'); assert.equal(m.ticket, ticket);
+  assert.equal(panel.workspace.hidden, true); assert.equal(ui.root.hidden, false);
+  assert.equal(panel.content.scrollTop, 90); assert.equal(panel.logsButton.getAttribute('aria-expanded'), 'true');
+  panel.followCheckbox.focus(); panel.toggleLogs(); assert.equal(document.activeElement, panel.logsButton);
+  assert.equal(m.ticket, ticket); assert.equal(panel.content.scrollTop, 90);
+  panel.showView('statistics'); assert.equal(m.ticket, null); assert.equal(ui.selected().length, 1);
+  assert.equal(panel.content.scrollTop, 70);
+  panel.showView('copy'); assert.equal(panel.content.scrollTop, 160);
+  panel.showView('manage'); assert.equal(m.selected().length, 1); assert.equal(m.confirmButton, null);
+  assert.equal(panel.content.scrollTop, 90); assert.deepEqual(counts(), { reads: 1, mutations: 0 });
+});
+
+test('reload clears previous results immediately; mutation completion invalidates the statistics export and selections', async t => {
+  const { panel, counts } = fixture(t); const ui = panel.inventoryPanel; const m = ui.mutations;
+  panel.showView('manage'); assert.match(m.list.textContent, /加载列表/);
+  await ui.load(); m.results.textContent = 'Previous operation'; ui.report = { complete: true }; ui.result.textContent = 'Previous scan';
+  const loading = ui.load();
+  assert.equal(m.results.textContent, ''); assert.equal(ui.report, null); assert.equal(ui.result.textContent, '');
+  assert.match(ui.list.textContent, /正在读取/); await loading;
+  ui.report = { complete: true }; ui.result.textContent = 'Snapshot before deletion'; ui.rows[0].input.checked = true;
+  m.rows[0].input.checked = true; ui.updateBusy(); m.preview(); m.agreement.checked = true;
+  await m.execute();
+  assert.equal(ui.report, null); assert.equal(ui.exportButton.disabled, true); assert.equal(ui.selected().length, 0);
+  assert.equal(m.selected().length, 0); assert.equal(m.ticket, null); assert.equal(ui.folders.length, 0);
+  assert.match(ui.list.textContent, /重新加载/); assert.match(m.results.textContent, /已确认/);
+  panel.showView('statistics'); assert.equal(ui.exportButton.hidden, true);
+  assert.equal(counts().mutations, 1);
+});
+
+test('diagnostics survive minimize and export modal without changing the task or unlocking the background', t => {
+  const { panel } = fixture(t); panel.toggleLogs(); panel.setBusy(true);
+  panel.toggleMinimize(); assert.equal(panel.diagnostics.hidden, true);
+  panel.appendLog('Arrival while minimized'); panel.toggleMinimize();
+  assert.equal(panel.diagnostics.hidden, false); assert.match(panel.outputTextBox.textContent, /Arrival while minimized/);
+  panel.followCheckbox.focus(); panel.reviewExport('{}', 'fictional.json');
+  assert.equal(panel.diagnostics.inert, true); assert.equal(panel.header.inert, true);
+  panel.exportReview.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(panel.diagnostics.inert, false); assert.equal(document.activeElement, panel.followCheckbox);
+  assert.equal(panel.busy, true); assert.equal(panel.activeView, 'copy');
 });
 
 test('busy locks operation navigation but permits logs and return; empty selected target cannot submit', t => {
@@ -57,7 +109,7 @@ test('busy locks operation navigation but permits logs and return; empty selecte
   assert.equal(panel.startBatchTransferButton.disabled, true); assert.equal(item.inputText.getAttribute('aria-invalid'), 'true');
   item.inputText.value = 'Valid'; panel.updateSelectionReview(); assert.equal(panel.startBatchTransferButton.disabled, false);
   panel.setBusy(true); panel.showView('manage'); assert.equal(panel.activeView, 'copy');
-  panel.logsButton.click(); assert.equal(panel.activeView, 'logs'); assert.equal(panel.diagnostics.hidden, false);
+  panel.logsButton.click(); assert.equal(panel.activeView, 'copy'); assert.equal(panel.diagnostics.hidden, false);
   panel.logsButton.click(); assert.equal(panel.activeView, 'copy'); assert.equal(panel.busy, true);
   panel.setBusy(false); panel.showView('manage'); assert.equal(panel.activeView, 'manage');
 });
@@ -82,7 +134,7 @@ test('help and progress are directly visible without disclosure; progress update
   panel.operation.confirm('First confirmed page');
   assert.equal(panel.progressDetails, progress); assert.equal(progress.hidden, false);
   assert.match(progress.textContent, /First confirmed page/);
-  assert.equal(panel.content.contains(progress), true); assert.equal(panel.footer.contains(progress), false);
+  assert.equal(panel.content.contains(progress), false); assert.equal(panel.footer.contains(progress), true);
   assert.equal(document.activeElement, panel.logsButton);
   panel.operation.finish('failed', 'Fictional failure reason');
   assert.match(progress.textContent, /Fictional failure reason/);
@@ -90,13 +142,13 @@ test('help and progress are directly visible without disclosure; progress update
 });
 
 test('records preserve reading position across navigation and hidden arrivals; filters have explicit empty guidance', t => {
-  const { panel } = fixture(t); panel.showView('logs');
+  const { panel } = fixture(t); panel.toggleLogs();
   panel.followCheckbox.checked = false; panel.followCheckbox.dispatchEvent(new window.Event('change'));
-  panel.content.scrollTop = 80; panel.content.dispatchEvent(new window.Event('scroll'));
-  panel.showView('copy');
+  panel.outputTextBox.scrollTop = 80; panel.outputTextBox.dispatchEvent(new window.Event('scroll'));
+  panel.toggleLogs();
   const row = panel.outputTextBox.firstElementChild; panel.appendLog('Hidden fictional arrival');
   assert.equal(panel.outputTextBox.firstElementChild, row);
-  panel.showView('logs'); assert.equal(panel.content.scrollTop, 80);
+  panel.toggleLogs(); assert.equal(panel.outputTextBox.scrollTop, 80);
   assert.match(panel.outputTextBox.textContent, /Hidden fictional arrival/);
   panel.logFilter.value = 'error'; panel.logFilter.dispatchEvent(new window.Event('change'));
   assert.match(panel.outputTextBox.textContent, /此级别没有记录/);
@@ -127,4 +179,27 @@ test('minimize restores automatic or manual dimensions without resetting them on
   panel.floatingPanel.style.width = '610px'; panel.floatingPanel.style.height = '480px';
   panel.showView('statistics'); panel.toggleMinimize(); panel.toggleMinimize();
   assert.equal(panel.floatingPanel.style.width, '610px'); assert.equal(panel.floatingPanel.style.height, '480px');
+});
+
+test('records include operation lifecycle outcomes without duplicating each progress update', t => {
+  const { panel } = fixture(t);
+  panel.operation.begin('Fictional scan');
+  panel.operation.confirm('First page'); panel.operation.confirm('Second page');
+  panel.operation.finish('failed', 'Fictional network failure'); panel.toggleLogs();
+  const entries = panel.logs.entries.filter(entry => entry.message.includes('Fictional scan'));
+  assert.equal(entries.length, 2); assert.equal(entries[1].level, 'error');
+  assert.match(entries[1].message, /Fictional network failure/);
+  assert.match(panel.outputTextBox.textContent, /Fictional network failure/);
+});
+
+test('failed or cancelled catalog load leaves recovery guidance instead of a permanent loading state', async t => {
+  const { panel } = fixture(t); const ui = panel.inventoryPanel; panel.showView('statistics');
+  ui.service.client.folders = async () => { throw new Error('Fictional connection error'); };
+  await ui.load();
+  assert.doesNotMatch(ui.list.textContent, /正在读取/); assert.match(ui.list.textContent, /重新加载/);
+  assert.match(ui.result.textContent, /Fictional connection error/); assert.equal(panel.busy, false);
+  ui.service.client.folders = async () => { ui.controller.abort(); return []; };
+  await ui.load();
+  assert.match(ui.list.textContent, /已停止读取/); assert.equal(panel.operation.state.status, 'interrupted');
+  assert.equal(ui.loadButton.disabled, false); assert.equal(ui.exportButton.disabled, true);
 });
