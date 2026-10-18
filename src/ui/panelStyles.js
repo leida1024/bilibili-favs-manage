@@ -26,6 +26,8 @@ export const panelStyles = `
 .bili-favs-manage-panel summary { cursor:pointer; padding:4px 0; font-weight:600; }
 .bili-favs-manage-panel .bf-tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:10px 0; }
 .bili-favs-manage-panel .bf-tools label { display:flex; align-items:center; gap:4px; }
+.bili-favs-manage-panel .bf-folder-row { display:flex; align-items:flex-start; gap:8px; padding:8px 0; border-bottom:1px solid #e2eaf1; overflow-wrap:anywhere; }
+.bili-favs-manage-panel .bf-folder-row input { flex-shrink:0; }
 .bili-favs-manage-panel .output-text-box { white-space:pre-wrap; overflow-wrap:anywhere; max-height:200px; overflow:auto; background:#f5f8fb; padding:10px; font:12px/1.7 ui-monospace,monospace; }
 .bili-favs-manage-panel .bf-log-error { color:#ad361e; }
 .bili-favs-manage-panel .bf-log-warn { color:#875900; }

@@ -19,12 +19,17 @@
 <script type="module">
   import { FloatingPanel } from '../src/ui/FloatingPanel.js';
   import { OperationState } from '../src/core/OperationState.js';
+  import { InventoryService } from '../src/core/InventoryService.js';
   const names = ['编程入门', '摄影课堂', '音乐现场', '旅行灵感', '美食记录'];
   let panel;
   function render() {
     panel?.destroy();
     const scenario = document.querySelector('#scenario').value;
     const manager = {
+      inventory: new InventoryService({
+        async folders(owner, kind) { return Array.from({ length: 5 }, (_, i) => ({ id: String(100 + i), ownerId: kind === 'created' ? '50' : '90', kind, name: `虚构收藏夹 ${i + 1}`, count: 2, protected: i === 0, available: true, subscribed: true })); },
+        async videos(id) { return { info: { id: Number(id), media_count: 2 }, has_more: false, medias: [{ id: 1, type: 2, duration: 60, upper: { mid: 90 } }, { id: 2, type: 2, duration: null }] }; }
+      }, 400),
       operation: new OperationState(),
       getAllFavoriteNames: () => scenario === 'empty' ? [] : scenario === 'many'
         ? Array.from({ length: 40 }, (_, i) => `虚构收藏夹 ${i + 1} · 适合周末慢慢学习的摄影、旅行与编程课程合集`) : names,
