@@ -348,7 +348,7 @@ Completed refresh-native-unsubscribe: persistent tab/account logs and geometry, 
 
 ### Main Changes
 
-(Add details)
+Product commit944884f; design, research and detailed evidence: `.trellis/tasks/archive/2026-10/10-19-refresh-native-unsubscribe/`. Contracts updated in frontend component/state/directory specs.
 
 ### Git Commits
 
@@ -358,7 +358,7 @@ Completed refresh-native-unsubscribe: persistent tab/account logs and geometry, 
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] Build;82/82 Node tests;75 fictional browser scenarios; actual mouse resize and refresh continuity; read-only API/web parity. No real mutations.
 
 ### Status
 
