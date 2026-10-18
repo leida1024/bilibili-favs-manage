@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>收藏夹批量管理 · 模拟数据预览</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #263445; background: #f3f6fa; font: 14px/1.6 "Microsoft YaHei", sans-serif; }
+    main { width: 1040px; margin: 0 auto; padding: 32px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    h1 { margin: 0 0 5px; font-size: 25px; letter-spacing: 1px; }
+    header p { margin: 0; color: #63758b; }
+    .badge { padding: 6px 12px; border: 1px solid #c5eaf7; border-radius: 20px; background: #e9f8ff; color: #087d9f; }
+    .stage { height: 474px; position: relative; border: 1px solid #dde5ef; border-radius: 12px; background: #eaf0f7; }
+    h3, h4 { margin: 0; }
+    button, input { font-family: inherit; }
+    footer { display: flex; gap: 22px; margin-top: 22px; }
+    footer p { flex: 1; margin: 0; color: #63758b; }
+    footer strong { display: block; margin-bottom: 4px; color: #263445; font-size: 15px; }
+    footer b { display: inline-block; margin-right: 6px; color: #008ab5; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div><h1>Bilibili 收藏夹批量管理</h1><p>勾选源收藏夹，填写目标名称，再开始批量复制。</p></div>
+      <span class="badge">界面示例 · 全部为模拟数据</span>
+    </header>
+    <div class="stage" aria-label="实际面板组件的模拟数据展示"></div>
+    <footer>
+      <p><strong><b>01</b> 勾选源收藏夹</strong>一次选择多个想要复制的收藏夹。</p>
+      <p><strong><b>02</b> 填写目标名称</strong>默认同名，也可改成自己的分类名称。</p>
+      <p><strong><b>03</b> 查看输出信息</strong>开始后，在右侧查看任务进度。</p>
+    </footer>
+  </main>
+  <script type="module">
+    import { FloatingPanel } from '../src/ui/FloatingPanel.js';
+
+    // 仅使用虚构数据和模拟 manager，不加载入口或 B 站页面，不发起网络操作。
+    const names = ['编程入门', '摄影课堂', '音乐现场', '旅行灵感', '美食记录'];
+    const manager = {
+      getAllFavoriteNames: () => [...names],
+      async batchCopy(tasks) {
+        panel.appendLog(`模拟演示：已选择 ${tasks.length} 个收藏夹，不执行实际复制。`);
+      }
+    };
+    const panel = new FloatingPanel(manager);
+    panel.init();
+    document.querySelector('.stage').appendChild(panel.floatingPanel);
+    Object.assign(panel.floatingPanel.style, {
+      position: 'absolute', top: '20px', left: '20px', width: '932px', height: '430px'
+    });
+    panel.outputTextBox.replaceChildren();
+    const messages = [
+      '模拟演示：面板已就绪',
+      '已勾选 2 个源收藏夹',
+      '编程入门 → 学习资料',
+      '摄影课堂 → 摄影笔记',
+      '点击「开始批量复制」后可在此查看进度'
+    ];
+    messages.forEach((message, i) => {
+      const line = document.createElement('div');
+      line.textContent = `12:00:0${i}  ${message}`;
+      line.style.color = i === 0 ? '#00834a' : '#263445';
+      panel.outputTextBox.appendChild(line);
+    });
+    panel.favCheckboxItemList.slice(0, 2).forEach((item, i) => {
+      item.checkbox.checked = true;
+      item.inputText.value = ['学习资料', '摄影笔记'][i];
+    });
+    panel.recordPanelSize();
+    document.documentElement.dataset.previewReady = 'true';
+  </script>
+</body>
+</html>
