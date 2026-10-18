@@ -71,7 +71,10 @@ test('实际复制复用含空格的目标，不打开新建表单', async t => 
   t.mock.method(BilibiliAPI, 'clickCopyButton', async () => true);
   let creates = 0, copies = 0;
   document.querySelector('.fake-fav-input').onclick = () => creates++;
-  document.querySelector('.btn').onclick = () => copies++;
+  document.querySelector('.btn').onclick = () => {
+    copies++;
+    const toast = document.createElement('div'); toast.className = 'vui_toast'; toast.textContent = '操作成功'; document.body.append(toast);
+  };
   assert.equal(await manager.copyOnePage(' 学习 资料 '), true);
   assert.equal(creates, 0);
   assert.equal(copies, 1);

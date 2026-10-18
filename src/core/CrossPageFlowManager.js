@@ -31,7 +31,7 @@ export class CrossPageFlowManager {
     const ownURL = PageDetector.getOwnFavListURL();
     if (!ownURL) {
       error('无法获取用户自己的收藏夹页面 URL');
-      return;
+      throw new Error('无法确认登录身份，请登录后再复制');
     }
 
     // 保存状态（缺失对比延后到自己页面执行）
@@ -209,6 +209,7 @@ export class CrossPageFlowManager {
         if (!success) {
           error('收藏夹创建失败，请手动创建后重试');
           StateManager.clearState();
+          this.manager.operation.finish('failed', '创建未确认，流程已停止。请检查页面结果后手动重试。');
           return true;
         }
       } else {
@@ -228,6 +229,7 @@ export class CrossPageFlowManager {
 
       await delay(3000);
       window.location.href = state.returnURL;
+      this.manager.operation.finish('interrupted', '目标准备完成，等待返回来源页面继续复制。');
 
       return true;
     } else if (state.phase === 'copying') {

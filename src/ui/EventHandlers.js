@@ -28,18 +28,7 @@ export class EventHandlers {
    * @param {Object} panel - FloatingPanel 实例
    */
   static toggleMinimize(panel) {
-    const floP = panel.floatingPanel;
-
-    if (panel.minimizeButton.textContent === '点我最小化') {
-      panel.recordHiddenPanelSize();
-      panel.minimizeButton.textContent = '点我打开面板';
-      floP.style.width = panel.minW + 'px';
-      floP.style.height = panel.minH + 'px';
-    } else {
-      panel.minimizeButton.textContent = '点我最小化';
-      floP.style.width = Math.max(panel.hiddenWidth, floP.offsetWidth, panel.originFPW) + 'px';
-      floP.style.height = Math.max(panel.hiddenHeight, floP.offsetHeight, panel.originFPH) + 'px';
-    }
+    panel.toggleMinimize();
   }
 
   /**
@@ -64,6 +53,7 @@ export class EventHandlers {
    * @param {MouseEvent} e - 鼠标事件
    */
   static mouseDown(panel, e) {
+    if (e.button !== 0 || e.target.closest('button,input,select,textarea,label,summary,a')) return;
     const floP = panel.floatingPanel;
     let d = EventHandlers.getDirection(panel, e);
 
@@ -72,7 +62,7 @@ export class EventHandlers {
       panel.resizeable = true;
       panel.isDragging = false;
       panel.direction = d;
-    } else {
+    } else if (e.target.closest('.bf-header')) {
       // 如果点中了按钮、输入框或输出框，不开启拖动
       if (
         e.target.tagName === 'BUTTON' ||

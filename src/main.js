@@ -36,10 +36,11 @@ if (!window.__biliFavsLifecycle) {
       log(`脚本已就绪 v${CONFIG.SCRIPT.VERSION}`);
 
       const mountedPanel = panel;
-      mountedPanel.busy = true;
+      mountedPanel.setBusy(true);
       manager.crossPageFlow.resumeFlow().catch(err => {
         log('恢复跨页面流程失败:', err.message);
-      }).finally(() => { mountedPanel.busy = false; });
+        manager.operation.finish('failed', `恢复失败：${err.message}。请检查页面后重试。`);
+      }).finally(() => { if (mountedPanel.floatingPanel) mountedPanel.setBusy(false); });
     },
     refresh() {
       if (panel?.busy) return false;
