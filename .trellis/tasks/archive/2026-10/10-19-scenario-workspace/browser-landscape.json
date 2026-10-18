@@ -1,0 +1,184 @@
+{
+  "failures": [],
+  "results": [
+    {
+      "label": "ready",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 3,
+      "width": 600
+    },
+    {
+      "label": "ready/statistics",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 4,
+      "width": 600
+    },
+    {
+      "label": "ready/manage",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 3,
+      "width": 600
+    },
+    {
+      "label": "empty",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 0,
+      "width": 600
+    },
+    {
+      "label": "empty/statistics",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 0,
+      "width": 600
+    },
+    {
+      "label": "empty/manage",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 0,
+      "width": 600
+    },
+    {
+      "label": "dense",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 3,
+      "width": 600
+    },
+    {
+      "label": "dense/statistics",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 4,
+      "width": 600
+    },
+    {
+      "label": "dense/manage",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 3,
+      "width": 600
+    },
+    {
+      "label": "many",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 1,
+      "width": 600
+    },
+    {
+      "label": "many/statistics",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 4,
+      "width": 600
+    },
+    {
+      "label": "many/manage",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 3,
+      "width": 600
+    },
+    {
+      "label": "running",
+      "taskHeight": 197,
+      "taskWidth": 326,
+      "visible": 2,
+      "width": 600
+    },
+    {
+      "label": "running/statistics",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 4,
+      "width": 600
+    },
+    {
+      "label": "running/manage",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 3,
+      "width": 600
+    },
+    {
+      "label": "failed",
+      "taskHeight": 185,
+      "taskWidth": 326,
+      "visible": 1,
+      "width": 600
+    },
+    {
+      "label": "failed/statistics",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 4,
+      "width": 600
+    },
+    {
+      "label": "failed/manage",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 3,
+      "width": 600
+    },
+    {
+      "label": "completed",
+      "taskHeight": 185,
+      "taskWidth": 326,
+      "visible": 1,
+      "width": 600
+    },
+    {
+      "label": "completed/statistics",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 4,
+      "width": 600
+    },
+    {
+      "label": "completed/manage",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 3,
+      "width": 600
+    },
+    {
+      "label": "interrupted",
+      "taskHeight": 185,
+      "taskWidth": 326,
+      "visible": 1,
+      "width": 600
+    },
+    {
+      "label": "interrupted/statistics",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 4,
+      "width": 600
+    },
+    {
+      "label": "interrupted/manage",
+      "taskHeight": 243,
+      "taskWidth": 326,
+      "visible": 3,
+      "width": 600
+    },
+    {
+      "label": "dense/unknown",
+      "taskHeight": 197,
+      "taskWidth": 326,
+      "visible": 2,
+      "width": 600
+    }
+  ],
+  "viewport": [
+    812,
+    375
+  ]
+}

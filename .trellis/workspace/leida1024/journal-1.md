@@ -301,3 +301,36 @@ Top-level design, acceptance and fictional screenshots: [compact workspace task]
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: Scenario workspace and cross-page diagnostics
+
+**Date**: 2026-10-19
+**Task**: Scenario workspace and cross-page diagnostics
+**Branch**: `develop`
+
+### Summary
+
+Documented autonomous scenario decisions and implemented numeric version 2.2.1; compact 600x500 workspace, scoped state/records, corrected boolean eligibility, correlated cross-page logs and unknown outcomes. Build and 67 tests passed; 75 fictional browser cases and visual checks passed. Read-only own catalog 28 rows:27 eligible/1 protected. No real mutations, push or release; GM/full navigation remain unverified.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1861bbf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
