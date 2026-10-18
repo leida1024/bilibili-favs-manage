@@ -16,7 +16,7 @@ QQ群：[524764959（扫码加入）](#交流群) · 邮箱：[ljx.1024@outlook.
 2. 从 [Greasy Fork 安装脚本](https://greasyfork.org/zh-CN/scripts/487232-bilibili-%E6%94%B6%E8%97%8F%E5%A4%B9%E6%89%B9%E9%87%8F%E5%A4%8D%E5%88%B6)，确认脚本已启用。
 3. 登录 B 站，打开要复制的用户空间，进入「收藏」。
 
-仓库中的 **2.1.2 修复版尚未发布到 Greasy Fork**。如需立即使用，在 Tampermonkey 中打开已安装脚本的编辑器（或新建脚本），用 [dist/BilibiliFavsManage.user.js](dist/BilibiliFavsManage.user.js) 的全部内容替换并保存，关闭重复安装的旧版本，然后刷新收藏页。
+**2.1.2 已发布到 Greasy Fork**。旧用户可在 Tampermonkey 中检查更新，或通过上方安装链接更新，然后刷新收藏页。请关闭重复安装的旧脚本。
 
 ## 使用
 
