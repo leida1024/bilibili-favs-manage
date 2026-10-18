@@ -5,20 +5,9 @@ import { OperationState } from '../core/OperationState.js';
 import { LogStore } from '../utils/logStore.js';
 import { normalizeCopyTasks } from '../utils/favoriteNames.js';
 import { panelStyles } from './panelStyles.js';
-
-export function element(tag, className = '', text = '') {
-  const node = document.createElement(tag);
-  node.className = className;
-  node.textContent = text;
-  return node;
-}
-
-export function button(text, action, className = '') {
-  const node = element('button', className, text);
-  node.type = 'button';
-  node.addEventListener('click', action);
-  return node;
-}
+import { element, button } from './elements.js';
+import { InventoryPanel } from './InventoryPanel.js';
+export { element, button } from './elements.js';
 
 const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止 · 请检查', interrupted: '已中断 / 等待继续' };
 
@@ -71,6 +60,10 @@ export class FloatingPanel {
     this.statusBox.setAttribute('role', 'status');
     this.statusBox.setAttribute('aria-live', 'polite');
     this.content.append(this.statusBox);
+    if (this.manager.inventory) {
+      this.inventoryPanel = new InventoryPanel(this, this.manager.inventory);
+      this.content.append(this.inventoryPanel.root);
+    }
     this.createDiagnostics();
     root.append(style, this.header, this.content);
     document.body.append(root);
@@ -149,6 +142,7 @@ export class FloatingPanel {
     for (const item of this.favCheckboxItemList) { item.checkbox.disabled = busy; item.inputText.disabled = busy; }
     this.startBatchTransferButton.textContent = busy ? '操作中…' : '开始批量复制';
     this.updateSelectionReview();
+    this.inventoryPanel?.updateBusy();
     this.onBusyChange?.(busy);
   }
 
@@ -247,6 +241,7 @@ export class FloatingPanel {
   }
 
   destroy() {
+    this.inventoryPanel?.destroy();
     if (this.operation.state.status === 'running') this.operation.finish('interrupted', '面板已离开当前页面；请检查页面结果，不要直接重复提交。');
     this.unsubscribe?.();
     document.body.removeEventListener('mousemove', this.onBodyMove);

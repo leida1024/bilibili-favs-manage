@@ -11,12 +11,14 @@ import { log, error, warn } from '../utils/logger.js';
 import { CONFIG } from '../config/config.js';
 import { normalizeFavoriteName, normalizeCopyTasks } from '../utils/favoriteNames.js';
 import { OperationState } from './OperationState.js';
+import { InventoryService } from './InventoryService.js';
 
 export class FavoriteManager {
   constructor() {
     this.api = BilibiliAPI;
     this.crossPageFlow = new CrossPageFlowManager(this);
     this.operation = new OperationState();
+    this.inventory = new InventoryService();
   }
 
   /**
