@@ -1156,7 +1156,8 @@
     return Object.freeze({ id, ownerId, kind: kind === 'created' ? 'created' : raw.type === 11 ? 'subscribed' : 'unsupported',
       name: typeof raw.title === 'string' ? raw.title : '（名称未知）', count: knownCount(raw.media_count),
       protected: kind === 'created' && (index === 0 || raw.is_kid_playlist !== 0 || (raw.type !== undefined && raw.type !== 11)),
-      available: raw.state === undefined || raw.state === 0, subscribed: raw.fav_state === 1 });
+      available: (kind === 'created' ? raw.state === undefined || raw.state === 0 : raw.state === 0) &&
+        !(stableId(raw.mid) && stableId(raw.upper?.mid) && stableId(raw.mid) !== stableId(raw.upper.mid)), subscribed: raw.fav_state === 1 });
   }
 
   function pause(ms, signal) {
@@ -1189,13 +1190,15 @@
     }
 
     async mutate(action, folder, signal) {
-      if (action !== 'delete' || !stableId(folder.id)) return { status: 'failed', detail: '操作或 ID 无效，未提交' };
+      if (!['delete', 'unsubscribe'].includes(action) || !stableId(folder.id)) return { status: 'failed', detail: '操作或 ID 无效，未提交' };
       if (signal?.aborted) return { status: 'not_started', detail: '取消，未提交' };
       const token = document.cookie.split(';').map(part => part.trim()).find(part => part.startsWith('bili_jct='))?.slice(9);
       if (!token) return { status: 'failed', detail: '登录校验缺失，未提交；请重新登录后检查' };
-      const body = new URLSearchParams({ media_ids: folder.id, platform: 'web', csrf: token });
+      const body = new URLSearchParams({ platform: 'web', csrf: token });
+      if (action === 'delete') body.set('media_ids', folder.id);
+      const path = action === 'delete' ? '/x/v3/fav/folder/del' : `/x/v3/fav/folder/unfav?${new URLSearchParams({ media_id: folder.id })}`;
       try {
-        const json = await this.fetchJSON('/x/v3/fav/folder/del', { method: 'POST', body }, signal);
+        const json = await this.fetchJSON(path, { method: 'POST', body }, signal);
         if (!json || !Number.isInteger(json.code)) return { status: 'unknown', detail: '响应未识别；请检查平台结果，勿直接重试' };
         return json.code === 0 ? { status: 'confirmed', detail: '平台已确认成功' } : { status: 'failed', detail: `平台拒绝（代码 ${json.code}），已停止` };
       } catch { return { status: 'unknown', detail: '请求后未取得明确结果；请检查平台，勿直接重试' }; }
@@ -1205,6 +1208,7 @@
       if (!stableId(ownerId) || !['created', 'subscribed'].includes(kind)) throw new Error('收藏夹范围无效');
       if (kind === 'created') {
         const data = await this.request('/x/v3/fav/folder/created/list-all', { up_mid: ownerId }, signal);
+        if (data.count === 0 && data.list === null) data.list = [];
         if (!Array.isArray(data.list) || data.list.length !== data.count) throw new Error('收藏夹列表不完整，请稍后重新加载');
         return this.normalizeList(data.list, kind);
       }
@@ -1212,6 +1216,7 @@
       for (let pn = 1; pn <= 100; pn++) {
         if (pn > 1) await pause(pace, signal);
         const data = await this.request('/x/v3/fav/folder/collected/list', { up_mid: ownerId, pn, ps: 20, platform: 'web' }, signal);
+        if (data.count === 0 && data.list === null && data.has_more === false) data.list = [];
         if (!Array.isArray(data.list) || typeof data.has_more !== 'boolean') throw new Error('订阅列表格式未识别');
         rows.push(...data.list);
         if (!data.has_more) {
@@ -1229,9 +1234,11 @@
       return result;
     }
 
-    videos(folderId, pn, signal) {
+    async videos(folderId, pn, signal) {
       if (!stableId(folderId)) throw new Error('收藏夹 ID 无效');
-      return this.request('/x/v3/fav/resource/list', { media_id: folderId, pn, ps: 20, platform: 'web' }, signal);
+      const data = await this.request('/x/v3/fav/resource/list', { media_id: folderId, pn, ps: 20, platform: 'web' }, signal);
+      if (data.medias === null && data.info?.media_count === 0 && data.has_more === false) data.medias = [];
+      return data;
     }
   }
 
@@ -1257,22 +1264,23 @@
               if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
               const data = await this.client.videos(folder.id, pn, signal);
               if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
-              if (!Array.isArray(data.medias) || typeof data.has_more !== 'boolean' || stableId(data.info?.id) !== folder.id) throw new Error('分页格式或收藏夹身份未确认');
+              if (!Array.isArray(data.medias) || data.medias.some(item => !item || typeof item !== 'object') || typeof data.has_more !== 'boolean' || stableId(data.info?.id) !== folder.id) throw new Error('分页格式或收藏夹身份未确认');
               const signature = JSON.stringify(data.medias.map(v => [v.type, v.id]));
               if (data.medias.length && pageSignatures.has(signature)) throw new Error('分页重复，扫描已停止');
               pageSignatures.add(signature);
               if (report.entries + data.medias.length > maxEntries) throw new Error('达到条目上限');
-              coverage.pages++; coverage.loaded += data.medias.length; report.entries += data.medias.length;
               const expected = knownCount(data.info.media_count);
               if (coverage.expected !== null && coverage.expected !== expected) throw new Error('扫描期间数量变化');
               coverage.expected = expected;
+              coverage.pages++; coverage.loaded += data.medias.length; report.entries += data.medias.length;
               for (const raw of data.medias) {
-                if (Number.isInteger(raw.attr) && (raw.attr & 1)) report.unavailable++;
+                const unavailable = Number.isInteger(raw.attr) && !!(raw.attr & 1);
+                if (unavailable) report.unavailable++;
                 const id = raw.type === 2 ? stableId(raw.id) : null;
                 if (!id) { report.unknownIdentity++; continue; }
                 report.occurrences++;
                 if (videos.has(id)) continue;
-                const duration = knownCount(raw.duration);
+                const duration = unavailable ? null : knownCount(raw.duration);
                 const uploaderId = stableId(raw.upper?.mid);
                 videos.set(id, { id, bvid: typeof raw.bvid === 'string' ? raw.bvid : null, duration, uploaderId });
                 if (duration === null) report.unknownDurations++; else report.knownDurationSeconds += duration;
@@ -1305,6 +1313,12 @@
   function eligibility(action, folder, actor, pageOwner) {
     if (!stableId(actor) || !stableId(folder.id) || !stableId(folder.ownerId)) return '身份未确认';
     if (!folder.available) return '对象不可用';
+    if (action === 'unsubscribe') {
+      if (folder.kind !== 'subscribed') return '仅支持收藏夹订阅，合集暂不支持';
+      if (folder.ownerId === actor) return '不能将自己的收藏夹当作订阅';
+      if (folder.subscribed !== true) return '订阅状态未确认';
+      return null;
+    }
     if (action !== 'delete') return '操作类型不支持';
     if (folder.kind !== 'created') return '不是创建的收藏夹';
     if (folder.ownerId !== actor || pageOwner !== actor) return '只能管理自己空间的收藏夹';
@@ -1344,11 +1358,11 @@
             if (index) await pause(this.pace, signal);
             const current = this.context();
             if (current.actor !== ticket.actor || current.pageOwner !== ticket.pageOwner) throw new Error('当前账号或空间变化，请重新预览');
-            const catalog = await this.client.folders(ticket.actor, 'created', signal, this.pace);
+            const catalog = await this.client.folders(ticket.actor, ticket.action === 'delete' ? 'created' : 'subscribed', signal, this.pace);
             if (signal?.aborted) break;
             const fresh = catalog.find(folder => folder.id === target.id);
             if (!fresh || eligibility(ticket.action, fresh, current.actor, current.pageOwner) ||
-              ['id', 'ownerId', 'name', 'count', 'kind', 'protected', 'available'].some(key => fresh[key] !== target[key])) throw new Error('目标身份、名称、数量或保护状态变化，请重新加载并预览');
+              ['id', 'ownerId', 'name', 'count', 'kind', 'protected', 'available', 'subscribed'].some(key => fresh[key] !== target[key])) throw new Error('目标身份、名称、数量或保护状态变化，请重新加载并预览');
             const latest = this.context();
             if (latest.actor !== ticket.actor || latest.pageOwner !== ticket.pageOwner) throw new Error('账号或空间变化，未提交');
             if (signal?.aborted) break;
@@ -2046,13 +2060,22 @@
   }
 
   const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
+  const descriptions = {
+    delete: { verb: '删除', title: '删除自己创建的收藏夹',
+      detail: '与统计分开勾选。默认/特殊收藏夹不可选。删除会移除收藏夹及其中的收藏关系，请自行备份；这里不提供撤销。不会删除原作者上传的视频。',
+      agreement: '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。' },
+    unsubscribe: { verb: '退订', title: '取消我的收藏夹订阅',
+      detail: '只管理当前登录账号的收藏夹订阅，不改变原作者的收藏夹内容。合集、所有者未知或不可用的条目暂不支持。与统计分开勾选。',
+      agreement: '我已检查以上 ID 和所有者，确认取消当前账号对这些收藏夹的订阅；原作者的内容不受影响。' }
+  };
 
   class MutationPanel {
     constructor(inventoryUI, engine) {
-      this.inventoryUI = inventoryUI; this.panel = inventoryUI.panel; this.engine = engine; this.rows = [];
+      this.inventoryUI = inventoryUI; this.panel = inventoryUI.panel; this.engine = engine; this.rows = []; this.action = 'delete';
       this.root = element('section', 'bf-diagnostics bf-mutations');
-      this.root.append(element('h3', '', '删除自己创建的收藏夹'));
-      this.root.append(element('p', 'bf-muted', '与统计分开勾选。默认/特殊收藏夹不可选。删除会移除收藏夹及其中的收藏关系，请自行备份；这里不提供撤销。不会删除原作者上传的视频。'));
+      this.heading = element('h3', '', descriptions.delete.title);
+      this.explanation = element('p', 'bf-muted', descriptions.delete.detail);
+      this.root.append(this.heading, this.explanation);
       this.list = element('div', 'bf-selection');
       this.previewButton = button('预览删除目标', () => this.preview());
       this.review = element('section');
@@ -2063,11 +2086,15 @@
 
     invalidate() { this.engine.invalidate(); this.ticket = null; this.review.replaceChildren(); }
 
-    setCatalog(folders) {
+    setCatalog(folders, kind) {
       this.invalidate(); this.rows = []; this.list.replaceChildren();
+      if (kind) this.action = kind === 'subscribed' ? 'unsubscribe' : 'delete';
+      const description = descriptions[this.action];
+      this.heading.textContent = description.title; this.explanation.textContent = description.detail;
+      this.previewButton.textContent = `预览${description.verb}目标`;
       const { actor, pageOwner } = this.engine.context();
       for (const folder of folders) {
-        const reason = eligibility('delete', folder, actor, pageOwner);
+        const reason = eligibility(this.action, folder, actor, pageOwner);
         const input = element('input'); input.type = 'checkbox';
         const label = element('label', 'bf-folder-row');
         label.append(input, element('span', '', `${folder.name} · ID ${folder.id} · 所有者 ${folder.ownerId || '未知'} · ${folder.count ?? '未知'} 条${reason ? ` · 不可选：${reason}` : ''}`));
@@ -2091,13 +2118,14 @@
       if (this.panel.busy) return;
       this.invalidate();
       try {
-        this.ticket = this.engine.prepare('delete', this.selected());
-        this.review.append(element('h3', '', `将删除 ${this.ticket.targets.length} 个收藏夹`));
+        const description = descriptions[this.action];
+        this.ticket = this.engine.prepare(this.action, this.selected());
+        this.review.append(element('h3', '', `将${description.verb} ${this.ticket.targets.length} 个收藏夹`));
         for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ID ${target.id} · 所有者 ${target.ownerId} · ${target.count ?? '未知'} 条`));
         this.agreement = element('input'); this.agreement.type = 'checkbox';
-        const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', '我已检查以上目标，理解删除会移除整个收藏夹及其中收藏关系，且这里无法撤销。'));
+        const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', description.agreement));
         this.agreement.addEventListener('change', () => this.updateBusy());
-        this.confirmButton = button('确认删除以上目标', () => this.execute());
+        this.confirmButton = button(`确认${description.verb}以上目标`, () => this.execute());
         this.review.append(label, this.confirmButton, button('放弃本次操作', () => this.invalidate()));
         this.updateBusy(); this.agreement.focus();
       } catch (err) { this.results.textContent = err.message; }
@@ -2106,7 +2134,7 @@
     execute() {
       if (this.panel.busy || !this.ticket || !this.agreement?.checked) return;
       const ticket = this.ticket; this.ticket = null; this.review.replaceChildren();
-      return this.inventoryUI.run('删除收藏夹', async signal => {
+      return this.inventoryUI.run(`${descriptions[ticket.action].verb}收藏夹`, async signal => {
         const report = await this.engine.execute(ticket, { confirmed: true, signal, onResult: result => {
           if (result.status === 'confirmed') this.panel.operation.confirm(`ID ${result.id}：平台已确认`);
         } });
@@ -2144,7 +2172,7 @@
         this.root.append(this.mutations.root);
       }
       this.kind.addEventListener('change', () => {
-        this.folders = []; this.rows = []; this.list.replaceChildren(); this.mutations?.setCatalog([]); this.updateBusy();
+        this.folders = []; this.rows = []; this.list.replaceChildren(); this.mutations?.setCatalog([], this.kind.value); this.updateBusy();
       });
       this.updateBusy();
     }
@@ -2169,19 +2197,22 @@
       catch (err) {
         this.panel.operation.finish(this.controller.signal.aborted ? 'interrupted' : 'failed', this.controller.signal.aborted ? '已取消，请重新选择后开始。' : err.message);
         this.result.textContent = this.panel.operation.state.detail;
-      } finally { this.controller = null; this.panel.setBusy(false); }
+      } finally {
+        if (this.controller.signal.aborted && this.panel.operation.state.status === 'running') this.panel.operation.finish('interrupted', '已取消，未继续后续请求。');
+        this.controller = null; this.panel.setBusy(false);
+      }
     }
 
     load() {
       return this.run('读取收藏夹列表', async signal => {
         this.folders = []; this.rows = []; this.list.replaceChildren(); this.report = null; this.result.textContent = '';
-        this.mutations?.setCatalog([]);
+        this.mutations?.setCatalog([], this.kind.value);
         const kind = this.kind.value;
         const owner = kind === 'created' ? PageDetector.getCurrentPageUID() : PageDetector.getLoginUserUID();
         const folders = await this.service.client.folders(owner, kind, signal);
         if (signal.aborted) return;
         this.folders = folders; this.catalogOwner = owner; this.catalogKind = kind;
-        this.mutations?.setCatalog(folders);
+        this.mutations?.setCatalog(folders, kind);
         for (const folder of folders) {
           const label = element('label', 'bf-folder-row');
           const input = element('input'); input.type = 'checkbox'; input.disabled = folder.kind === 'unsupported';

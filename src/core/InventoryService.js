@@ -22,22 +22,23 @@ export class InventoryService {
             if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
             const data = await this.client.videos(folder.id, pn, signal);
             if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
-            if (!Array.isArray(data.medias) || typeof data.has_more !== 'boolean' || stableId(data.info?.id) !== folder.id) throw new Error('分页格式或收藏夹身份未确认');
+            if (!Array.isArray(data.medias) || data.medias.some(item => !item || typeof item !== 'object') || typeof data.has_more !== 'boolean' || stableId(data.info?.id) !== folder.id) throw new Error('分页格式或收藏夹身份未确认');
             const signature = JSON.stringify(data.medias.map(v => [v.type, v.id]));
             if (data.medias.length && pageSignatures.has(signature)) throw new Error('分页重复，扫描已停止');
             pageSignatures.add(signature);
             if (report.entries + data.medias.length > maxEntries) throw new Error('达到条目上限');
-            coverage.pages++; coverage.loaded += data.medias.length; report.entries += data.medias.length;
             const expected = knownCount(data.info.media_count);
             if (coverage.expected !== null && coverage.expected !== expected) throw new Error('扫描期间数量变化');
             coverage.expected = expected;
+            coverage.pages++; coverage.loaded += data.medias.length; report.entries += data.medias.length;
             for (const raw of data.medias) {
-              if (Number.isInteger(raw.attr) && (raw.attr & 1)) report.unavailable++;
+              const unavailable = Number.isInteger(raw.attr) && !!(raw.attr & 1);
+              if (unavailable) report.unavailable++;
               const id = raw.type === 2 ? stableId(raw.id) : null;
               if (!id) { report.unknownIdentity++; continue; }
               report.occurrences++;
               if (videos.has(id)) continue;
-              const duration = knownCount(raw.duration);
+              const duration = unavailable ? null : knownCount(raw.duration);
               const uploaderId = stableId(raw.upper?.mid);
               videos.set(id, { id, bvid: typeof raw.bvid === 'string' ? raw.bvid : null, duration, uploaderId });
               if (duration === null) report.unknownDurations++; else report.knownDurationSeconds += duration;

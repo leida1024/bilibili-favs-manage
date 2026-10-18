@@ -7,7 +7,8 @@ export function normalizeFolder(raw, kind, index = 0) {
   return Object.freeze({ id, ownerId, kind: kind === 'created' ? 'created' : raw.type === 11 ? 'subscribed' : 'unsupported',
     name: typeof raw.title === 'string' ? raw.title : '（名称未知）', count: knownCount(raw.media_count),
     protected: kind === 'created' && (index === 0 || raw.is_kid_playlist !== 0 || (raw.type !== undefined && raw.type !== 11)),
-    available: raw.state === undefined || raw.state === 0, subscribed: raw.fav_state === 1 });
+    available: (kind === 'created' ? raw.state === undefined || raw.state === 0 : raw.state === 0) &&
+      !(stableId(raw.mid) && stableId(raw.upper?.mid) && stableId(raw.mid) !== stableId(raw.upper.mid)), subscribed: raw.fav_state === 1 });
 }
 
 export function pause(ms, signal) {
@@ -40,13 +41,15 @@ export class FolderClient {
   }
 
   async mutate(action, folder, signal) {
-    if (action !== 'delete' || !stableId(folder.id)) return { status: 'failed', detail: '操作或 ID 无效，未提交' };
+    if (!['delete', 'unsubscribe'].includes(action) || !stableId(folder.id)) return { status: 'failed', detail: '操作或 ID 无效，未提交' };
     if (signal?.aborted) return { status: 'not_started', detail: '取消，未提交' };
     const token = document.cookie.split(';').map(part => part.trim()).find(part => part.startsWith('bili_jct='))?.slice(9);
     if (!token) return { status: 'failed', detail: '登录校验缺失，未提交；请重新登录后检查' };
-    const body = new URLSearchParams({ media_ids: folder.id, platform: 'web', csrf: token });
+    const body = new URLSearchParams({ platform: 'web', csrf: token });
+    if (action === 'delete') body.set('media_ids', folder.id);
+    const path = action === 'delete' ? '/x/v3/fav/folder/del' : `/x/v3/fav/folder/unfav?${new URLSearchParams({ media_id: folder.id })}`;
     try {
-      const json = await this.fetchJSON('/x/v3/fav/folder/del', { method: 'POST', body }, signal);
+      const json = await this.fetchJSON(path, { method: 'POST', body }, signal);
       if (!json || !Number.isInteger(json.code)) return { status: 'unknown', detail: '响应未识别；请检查平台结果，勿直接重试' };
       return json.code === 0 ? { status: 'confirmed', detail: '平台已确认成功' } : { status: 'failed', detail: `平台拒绝（代码 ${json.code}），已停止` };
     } catch { return { status: 'unknown', detail: '请求后未取得明确结果；请检查平台，勿直接重试' }; }
@@ -56,6 +59,7 @@ export class FolderClient {
     if (!stableId(ownerId) || !['created', 'subscribed'].includes(kind)) throw new Error('收藏夹范围无效');
     if (kind === 'created') {
       const data = await this.request('/x/v3/fav/folder/created/list-all', { up_mid: ownerId }, signal);
+      if (data.count === 0 && data.list === null) data.list = [];
       if (!Array.isArray(data.list) || data.list.length !== data.count) throw new Error('收藏夹列表不完整，请稍后重新加载');
       return this.normalizeList(data.list, kind);
     }
@@ -63,6 +67,7 @@ export class FolderClient {
     for (let pn = 1; pn <= 100; pn++) {
       if (pn > 1) await pause(pace, signal);
       const data = await this.request('/x/v3/fav/folder/collected/list', { up_mid: ownerId, pn, ps: 20, platform: 'web' }, signal);
+      if (data.count === 0 && data.list === null && data.has_more === false) data.list = [];
       if (!Array.isArray(data.list) || typeof data.has_more !== 'boolean') throw new Error('订阅列表格式未识别');
       rows.push(...data.list);
       if (!data.has_more) {
@@ -80,8 +85,10 @@ export class FolderClient {
     return result;
   }
 
-  videos(folderId, pn, signal) {
+  async videos(folderId, pn, signal) {
     if (!stableId(folderId)) throw new Error('收藏夹 ID 无效');
-    return this.request('/x/v3/fav/resource/list', { media_id: folderId, pn, ps: 20, platform: 'web' }, signal);
+    const data = await this.request('/x/v3/fav/resource/list', { media_id: folderId, pn, ps: 20, platform: 'web' }, signal);
+    if (data.medias === null && data.info?.media_count === 0 && data.has_more === false) data.medias = [];
+    return data;
   }
 }
