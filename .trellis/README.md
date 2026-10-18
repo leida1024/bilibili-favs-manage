@@ -17,7 +17,7 @@ Read the [development handbook](DEVELOPMENT.md), [workflow](workflow.md), [front
 | 4 | [Unsubscribe](tasks/archive/2026-10/10-18-batch-unsubscribe/) | Folder subscriptions with identity safeguards, synthetic acceptance |
 | Follow-up | [Panel usability](tasks/archive/2026-10/10-18-panel-usability/) | Adjacent copy pairs, separate task views and one task scroller |
 
-The latest local build passed 57 tests and build. These changes are not released. No real-account mutations or remote pushes were performed. The latest user instruction prohibits pushing until user review. Remaining live/GM/navigation limits are in the handbook and task verification files.
+The latest local build 2.2.0-dev.1 passed 60 tests and build. These changes are not released. No real-account mutations or remote pushes were performed. The latest user instruction prohibits pushing until user review. Remaining live/GM/navigation limits are in the handbook and task verification files.
 
 ## Records
 
@@ -28,4 +28,4 @@ The latest local build passed 57 tests and build. These changes are not released
 
 Trellis uses the local 0.6.0-rc.0 setup. Runtime pointers and browser profiles are ignored or outside Git. Do not change global agent settings automatically.
 
-Latest follow-up: [panel design rethink](tasks/archive/2026-10/10-18-panel-design-rethink/) keeps optional records below the current task, prioritizes dynamic lists over repeated help/status, unifies typography and repairs navigation/catalog state linkage. Product commit `7717c06`; 57 tests, 81 fictional browser cases and read-only live startup passed. It supersedes the full-screen-records design in earlier tasks.
+Latest follow-up: [compact workspace](tasks/archive/2026-10/10-18-compact-workbench/), product commit `4fc2007`, restores default side logs in a 640×600 window and unifies search/bulk selection across copy/statistics/management. Lists prioritize names/counts; final mutation confirmation shows exact identities and consequences. Top-level design and 125 fictional browser cases are recorded with the task; 60 tests/build and read-only live injection passed. This user's explicit redesign supersedes the below-footer optional records and always-visible row identities from `7717c06` and earlier UI tasks. Published Greasy Fork remains 2.1.2; no push.

@@ -1,0 +1,922 @@
+[
+  {
+    "failures": [],
+    "results": [
+      {
+        "label": "ready",
+        "logs": "side",
+        "taskHeight": 471,
+        "visibleCopyRows": 5,
+        "width": 640
+      },
+      {
+        "label": "ready/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "ready/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "empty",
+        "logs": "side",
+        "taskHeight": 471,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "empty/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "empty/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "dense",
+        "logs": "side",
+        "taskHeight": 471,
+        "visibleCopyRows": 10,
+        "width": 640
+      },
+      {
+        "label": "dense/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "dense/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "many",
+        "logs": "side",
+        "taskHeight": 471,
+        "visibleCopyRows": 5,
+        "width": 640
+      },
+      {
+        "label": "many/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "many/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "running",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 5,
+        "width": 640
+      },
+      {
+        "label": "running/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "running/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "failed",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 5,
+        "width": 640
+      },
+      {
+        "label": "failed/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "failed/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "completed",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 5,
+        "width": 640
+      },
+      {
+        "label": "completed/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "completed/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "interrupted",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 5,
+        "width": 640
+      },
+      {
+        "label": "interrupted/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "interrupted/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "dense/failed",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 8,
+        "width": 640
+      }
+    ],
+    "viewport": [
+      1440,
+      900
+    ]
+  },
+  {
+    "failures": [],
+    "results": [
+      {
+        "label": "ready",
+        "logs": "side",
+        "taskHeight": 471,
+        "visibleCopyRows": 5,
+        "width": 640
+      },
+      {
+        "label": "ready/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "ready/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "empty",
+        "logs": "side",
+        "taskHeight": 471,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "empty/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "empty/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "dense",
+        "logs": "side",
+        "taskHeight": 471,
+        "visibleCopyRows": 10,
+        "width": 640
+      },
+      {
+        "label": "dense/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "dense/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "many",
+        "logs": "side",
+        "taskHeight": 471,
+        "visibleCopyRows": 5,
+        "width": 640
+      },
+      {
+        "label": "many/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "many/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "running",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 5,
+        "width": 640
+      },
+      {
+        "label": "running/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "running/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "failed",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 5,
+        "width": 640
+      },
+      {
+        "label": "failed/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "failed/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "completed",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 5,
+        "width": 640
+      },
+      {
+        "label": "completed/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "completed/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "interrupted",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 5,
+        "width": 640
+      },
+      {
+        "label": "interrupted/statistics",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "interrupted/manage",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "dense/failed",
+        "logs": "side",
+        "taskHeight": 425,
+        "visibleCopyRows": 8,
+        "width": 640
+      }
+    ],
+    "viewport": [
+      1024,
+      768
+    ]
+  },
+  {
+    "failures": [],
+    "results": [
+      {
+        "label": "ready",
+        "logs": "bottom",
+        "taskHeight": 349,
+        "visibleCopyRows": 5,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "ready/statistics",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "ready/manage",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "empty",
+        "logs": "bottom",
+        "taskHeight": 349,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "empty/statistics",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "empty/manage",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "dense",
+        "logs": "bottom",
+        "taskHeight": 349,
+        "visibleCopyRows": 6,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "dense/statistics",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "dense/manage",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "many",
+        "logs": "bottom",
+        "taskHeight": 349,
+        "visibleCopyRows": 3,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "many/statistics",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "many/manage",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "running",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 5,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "running/statistics",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "running/manage",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "failed",
+        "logs": "bottom",
+        "taskHeight": 285,
+        "visibleCopyRows": 5,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "failed/statistics",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "failed/manage",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "completed",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 5,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "completed/statistics",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "completed/manage",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "interrupted",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 5,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "interrupted/statistics",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "interrupted/manage",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "dense/failed",
+        "logs": "bottom",
+        "taskHeight": 303,
+        "visibleCopyRows": 5,
+        "width": 359.20001220703125
+      }
+    ],
+    "viewport": [
+      375,
+      812
+    ]
+  },
+  {
+    "failures": [],
+    "results": [
+      {
+        "label": "ready",
+        "logs": "side",
+        "taskHeight": 243,
+        "visibleCopyRows": 3,
+        "width": 640
+      },
+      {
+        "label": "ready/statistics",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "ready/manage",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "empty",
+        "logs": "side",
+        "taskHeight": 243,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "empty/statistics",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "empty/manage",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "dense",
+        "logs": "side",
+        "taskHeight": 243,
+        "visibleCopyRows": 3,
+        "width": 640
+      },
+      {
+        "label": "dense/statistics",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "dense/manage",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "many",
+        "logs": "side",
+        "taskHeight": 243,
+        "visibleCopyRows": 2,
+        "width": 640
+      },
+      {
+        "label": "many/statistics",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "many/manage",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "running",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 2,
+        "width": 640
+      },
+      {
+        "label": "running/statistics",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "running/manage",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "failed",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 2,
+        "width": 640
+      },
+      {
+        "label": "failed/statistics",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "failed/manage",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "completed",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 2,
+        "width": 640
+      },
+      {
+        "label": "completed/statistics",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "completed/manage",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "interrupted",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 2,
+        "width": 640
+      },
+      {
+        "label": "interrupted/statistics",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "interrupted/manage",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 0,
+        "width": 640
+      },
+      {
+        "label": "dense/failed",
+        "logs": "side",
+        "taskHeight": 197,
+        "visibleCopyRows": 2,
+        "width": 640
+      }
+    ],
+    "viewport": [
+      812,
+      375
+    ]
+  },
+  {
+    "failures": [],
+    "results": [
+      {
+        "label": "ready",
+        "logs": "bottom",
+        "taskHeight": 151,
+        "visibleCopyRows": 1,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "ready/statistics",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "ready/manage",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "empty",
+        "logs": "bottom",
+        "taskHeight": 151,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "empty/statistics",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "empty/manage",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "dense",
+        "logs": "bottom",
+        "taskHeight": 151,
+        "visibleCopyRows": 1,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "dense/statistics",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "dense/manage",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "many",
+        "logs": "bottom",
+        "taskHeight": 151,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "many/statistics",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "many/manage",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "running",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "running/statistics",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "running/manage",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "failed",
+        "logs": "bottom",
+        "taskHeight": 89,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "failed/statistics",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "failed/manage",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "completed",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "completed/statistics",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "completed/manage",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "interrupted",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "interrupted/statistics",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "interrupted/manage",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      },
+      {
+        "label": "dense/failed",
+        "logs": "bottom",
+        "taskHeight": 105,
+        "visibleCopyRows": 0,
+        "width": 359.20001220703125
+      }
+    ],
+    "viewport": [
+      375,
+      375
+    ]
+  }
+]

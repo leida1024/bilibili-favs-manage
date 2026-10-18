@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
+- **Total Sessions**: 9
 - **Last Active**: 2026-10-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~270 | Active |
+| `journal-1.md` | ~303 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-10-18 | Compact workspace and consistent selection | `4fc2007` | `develop` |
 | 8 | 2026-10-18 | Rethink panel workflow and prioritize dynamic content | `7717c06` | `develop` |
 | 7 | 2026-10-18 | Compact direct-information panel acceptance | `847ddb2` | `develop` |
 | 6 | 2026-10-18 | Paired copy usability acceptance | `6883422` | `develop` |

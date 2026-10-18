@@ -1,0 +1,64 @@
+{
+  "colorScheme": "light",
+  "contrast": [
+    {
+      "minimum": 4.5,
+      "pair": "ink/surface",
+      "ratio": 12.59
+    },
+    {
+      "minimum": 4.5,
+      "pair": "muted/surface",
+      "ratio": 6.04
+    },
+    {
+      "minimum": 4.5,
+      "pair": "muted/soft",
+      "ratio": 5.62
+    },
+    {
+      "minimum": 4.5,
+      "pair": "blue/surface",
+      "ratio": 5.05
+    },
+    {
+      "minimum": 4.5,
+      "pair": "surface/blue",
+      "ratio": 5.05
+    },
+    {
+      "minimum": 4.5,
+      "pair": "danger/surface",
+      "ratio": 6.43
+    },
+    {
+      "minimum": 4.5,
+      "pair": "danger/danger-soft",
+      "ratio": 6
+    },
+    {
+      "minimum": 4.5,
+      "pair": "success/surface",
+      "ratio": 6.69
+    },
+    {
+      "minimum": 4.5,
+      "pair": "warning/soft",
+      "ratio": 6.48
+    },
+    {
+      "minimum": 3,
+      "pair": "control/surface",
+      "ratio": 3.09
+    },
+    {
+      "minimum": 4.5,
+      "pair": "blue/selected",
+      "ratio": 4.64
+    }
+  ],
+  "contrastPass": true,
+  "hostileHostFontPass": true,
+  "reducedMotion": true,
+  "transition": "0s"
+}

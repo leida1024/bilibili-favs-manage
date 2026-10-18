@@ -268,3 +268,36 @@ Task and diagnostics now coexist; compact metadata/help/status prioritize source
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: Compact workspace and consistent selection
+
+**Date**: 2026-10-18
+**Task**: Compact workspace and consistent selection
+**Branch**: `develop`
+
+### Summary
+
+Rebuilt UI as 640×600 with default side logs; unified search and eligible bulk selection in all 3 tasks; visible 2.2.0-dev.1 and version consistency check. 60 tests/build, 125 fictional browser cases and read-only live injection passed. Top-level design and screenshots recorded. No remote push, release or real collection mutation.
+
+### Main Changes
+
+Top-level design, acceptance and fictional screenshots: [compact workspace task](../../tasks/archive/2026-10/10-18-compact-workbench/). This layout supersedes the previous bottom-record design.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4fc2007` | Restore compact workspace and unify selection controls |
+
+### Testing
+
+- [OK] 60 tests, build, 125 browser cases, contrast/reduced-motion/keyboard review and read-only live injection; no real mutations or remote publication.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

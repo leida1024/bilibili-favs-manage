@@ -1,5 +1,11 @@
 # Development handbook and session handoff
 
+## Current UI contract (supersedes historical layout notes below)
+
+The user rejected the prior wide/cluttered interface and requested side logs, more visible folders, consistent selection in all three tasks, and real development versions. [Compact workspace task](tasks/archive/2026-10/10-18-compact-workbench/) owns the top-level design and final evidence. Product commit `4fc2007`, version `2.2.0-dev.1`: 640×600, default side logs, narrow-panel bottom logs, shared search/all/cancel/count toolbar, concise name/count rows and exact final destructive review. Desktop shows 10 full short-name copy rows, 8 under failure; 125 fictional cases and 60 tests/build passed. Read-only live injection: one panel, nine source rows, correct version/side logs/no overflow and minimize/navigation/reinjection passed. No real writes or push.
+
+The side log/default sizing and contextual identity design replace the content-sized/bottom hidden-record layout described in older sections. Preserve selection/ticket/reset contracts. Advance dev.N for each reviewable product iteration; keep package/lock/runtime/build/header equal. Online stays 2.1.2 until an explicit release. Existing no-push and real-mutation boundaries remain in force.
+
 ## Goal and authorization
 
 Make Bilibili favorites management comfortable and reliable. Work on develop; keep master and Greasy Fork unchanged. The user authorized Stage 0 followed by Stages 1–4 and the frontend-design usability follow-up, including local implementation, verification, fixes, commits, archives and journals. The latest instruction explicitly prohibits ALL remote pushes until user acceptance. It supersedes earlier push authorization. Do not request repeated phase or local-commit approval.

@@ -15,3 +15,5 @@ Preserve legacy/VUI layout support, asynchronous readiness, SPA entry, dismissal
 Use `examples/panel-preview.html` for visual acceptance with fictional data. Record exactly which live checks ran, which realm was used, and what remains unverified. Avoid screenshots of the user's favorites. Never log credentials, full storage, request authorization, or webhook secrets.
 
 Product changes and dev records are separate commits. Follow the branch policy before touching master or Greasy Fork. Documentation-only Trellis setup does not require rewriting build outputs or bumping the script version.
+
+Each reviewable product iteration advances the local development version (e.g. `2.2.0-dev.1`, then `dev.2`); publication remains a separate action. Keep `package.json`, the lockfile root package and `CONFIG.SCRIPT.VERSION` equal. Rollup reads the runtime version and fails if the package version differs; the panel and generated `@version` show the same value. Build before running the complete tests, since startup/version tests inspect the generated userscript. Published version statements in docs must still identify the actual Greasy Fork release.
