@@ -9,6 +9,7 @@ import { BilibiliAPI } from './BilibiliAPI.js';
 import { delay } from '../utils/dom.js';
 import { log, error } from '../utils/logger.js';
 import { CONFIG } from '../config/config.js';
+import { normalizeFavoriteName, normalizeCopyTasks } from '../utils/favoriteNames.js';
 
 export class CrossPageFlowManager {
   constructor(manager) {
@@ -25,6 +26,7 @@ export class CrossPageFlowManager {
    * @returns {Promise<void>}
    */
   async startCrossPageFlow(tasks) {
+    tasks = normalizeCopyTasks(tasks);
     // 跳转到自己的收藏夹页面
     const ownURL = PageDetector.getOwnFavListURL();
     if (!ownURL) {
@@ -55,6 +57,8 @@ export class CrossPageFlowManager {
    * @returns {Promise<boolean>}
    */
   async batchCreateFavorites(favNames) {
+    favNames = [...new Set(favNames.map(normalizeFavoriteName))];
+    if (favNames.some(name => !name)) return false;
     log('========================================');
     log('开始批量创建收藏夹');
     log(`共 ${favNames.length} 个: ${favNames.join(', ')}`);
@@ -81,16 +85,21 @@ export class CrossPageFlowManager {
   }
 
   /**
-   * 创建单个收藏夹：优先左侧边栏原生入口，失败回退到复制对话框方式
+   * 创建单个收藏夹：仅侧栏入口不存在时回退，结果未确认时停止。
    * @param {string} favName - 收藏夹名称
    * @returns {Promise<boolean>}
    */
   async createSingleFavorite(favName) {
+    favName = normalizeFavoriteName(favName);
+    if (!favName) return false;
+    if (this.manager.getAllFavoriteNames().map(normalizeFavoriteName).includes(favName)) return true;
     // 优先：左侧边栏原生"新建收藏夹"入口（最简，无需批量模式/复制对话框）
-    if (await BilibiliAPI.createFavoriteViaSidebar(favName)) {
+    const result = await BilibiliAPI.createFavoriteViaSidebar(favName);
+    if (result === true) {
       log(`✓ 创建收藏夹 [${favName}] 成功（侧边栏入口）`);
       return true;
     }
+    if (result !== null) return false;
 
     // 回退：复制对话框内"新建收藏夹"（已验证可用）
     log('侧边栏入口不可用，回退到复制对话框方式创建');
@@ -149,7 +158,8 @@ export class CrossPageFlowManager {
 
     // 6. 关闭对话框
     await delay(CONFIG.DELAY.SHORT);
-    BilibiliAPI.closeDialog(dialog);
+    const currentDialog = await BilibiliAPI.waitForDialog();
+    if (currentDialog) BilibiliAPI.closeDialog(currentDialog);
     await delay(CONFIG.DELAY.SHORT);
 
     return true;
@@ -172,6 +182,12 @@ export class CrossPageFlowManager {
       if (returnURL.origin !== window.location.origin ||
           returnURL.pathname !== window.location.pathname) return false;
     }
+    if (!['creating', 'copying'].includes(state.phase)) return false;
+
+    // 执行前消费任务：失败、刷新或异常退出不能自动重放创建/复制请求。
+    // 只有创建全部确认成功后才保存下一阶段。
+    StateManager.clearState();
+    state.tasks = normalizeCopyTasks(state.tasks);
 
     log('========================================');
     log('检测到跨页面流程状态');
@@ -181,7 +197,7 @@ export class CrossPageFlowManager {
     if (state.phase === 'creating') {
       // 当前已在「自己页面」，此时 getAllFavoriteNames() = 自己的收藏夹
       // 在此对比目标名称，找出真正缺失（自己还没有）的收藏夹
-      const ownNames = this.manager.getAllFavoriteNames();
+      const ownNames = this.manager.getAllFavoriteNames().map(normalizeFavoriteName);
       const missing = state.tasks
         .map(t => t.target)
         .filter((name, index, self) => self.indexOf(name) === index) // 去重

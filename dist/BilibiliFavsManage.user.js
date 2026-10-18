@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.1.1
+// @version      2.1.2
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       junxian-li-hpc
 // @match        https://space.bilibili.com/*
@@ -170,7 +170,7 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.1.1'}
+      VERSION: '2.1.2'}
   };
 
   /** 旧版个人空间（带“体验新版”入口）。 */
@@ -250,6 +250,21 @@
     return PAGE_ADAPTERS.find(adapter => document.querySelector(adapter.sidebar)) || null;
   }
 
+  /** 与页面显示一致地去掉首尾空白，保留名称内部的空格及连续空格。 */
+  function normalizeFavoriteName(name) {
+    return typeof name === 'string' ? name.trim() : '';
+  }
+
+  /** 在任何跳转或提交前检查整个任务列表；同时兼容旧版本保存的任务。 */
+  function normalizeCopyTasks(tasks) {
+    return tasks.map(task => {
+      const source = normalizeFavoriteName(task.source);
+      const target = normalizeFavoriteName(task.target);
+      if (!source || !target) throw new Error('源收藏夹和目标收藏夹名称不能为空或仅包含空白');
+      return { ...task, source, target };
+    });
+  }
+
   /**
    * B 站收藏夹页面 API 封装
    * 封装所有与 B 站页面 DOM 交互的操作
@@ -284,7 +299,7 @@
      */
     static getFavoriteName(favItem) {
       const titleEl = favItem.querySelector(pageAdapter().title);
-      return titleEl ? titleEl.textContent.trim() : '';
+      return normalizeFavoriteName(titleEl?.textContent);
     }
 
     /**
@@ -297,7 +312,7 @@
         error('无法获取当前收藏夹名称');
         return null;
       }
-      return titleEl.textContent.trim();
+      return normalizeFavoriteName(titleEl.textContent);
     }
 
     /**
@@ -391,6 +406,8 @@
      * @returns {boolean} 是否成功
      */
     static selectFavoriteInDialog(dialog, favName) {
+      favName = normalizeFavoriteName(favName);
+      if (!favName) return false;
       const favList = this.getFavoriteListInDialog(dialog);
 
       for (const fav of favList) {
@@ -432,6 +449,8 @@
      * @returns {Promise<boolean>} 是否成功
      */
     static async inputFavoriteName(name) {
+      name = normalizeFavoriteName(name);
+      if (!name) return false;
       const nameInput = Array.from(document.querySelectorAll(SELECTORS.CREATE_FAV_NAME_INPUT)).find(isElementVisible);
       if (!nameInput) {
         error('找不到名称输入框');
@@ -482,14 +501,18 @@
 
     /**
      * 通过左侧边栏原生"新建收藏夹"入口创建收藏夹
-     * （无需进入批量模式/复制对话框；入口或对话框缺失时返回 false，交由调用方回退）
+     * 仅入口不存在时返回 null，允许调用方使用复制对话框。
+     * 一旦尝试打开入口，失败或结果未确认均返回 false，禁止再次提交。
      * @param {string} favName - 收藏夹名称
-     * @returns {Promise<boolean>}
+     * @returns {Promise<boolean|null>}
      */
     static async createFavoriteViaSidebar(favName) {
+      favName = normalizeFavoriteName(favName);
+      if (!favName) return false;
+      if (this.getAllFavorites().some(item => this.getFavoriteName(item) === favName)) return true;
       const selector = pageAdapter().sidebarCreate;
       const sidebar = selector && document.querySelector(selector);
-      if (!sidebar) return false;
+      if (!sidebar) return null;
 
       // 文本精确为"新建收藏夹"的叶子元素即入口
       const entry = Array.from(sidebar.querySelectorAll('*')).find(
@@ -498,7 +521,7 @@
       );
       if (!entry) {
         warn('侧边栏未找到"新建收藏夹"入口');
-        return false;
+        return null;
       }
 
       log('点击左侧边栏[新建收藏夹]');
@@ -519,8 +542,26 @@
       if (!await this.inputFavoriteName(favName)) return false;
       if (!await this.clickCreateButton()) return false;
 
-      await delay(CONFIG.DELAY.MIDDLE);
-      return true;
+      const confirmed = await this.waitForFavorite(favName);
+      if (!confirmed) error(`未确认收藏夹 [${favName}] 创建成功，已停止，请检查页面结果`);
+      return confirmed;
+    }
+
+    /** 等待列表确认创建结果；每次重新查找弹窗，兼容组件整体重渲染。 */
+    static async waitForFavorite(favName, inDialog = false, timeout = 5000) {
+      favName = normalizeFavoriteName(favName);
+      if (!favName) return false;
+      const deadline = Date.now() + timeout;
+      do {
+        if (inDialog) {
+          const dialog = Array.from(document.querySelectorAll(pageAdapter().dialog)).find(isElementVisible);
+          if (dialog && this.isFavoriteExistInDialog(dialog, favName)) return true;
+        } else if (this.getAllFavorites().some(item => this.getFavoriteName(item) === favName)) {
+          return true;
+        }
+        if (Date.now() >= deadline) return false;
+        await delay(100);
+      } while (true);
     }
 
     static closeDialog(dialog) {
@@ -593,6 +634,8 @@
      * @returns {Promise<boolean>} 是否成功
      */
     static async clickFavorite(favName) {
+      favName = normalizeFavoriteName(favName);
+      if (!favName) return false;
       const allFavs = this.getAllFavorites();
 
       for (const favItem of allFavs) {
@@ -639,6 +682,8 @@
      * @returns {boolean}
      */
     static isFavoriteExistInDialog(dialog, favName) {
+      favName = normalizeFavoriteName(favName);
+      if (!favName) return false;
       const favList = this.getFavoriteListInDialog(dialog);
       return favList.some(fav => fav.name === favName);
     }
@@ -806,6 +851,7 @@
      * @returns {Promise<void>}
      */
     async startCrossPageFlow(tasks) {
+      tasks = normalizeCopyTasks(tasks);
       // 跳转到自己的收藏夹页面
       const ownURL = PageDetector.getOwnFavListURL();
       if (!ownURL) {
@@ -836,6 +882,8 @@
      * @returns {Promise<boolean>}
      */
     async batchCreateFavorites(favNames) {
+      favNames = [...new Set(favNames.map(normalizeFavoriteName))];
+      if (favNames.some(name => !name)) return false;
       log('========================================');
       log('开始批量创建收藏夹');
       log(`共 ${favNames.length} 个: ${favNames.join(', ')}`);
@@ -862,16 +910,21 @@
     }
 
     /**
-     * 创建单个收藏夹：优先左侧边栏原生入口，失败回退到复制对话框方式
+     * 创建单个收藏夹：仅侧栏入口不存在时回退，结果未确认时停止。
      * @param {string} favName - 收藏夹名称
      * @returns {Promise<boolean>}
      */
     async createSingleFavorite(favName) {
+      favName = normalizeFavoriteName(favName);
+      if (!favName) return false;
+      if (this.manager.getAllFavoriteNames().map(normalizeFavoriteName).includes(favName)) return true;
       // 优先：左侧边栏原生"新建收藏夹"入口（最简，无需批量模式/复制对话框）
-      if (await BilibiliAPI.createFavoriteViaSidebar(favName)) {
+      const result = await BilibiliAPI.createFavoriteViaSidebar(favName);
+      if (result === true) {
         log(`✓ 创建收藏夹 [${favName}] 成功（侧边栏入口）`);
         return true;
       }
+      if (result !== null) return false;
 
       // 回退：复制对话框内"新建收藏夹"（已验证可用）
       log('侧边栏入口不可用，回退到复制对话框方式创建');
@@ -930,7 +983,8 @@
 
       // 6. 关闭对话框
       await delay(CONFIG.DELAY.SHORT);
-      BilibiliAPI.closeDialog(dialog);
+      const currentDialog = await BilibiliAPI.waitForDialog();
+      if (currentDialog) BilibiliAPI.closeDialog(currentDialog);
       await delay(CONFIG.DELAY.SHORT);
 
       return true;
@@ -953,6 +1007,12 @@
         if (returnURL.origin !== window.location.origin ||
             returnURL.pathname !== window.location.pathname) return false;
       }
+      if (!['creating', 'copying'].includes(state.phase)) return false;
+
+      // 执行前消费任务：失败、刷新或异常退出不能自动重放创建/复制请求。
+      // 只有创建全部确认成功后才保存下一阶段。
+      StateManager.clearState();
+      state.tasks = normalizeCopyTasks(state.tasks);
 
       log('========================================');
       log('检测到跨页面流程状态');
@@ -962,7 +1022,7 @@
       if (state.phase === 'creating') {
         // 当前已在「自己页面」，此时 getAllFavoriteNames() = 自己的收藏夹
         // 在此对比目标名称，找出真正缺失（自己还没有）的收藏夹
-        const ownNames = this.manager.getAllFavoriteNames();
+        const ownNames = this.manager.getAllFavoriteNames().map(normalizeFavoriteName);
         const missing = state.tasks
           .map(t => t.target)
           .filter((name, index, self) => self.indexOf(name) === index) // 去重
@@ -1060,6 +1120,9 @@
      * @returns {Promise<boolean>} 是否成功
      */
     async copyFavorite(sourceFavName, targetFavName) {
+      sourceFavName = normalizeFavoriteName(sourceFavName);
+      targetFavName = normalizeFavoriteName(targetFavName);
+      if (!sourceFavName || !targetFavName) return false;
       log(`开始复制收藏夹 [${sourceFavName}] 到 [${targetFavName}]`);
 
       // 1. 点击源收藏夹
@@ -1116,6 +1179,8 @@
      * @returns {Promise<boolean>} 是否成功
      */
     async copyOnePage(targetFavName) {
+      targetFavName = normalizeFavoriteName(targetFavName);
+      if (!targetFavName) return false;
       // 0. 确保批量模式激活
       const batchActive = await this.api.ensureBatchModeActive();
       if (!batchActive) {
@@ -1135,7 +1200,7 @@
       }
 
       // 3. 等待对话框
-      const dialog = await this.api.waitForDialog();
+      let dialog = await this.api.waitForDialog();
       if (!dialog) {
         error('对话框未出现');
         return false;
@@ -1164,6 +1229,9 @@
           error('创建收藏夹失败');
           return false;
         }
+        // 创建后组件可能重渲染，不能继续操作已脱离页面的旧节点。
+        dialog = await this.api.waitForDialog();
+        if (!dialog) return false;
       }
 
       // 5. 选择目标收藏夹
@@ -1184,6 +1252,9 @@
      * @returns {Promise<boolean>} 是否成功
      */
     async createNewFavorite(dialog, favName) {
+      favName = normalizeFavoriteName(favName);
+      if (!favName) return false;
+      if (this.api.isFavoriteExistInDialog(dialog, favName)) return true;
       // 1. 点击新建收藏夹按钮
       if (!await this.api.clickCreateFavoriteButton(dialog)) {
         return false;
@@ -1199,8 +1270,10 @@
         return false;
       }
 
-      log(`✓ 创建收藏夹 [${favName}] 成功`);
-      return true;
+      const confirmed = await this.api.waitForFavorite(favName, true);
+      if (confirmed) log(`✓ 创建收藏夹 [${favName}] 成功`);
+      else error(`未确认收藏夹 [${favName}] 创建成功，已停止，请检查页面结果`);
+      return confirmed;
     }
 
     /**
@@ -1211,6 +1284,7 @@
      * @returns {Promise<void>}
      */
     async batchCopy(copyList, options = {}) {
+      copyList = normalizeCopyTasks(copyList);
       const { skipCrossPage = false } = options;
       log('开始批量复制，共', copyList.length, '个任务');
 
@@ -1231,7 +1305,9 @@
         const { source, target } = copyList[i];
         log(`\n[${i + 1}/${copyList.length}] ${source} → ${target}`);
 
-        await this.copyFavorite(source, target);
+        if (!await this.copyFavorite(source, target)) {
+          throw new Error(`收藏夹 [${source}] → [${target}] 复制失败，已停止后续任务，请检查页面结果后重试`);
+        }
 
         // 任务间延迟
         if (i < copyList.length - 1) {

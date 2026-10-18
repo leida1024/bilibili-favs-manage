@@ -9,6 +9,7 @@ import { CrossPageFlowManager } from './CrossPageFlowManager.js';
 import { delay } from '../utils/dom.js';
 import { log, error, warn } from '../utils/logger.js';
 import { CONFIG } from '../config/config.js';
+import { normalizeFavoriteName, normalizeCopyTasks } from '../utils/favoriteNames.js';
 
 export class FavoriteManager {
   constructor() {
@@ -50,6 +51,9 @@ export class FavoriteManager {
    * @returns {Promise<boolean>} 是否成功
    */
   async copyFavorite(sourceFavName, targetFavName) {
+    sourceFavName = normalizeFavoriteName(sourceFavName);
+    targetFavName = normalizeFavoriteName(targetFavName);
+    if (!sourceFavName || !targetFavName) return false;
     log(`开始复制收藏夹 [${sourceFavName}] 到 [${targetFavName}]`);
 
     // 1. 点击源收藏夹
@@ -106,6 +110,8 @@ export class FavoriteManager {
    * @returns {Promise<boolean>} 是否成功
    */
   async copyOnePage(targetFavName) {
+    targetFavName = normalizeFavoriteName(targetFavName);
+    if (!targetFavName) return false;
     // 0. 确保批量模式激活
     const batchActive = await this.api.ensureBatchModeActive();
     if (!batchActive) {
@@ -125,7 +131,7 @@ export class FavoriteManager {
     }
 
     // 3. 等待对话框
-    const dialog = await this.api.waitForDialog();
+    let dialog = await this.api.waitForDialog();
     if (!dialog) {
       error('对话框未出现');
       return false;
@@ -154,6 +160,9 @@ export class FavoriteManager {
         error('创建收藏夹失败');
         return false;
       }
+      // 创建后组件可能重渲染，不能继续操作已脱离页面的旧节点。
+      dialog = await this.api.waitForDialog();
+      if (!dialog) return false;
     }
 
     // 5. 选择目标收藏夹
@@ -174,6 +183,9 @@ export class FavoriteManager {
    * @returns {Promise<boolean>} 是否成功
    */
   async createNewFavorite(dialog, favName) {
+    favName = normalizeFavoriteName(favName);
+    if (!favName) return false;
+    if (this.api.isFavoriteExistInDialog(dialog, favName)) return true;
     // 1. 点击新建收藏夹按钮
     if (!await this.api.clickCreateFavoriteButton(dialog)) {
       return false;
@@ -189,8 +201,10 @@ export class FavoriteManager {
       return false;
     }
 
-    log(`✓ 创建收藏夹 [${favName}] 成功`);
-    return true;
+    const confirmed = await this.api.waitForFavorite(favName, true);
+    if (confirmed) log(`✓ 创建收藏夹 [${favName}] 成功`);
+    else error(`未确认收藏夹 [${favName}] 创建成功，已停止，请检查页面结果`);
+    return confirmed;
   }
 
   /**
@@ -201,6 +215,7 @@ export class FavoriteManager {
    * @returns {Promise<void>}
    */
   async batchCopy(copyList, options = {}) {
+    copyList = normalizeCopyTasks(copyList);
     const { skipCrossPage = false } = options;
     log('开始批量复制，共', copyList.length, '个任务');
 
@@ -221,7 +236,9 @@ export class FavoriteManager {
       const { source, target } = copyList[i];
       log(`\n[${i + 1}/${copyList.length}] ${source} → ${target}`);
 
-      await this.copyFavorite(source, target);
+      if (!await this.copyFavorite(source, target)) {
+        throw new Error(`收藏夹 [${source}] → [${target}] 复制失败，已停止后续任务，请检查页面结果后重试`);
+      }
 
       // 任务间延迟
       if (i < copyList.length - 1) {

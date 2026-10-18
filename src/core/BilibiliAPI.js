@@ -9,6 +9,7 @@ import { log, error, warn } from '../utils/logger.js';
 import { CONFIG } from '../config/config.js';
 import { getPageAdapter } from './adapters/index.js';
 import { VuiPageAdapter } from './adapters/VuiPageAdapter.js';
+import { normalizeFavoriteName } from '../utils/favoriteNames.js';
 
 const pageAdapter = () => getPageAdapter() || VuiPageAdapter;
 
@@ -38,7 +39,7 @@ export class BilibiliAPI {
    */
   static getFavoriteName(favItem) {
     const titleEl = favItem.querySelector(pageAdapter().title);
-    return titleEl ? titleEl.textContent.trim() : '';
+    return normalizeFavoriteName(titleEl?.textContent);
   }
 
   /**
@@ -51,7 +52,7 @@ export class BilibiliAPI {
       error('无法获取当前收藏夹名称');
       return null;
     }
-    return titleEl.textContent.trim();
+    return normalizeFavoriteName(titleEl.textContent);
   }
 
   /**
@@ -145,6 +146,8 @@ export class BilibiliAPI {
    * @returns {boolean} 是否成功
    */
   static selectFavoriteInDialog(dialog, favName) {
+    favName = normalizeFavoriteName(favName);
+    if (!favName) return false;
     const favList = this.getFavoriteListInDialog(dialog);
 
     for (const fav of favList) {
@@ -186,6 +189,8 @@ export class BilibiliAPI {
    * @returns {Promise<boolean>} 是否成功
    */
   static async inputFavoriteName(name) {
+    name = normalizeFavoriteName(name);
+    if (!name) return false;
     const nameInput = Array.from(document.querySelectorAll(SELECTORS.CREATE_FAV_NAME_INPUT)).find(isElementVisible);
     if (!nameInput) {
       error('找不到名称输入框');
@@ -236,14 +241,18 @@ export class BilibiliAPI {
 
   /**
    * 通过左侧边栏原生"新建收藏夹"入口创建收藏夹
-   * （无需进入批量模式/复制对话框；入口或对话框缺失时返回 false，交由调用方回退）
+   * 仅入口不存在时返回 null，允许调用方使用复制对话框。
+   * 一旦尝试打开入口，失败或结果未确认均返回 false，禁止再次提交。
    * @param {string} favName - 收藏夹名称
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean|null>}
    */
   static async createFavoriteViaSidebar(favName) {
+    favName = normalizeFavoriteName(favName);
+    if (!favName) return false;
+    if (this.getAllFavorites().some(item => this.getFavoriteName(item) === favName)) return true;
     const selector = pageAdapter().sidebarCreate;
     const sidebar = selector && document.querySelector(selector);
-    if (!sidebar) return false;
+    if (!sidebar) return null;
 
     // 文本精确为"新建收藏夹"的叶子元素即入口
     const entry = Array.from(sidebar.querySelectorAll('*')).find(
@@ -252,7 +261,7 @@ export class BilibiliAPI {
     );
     if (!entry) {
       warn('侧边栏未找到"新建收藏夹"入口');
-      return false;
+      return null;
     }
 
     log('点击左侧边栏[新建收藏夹]');
@@ -273,8 +282,26 @@ export class BilibiliAPI {
     if (!await this.inputFavoriteName(favName)) return false;
     if (!await this.clickCreateButton()) return false;
 
-    await delay(CONFIG.DELAY.MIDDLE);
-    return true;
+    const confirmed = await this.waitForFavorite(favName);
+    if (!confirmed) error(`未确认收藏夹 [${favName}] 创建成功，已停止，请检查页面结果`);
+    return confirmed;
+  }
+
+  /** 等待列表确认创建结果；每次重新查找弹窗，兼容组件整体重渲染。 */
+  static async waitForFavorite(favName, inDialog = false, timeout = 5000) {
+    favName = normalizeFavoriteName(favName);
+    if (!favName) return false;
+    const deadline = Date.now() + timeout;
+    do {
+      if (inDialog) {
+        const dialog = Array.from(document.querySelectorAll(pageAdapter().dialog)).find(isElementVisible);
+        if (dialog && this.isFavoriteExistInDialog(dialog, favName)) return true;
+      } else if (this.getAllFavorites().some(item => this.getFavoriteName(item) === favName)) {
+        return true;
+      }
+      if (Date.now() >= deadline) return false;
+      await delay(100);
+    } while (true);
   }
 
   static closeDialog(dialog) {
@@ -347,6 +374,8 @@ export class BilibiliAPI {
    * @returns {Promise<boolean>} 是否成功
    */
   static async clickFavorite(favName) {
+    favName = normalizeFavoriteName(favName);
+    if (!favName) return false;
     const allFavs = this.getAllFavorites();
 
     for (const favItem of allFavs) {
@@ -393,6 +422,8 @@ export class BilibiliAPI {
    * @returns {boolean}
    */
   static isFavoriteExistInDialog(dialog, favName) {
+    favName = normalizeFavoriteName(favName);
+    if (!favName) return false;
     const favList = this.getFavoriteListInDialog(dialog);
     return favList.some(fav => fav.name === favName);
   }

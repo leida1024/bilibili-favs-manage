@@ -1,6 +1,6 @@
 {
   "name": "bilibili-favs-manage",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "B站收藏夹批量管理工具",
   "type": "module",
   "main": "src/main.js",
