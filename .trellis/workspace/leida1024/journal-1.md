@@ -249,17 +249,17 @@ Records now stay beside the task; unified typography, compact help/status after 
 
 ### Main Changes
 
-(Add details)
+Task and diagnostics now coexist; compact metadata/help/status prioritize source rows. Independent selections/scroll survive navigation; actual task switches invalidate destructive confirmation. Reload and mutation completion clear stale reports. See the panel-design-rethink archive for design and evidence.
 
 ### Git Commits
 
 | Hash | Message |
 |------|---------|
-| `7717c06` | (see git log) |
+| `7717c06` | refactor(ui): keep records beside compact task workflows |
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] 57/57 tests, build and whitespace; 81 fictional browser cases, keyboard/contrast/reduced-motion checks; read-only live startup. No real mutations or remote publication.
 
 ### Status
 

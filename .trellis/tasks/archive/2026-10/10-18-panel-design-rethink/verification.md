@@ -33,4 +33,4 @@ Observed one panel, nine source rows, not busy, default copy task, same resolved
 No copy, deletion or unsubscribe was submitted on a real account. Tampermonkey GM sandbox, automatic full-navigation recovery and current legacy-page live behavior remain unverified. Existing synthetic safeguards continue to pass. No push, master change, release or Greasy Fork modification occurred. Seven existing untracked skill directories were excluded from staging.
 
 ## Completion
-Acceptance met. Product and development records are separate commits. The task is ready to archive and journal with product commit `7717c06`; no outstanding implementation blocker.
+Acceptance met. Product and development records are separate commits. The task is archived and journaled with product commit `7717c06`; no outstanding implementation blocker.
