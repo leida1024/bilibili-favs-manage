@@ -8,6 +8,8 @@ Read the [development handbook](DEVELOPMENT.md), [workflow](workflow.md), [front
 
 ## Completed local scope
 
+Current release preparation: [PR#4](https://github.com/leida1024/bilibili-favs-manage/pull/4) is open from release/2.2.13 to master, built from22 product cherry-picks plus release docs/screenshots. Isolated npm ci/build and149 tests passed; GitHub reports MERGEABLE/CLEAN, no configured status checks and no auto-merge. Only release branch was pushed; master remains a5bf35d. See [release task](tasks/archive/2026-10/10-19-release-2-2-13/) for mapping/evidence. Greasy Fork publication is not yet performed or verified.
+
 Latest local follow-up2.2.13 clarifies notice scrolling controls and updates the public contributor/release workflow. Build and149 tests passed. The archived [notice/release handoff](tasks/archive/2026-10/10-19-notice-release-handoff/) records22 product candidates for master, excluded development commits and release checks still required. No push or publication.
 
 | Order | Archived task | Result |

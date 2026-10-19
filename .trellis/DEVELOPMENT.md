@@ -1,5 +1,7 @@
 # Development handbook and session handoff
 
+Release preparation complete: [PR#4](https://github.com/leida1024/bilibili-favs-manage/pull/4), release/2.2.13→master, head27ad234.22 ordered product cherry-picks applied conflict-free; release notes and5 fictional screenshots refreshed. Isolated dependency installation, reproducible build and149 tests passed. Product docs backported to local develop as f47f3f5. Only release branch push/PR was authorized and executed; master remains a5bf35d, no auto-merge, no online-version claim. [Release task](tasks/archive/2026-10/10-19-release-2-2-13/) owns full mapping/evidence. Further merge/publication requires user instruction, then actual webhook/Greasy Fork verification.
+
 Latest local follow-up:2.2.13, [notice/release handoff](tasks/archive/2026-10/10-19-notice-release-handoff/). Top notice uses explicit scrolling labels. Public CONTRIBUTING now documents develop-based feature branches/PRs, ordinary numeric versions, current verification limits and product-only release selection. The task records21 earlier product candidates in dependency order,26 development-only commits and one excluded skills/cache mixed commit, plus this task's product commit. Build and149 tests passed; no live browser check, branch modification, push or release. The actual release branch is master, not main. Release-tree application/testing and publication wording remain future release work.
 
 Previous local follow-up:2.2.12 completed operation defenses, QQ notice/Help, detailed statistics/native paging and engineering review. See README and the archived operation-guards, help-community, statistics-details and compatibility-review tasks for acceptance. VUI read-only native/API comparisons passed; live legacy, GM sandbox and automatic cross-page recovery remain unverified.
@@ -18,7 +20,7 @@ This replaces earlier dimensions and shared-footer feedback. Preserve selection/
 
 ## Goal and authorization
 
-Make Bilibili favorites management comfortable and reliable. Work on develop; keep master and Greasy Fork unchanged. The user authorized Stage 0 followed by Stages 1–4 and the frontend-design usability follow-up, including local implementation, verification, fixes, commits, archives and journals. The latest instruction explicitly prohibits ALL remote pushes until user acceptance. It supersedes earlier push authorization. Do not request repeated phase or local-commit approval.
+Make Bilibili favorites management comfortable and reliable. Work on develop; keep master and Greasy Fork unchanged until publication is requested. The user authorized Stage 0 followed by Stages 1–4 and the frontend-design usability follow-up, including local implementation, verification, fixes, commits, archives and journals. The earlier no-push instruction was superseded only for the approved2.2.13 release branch push and PR#4; develop/master pushes and merging/publication remain outside this completed scope. Do not request repeated phase or local-commit approval.
 
 ## Verified local state (2026-10-18)
 
@@ -61,8 +63,8 @@ Real mutations require explicitly designated disposable folders/subscriptions. T
 
 ## Completion and release boundary
 
-The current deliverable is local and awaiting user review. Archives contain design, implementation and sanitized verification; the journal references work commits. No remote publication is authorized. Do not change master, release metadata or Greasy Fork.
+The current deliverable is PR#4 awaiting user review; develop records remain local. Archives contain design, implementation and sanitized verification; the journal references work commits. Only release/2.2.13 has been pushed, not master/develop. Greasy Fork publication has not been performed or verified.
 
-A future explicit release request requires reviewed product-only cherry-picks onto master, release checks and separate push authorization. Never merge all of develop into master. The master baseline for this work is a5bf35de70204ac234147068c7058a3044dbc2f5.
+The product-only release branch and its checks are ready. A future user instruction to merge/publish should operate on the reviewed PR head, recheck current base/head and then verify webhook delivery and actual Greasy Fork version. Never merge all of develop into master. Master remains at a5bf35de70204ac234147068c7058a3044dbc2f5.
 
 The latest design follow-up is recorded in [the panel-design-rethink archive](tasks/archive/2026-10/10-18-panel-design-rethink/), product commit `7717c06`. It supersedes the earlier full-screen-records structure and incorporates the user's screenshot feedback about static help/status crowding out lists. Final checks:57/57 tests, build,81 fictional browser cases across desktop/375px/landscape,contrast/reduced-motion/keyboard review. Read-only real startup:one panel,nine source rows,uniform font,no horizontal overflow,records/task coexistence,minimize/restore and navigation passed. No real mutations or remote pushes. See task verification for exact limits.

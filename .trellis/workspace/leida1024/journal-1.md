@@ -635,3 +635,37 @@ Local 2.2.13: explicit notice scrolling labels and accessible names; contributor
 ### Next Steps
 
 - None - task complete
+
+
+## Session 20: Prepare verified product-only 2.2.13 release PR
+
+**Date**: 2026-10-19
+**Task**: Prepare verified product-only 2.2.13 release PR
+**Branch**: `develop`
+
+### Summary
+
+PR #4 release/2.2.13 to master: 22 conflict-free product cherry-picks plus release notes/five fictional screenshots. Independent npm ci, reproducible build and 149 tests passed. Only release branch pushed; master unchanged, no auto-merge or Greasy Fork publication. Docs backported locally; full mapping in archived release task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `27ad234` | (see git log) |
+| `f47f3f5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
