@@ -12,6 +12,15 @@ const numberFrom = value => /^\d+$/.test(value || '') ? Number(value) : null;
 export class WebFolderClient {
   constructor() { this.identities = new WeakMap(); this.boundRows = new WeakSet(); this.videoReader = new NativeVideoReader(this); }
   get selectors() { return document.querySelector('.favlist-aside') ? nativeControls.vui : nativeControls.legacy; }
+  capture() {
+    const actor = PageDetector.getLoginUserUID(), owner = PageDetector.getCurrentPageUID();
+    const check = () => {
+      if (actor !== PageDetector.getLoginUserUID() || owner !== PageDetector.getCurrentPageUID())
+        throw new Error('账号或空间已变化，网页读取已停止；请重新加载列表');
+    };
+    const read = method => async (...args) => { check(); const data = await this[method](...args); check(); return data; };
+    return { folders: read('folders'), videos: read('videos'), mutate: (...args) => this.mutate(...args) };
+  }
   async wait(check, signal, timeout = 8000) {
     const end = Date.now() + timeout;
     do {

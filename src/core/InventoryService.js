@@ -1,5 +1,5 @@
 import { FolderClient, knownCount, stableId, pause, folderKey } from './FolderClient.js';
-import { videoMetadata } from './videoMetadata.js';
+import { videoMetadata, mergeVideoMetadata } from './videoMetadata.js';
 
 export class InventoryService {
   constructor(client = new FolderClient(), pace = 400) { this.client = client; this.pace = pace; this.running = false; }
@@ -7,12 +7,12 @@ export class InventoryService {
   async scan(folders, { signal, onPage = () => {}, maxPages = 500, maxEntries = 10000 } = {}) {
     if (this.running) throw new Error('已有扫描正在进行');
     if (!folders.length || folders.some(f => !stableId(f.id) || f.kind === 'unsupported') || new Set(folders.map(folderKey)).size !== folders.length) throw new Error('请选择有效的收藏夹');
+    const client = this.client.capture?.() || this.client;
     this.running = true;
-    const report = { scope: folders.map(f => ({ id: f.id, ownerId: f.ownerId, name: f.name })), complete: false, cancelled: false, folders: [], entries: 0,
+    const report = { scope: folders.map(f => ({ id: f.id, kind: f.kind, ownerId: f.ownerId, name: f.name })), complete: false, cancelled: false, folders: [], entries: 0,
       occurrences: 0, uniqueVideos: 0, duplicateOccurrences: 0, unknownIdentity: 0, unavailable: 0, knownDurationSeconds: 0, unknownDurations: 0, unknownUploaders: 0, videos: [], unidentified: [] };
     const videos = new Set(), aliases = new Map();
     let requests = 0;
-    const client = this.client.capture?.() || this.client;
     try {
       for (const folder of folders) {
         const coverage = { id: folder.id, kind: folder.kind, name: folder.name, pages: 0, loaded: 0, expected: null, complete: false, issue: null };
@@ -37,10 +37,11 @@ export class InventoryService {
               const metadata = videoMetadata(raw);
               if (metadata.unavailable) report.unavailable++;
               const membership = { id: folder.id, kind: folder.kind, ownerId: folder.ownerId, name: folder.name, occurrences: 1, collectedAt: knownCount(raw.fav_time) };
-              if (!metadata.id && !metadata.bvid) { report.unknownIdentity++; metadata.folders.push(membership); report.unidentified.push(metadata); continue; }
+              if (!metadata.id && !metadata.bvid) { report.unknownIdentity++; metadata.occurrences = 1; metadata.folders.push(membership); report.unidentified.push(metadata); continue; }
               report.occurrences++;
               const byId = metadata.id && aliases.get(`av:${metadata.id}`), byBV = metadata.bvid && aliases.get(metadata.bvid);
               if (byId && byBV && byId !== byBV) {
+                mergeVideoMetadata(byId, byBV);
                 byId.occurrences += byBV.occurrences;
                 for (const entry of byBV.folders) {
                   const old = byId.folders.find(f => folderKey(f) === folderKey(entry));
@@ -50,8 +51,7 @@ export class InventoryService {
                 videos.delete(byBV);
               }
               const video = byId || byBV || metadata;
-              for (const key of ['id', 'bvid', 'title', 'url', 'duration', 'uploaderId', 'uploaderName', 'publishedAt', 'unavailable'])
-                if (video[key] === null && metadata[key] !== null) video[key] = metadata[key];
+              mergeVideoMetadata(video, metadata);
               if (metadata.bvid) video.url = metadata.url;
               if (metadata.id) aliases.set(`av:${metadata.id}`, video);
               if (metadata.bvid) aliases.set(metadata.bvid, video);

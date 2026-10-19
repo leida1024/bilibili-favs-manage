@@ -1,6 +1,10 @@
 import { stableId, knownCount } from './FolderClient.js';
 
 const label = value => typeof value === 'string' && value.trim() ? value.trim() : null;
+export function mergeVideoMetadata(target, source) {
+  for (const key of ['id', 'bvid', 'title', 'url', 'duration', 'uploaderId', 'uploaderName', 'publishedAt', 'unavailable'])
+    if (target[key] === null && source[key] !== null) target[key] = source[key];
+}
 export function videoMetadata(raw) {
   const id = raw.type === 2 ? stableId(raw.id) : null;
   const bvid = raw.type === 2 && /^BV[0-9A-Za-z]{10}$/.test(raw.bvid) ? raw.bvid : null;
