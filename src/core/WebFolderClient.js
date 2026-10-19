@@ -40,14 +40,23 @@ export class WebFolderClient {
     for (let i = 0; i < 100; i++) {
       if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
       const more = [...group.querySelectorAll(s.more)].find(node => /显示剩余\d+个|加载更多|查看更多/.test(text(node)));
-      const source = kind === 'subscribed' && !s.group ? legacySubscriptionSource(group) : null;
-      const before = group.querySelectorAll(s.row).length;
-      if (source && before > source.count) throw new Error('网页订阅数量变化，请重新加载');
-      if (!more && (!source || before === source.count)) return [...group.querySelectorAll(s.row)];
+      // Vue updates the source before rendering the corresponding DOM rows.
+      // Await that render rather than treating a normal update as a changed list.
+      const { source, rows } = await this.wait(() => {
+        const source = kind === 'subscribed' && !s.group ? legacySubscriptionSource(group) : null;
+        const rows = [...group.querySelectorAll(s.row)];
+        return !source || rows.length === source.list.length ? { source, rows } : null;
+      }, signal);
+      const before = rows.length;
+      if (source && new Set(source.list.map(item => `${item.type}:${item.id}`)).size !== source.list.length)
+        throw new Error(`网页重复加载了订阅条目（${before} 条）；请刷新整个网页后重新加载，尚未退订`);
+      if (source && before > source.count)
+        throw new Error(`网页订阅总数尚未同步（列表 ${before} 条，总数 ${source.count} 条）；请刷新整个网页后重新加载，尚未退订`);
+      if (!more && (!source || before === source.count)) return rows;
       if (more) more.click();
       else {
-        group.scrollTop = group.scrollHeight;
-        group.dispatchEvent(new window.Event('scroll'));
+        // PerfectScrollbar already translates scrolling into this event. Using
+        // both paths starts concurrent requests for the same native page.
         group.dispatchEvent(new window.Event('ps-y-reach-end'));
       }
       await this.wait(() => group.querySelectorAll(s.row).length > before, signal);

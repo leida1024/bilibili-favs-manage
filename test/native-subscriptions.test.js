@@ -5,13 +5,14 @@ import { WebFolderClient } from '../src/core/WebFolderClient.js';
 import { FavoriteManager } from '../src/core/FavoriteManager.js';
 import { FloatingPanel } from '../src/ui/FloatingPanel.js';
 
-function fixture(t, layout = 'vui', { delayed = false, paginated = false, single = false, fault } = {}) {
+function fixture(t, layout = 'vui', { delayed = false, paginated = false, single = false, fault, scrollbar = false } = {}) {
   const legacy = layout === 'legacy';
   const dom = new JSDOM('<div id="app"></div>', { url: 'https://space.bilibili.com/50/favlist' });
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, Node: dom.window.Node });
   document.cookie = 'DedeUserID=50';
   const data = (single ? [100] : [100, 101]).map((id, index) => ({ id, type: index ? 21 : 11, mid: 0,
     title: 'Fictional unavailable', media_count: 0, state: 1 }));
+  const remaining = new Set(data.map(item => item.id));
   const source = { count: data.length, list: paginated ? data.slice(0, 1) : [...data] };
   const app = document.querySelector('#app'), vnodes = []; app._vnode = { children: vnodes };
   const aside = document.createElement('div'); aside.className = legacy ? 'fav-container' : 'favlist-aside';
@@ -22,6 +23,7 @@ function fixture(t, layout = 'vui', { delayed = false, paginated = false, single
   let menuClicks = 0, finalClicks = 0, navigations = 0, expansions = 0, loads = 0;
   const remove = row => {
     const index = source.list.findIndex(item => String(item.id) === row.dataset.id);
+    remaining.delete(Number(row.dataset.id));
     source.list.splice(index, 1); source.count--; row.remove();
     if (legacy && single) aside.remove();
   };
@@ -63,7 +65,15 @@ function fixture(t, layout = 'vui', { delayed = false, paginated = false, single
   source.list.forEach(add);
   if (paginated) {
     const load = () => { loads++; source.list.push(data[1]); add(data[1]); };
-    if (legacy) group.addEventListener('ps-y-reach-end', load, { once: true });
+    if (legacy && scrollbar) {
+      // Legacy PerfectScrollbar translates a scroll into the same reach-end
+      // event as the controller. There is no in-flight guard in that controller.
+      group.addEventListener('scroll', () => group.dispatchEvent(new window.Event('ps-y-reach-end')));
+      group.addEventListener('ps-y-reach-end', () => {
+        loads++;
+        setTimeout(() => { source.list.push(data[1]); add(data[1]); }, 20);
+      });
+    } else if (legacy) group.addEventListener('ps-y-reach-end', load, { once: true });
     else {
       const more = document.createElement('div'); more.className = 'fav-collapse-more'; more.textContent = '显示剩余1个';
       more.onclick = () => { load(); more.remove(); }; group.append(more);
@@ -73,7 +83,7 @@ function fixture(t, layout = 'vui', { delayed = false, paginated = false, single
   const controller = new AbortController(), client = new WebFolderClient();
   if (delayed) setTimeout(() => app.append(aside), 40); else app.append(aside);
   t.after(() => dom.window.close());
-  return { client, source, group, controller, data, vnodes, counts: () => ({ menuClicks, finalClicks, navigations, expansions, loads }) };
+  return { client, source, group, controller, data, remaining, vnodes, counts: () => ({ menuClicks, finalClicks, navigations, expansions, loads }) };
 }
 
 for (const layout of ['legacy', 'vui']) {
@@ -172,4 +182,58 @@ test('bound available subscriptions still navigate to their videos when scanning
   const page = await f.client.videos('101', 1, undefined, folders[1]);
   assert.equal(new URL(window.location.href).searchParams.get('fid'), '101');
   assert.equal(page.info.id, '101'); assert.equal(page.has_more, false); assert.deepEqual(page.medias, []);
+});
+
+
+test('legacy native scrollbar translation requests each asynchronous page only once', async t => {
+  const f = fixture(t, 'legacy', { paginated: true, scrollbar: true });
+  const rows = await f.client.folders('50', 'subscribed');
+  assert.equal(f.counts().loads, 1); assert.equal(f.source.list.length, 2);
+  assert.deepEqual(rows.map(row => row.id), ['100', '101']);
+});
+
+
+for (const read of ['api', 'web']) {
+  test(`legacy ${read}-read native-write mixed available/unavailable batch prepares once and completes both targets`, async t => {
+    const f = fixture(t, 'legacy', { paginated: true, scrollbar: true });
+    f.data[0].state = 0; f.group.querySelector('[data-id="100"]').classList.remove('favInvalid');
+    const manager = new FavoriteManager(); Object.assign(manager.modes, { read, manage: 'web' });
+    manager.batchOperations.pace = 0;
+    manager.http.fetcher = async (_, options) => {
+      assert.notEqual(options.method, 'POST', 'native mutation cannot fall back to API');
+      const list = f.data.filter(item => f.remaining.has(item.id));
+      return { ok: true, json: async () => ({ code: 0, data: { count: list.length, has_more: false, list } }) };
+    };
+    const panel = new FloatingPanel(manager); panel.init(); panel.showView('manage'); t.after(() => panel.destroy());
+    const inventory = panel.inventoryPanel; inventory.kind.value = 'subscribed'; await inventory.load();
+    const ui = inventory.mutations;
+    assert.deepEqual(ui.rows.map(row => row.folder.available), [true, false]);
+    for (const row of ui.rows) row.input.click();
+    ui.preview(); const ticket = ui.ticket; assert.equal(ticket.targets.length, 2);
+    ui.agreement.checked = true; await ui.execute();
+    assert.equal(panel.operations.manage.state.status, 'completed');
+    assert.equal(f.counts().menuClicks, 2); assert.equal(f.counts().loads, 1);
+    assert.equal(f.counts().navigations, 0); assert.equal(f.remaining.size, 0);
+    await assert.rejects(manager.batchOperations.execute(ticket, { confirmed: true }), /重新预览/);
+  });
+}
+
+test('legacy waits for source-to-DOM rendering without requesting the same page again', async t => {
+  const f = fixture(t, 'legacy');
+  f.group.querySelector('[data-id="101"]').remove();
+  const row = document.createElement('div'); row.className = 'fav-item favInvalid';
+  row.innerHTML = '<a class="text" href="/50/favlist?fid=101&ftype=collect&ctype=21">Fictional unavailable</a>';
+  // The header is already expanded; the delay must be handled by source/DOM readiness.
+  f.group.closest('.fav-container').querySelector('i').classList.add('arrow-transform');
+  let loads = 0; f.group.addEventListener('ps-y-reach-end', () => loads++);
+  setTimeout(() => f.group.append(row), 30);
+  const folders = await f.client.folders('50', 'subscribed');
+  assert.deepEqual(folders.map(item => item.id), ['100', '101']); assert.equal(loads, 0);
+});
+
+test('legacy already duplicated native pages stop before mutation with whole-page refresh guidance', async t => {
+  const f = fixture(t, 'legacy');
+  f.source.list.push(f.data[0]); f.group.append(f.group.querySelector('[data-id="100"]').cloneNode(true));
+  await assert.rejects(f.client.folders('50', 'subscribed'), /重复加载.*刷新整个网页/);
+  assert.equal(f.counts().menuClicks, 0);
 });
