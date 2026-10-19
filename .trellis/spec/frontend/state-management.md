@@ -36,6 +36,16 @@ LogStore continuously persists sanitized snapshots to sessionStorage under `bili
 
 The current flow is creating -> return to source -> copying. Resume checks that the current page is the expected destination. The saved stage is consumed before performing changes, and the next stage is saved only after confirmed completion. Preserve the failure behavior: refresh must not blindly repeat uncertain folder creation or copying.
 
+## Scenario: independent sidebar creation on empty legacy pages
+
+1. Trigger: own/current folders contain no videos, so copy-dialog controls cannot create the destination.
+2. Signatures: adapter `sidebarCreate` and optional `sidebarCreateForm: {dialog,input,confirm}`; `BilibiliAPI.createFavoriteViaSidebar(name, guard)`; shared `inputFavoriteName(name,input=null)` and `clickCreateButton(button=null)` accept verified scoped controls.
+3. Contract: legacy uses `#fav-createdList-container`'s visible 新建收藏夹 leaf and independent `.edit-media-list .edit-mask`, `#media-list-name`, `.submit-btn`. Reuse normalized existing targets. Return null only if no entry exists, false after any attempted/unconfirmed creation, true only after observing the target sidebar row. Cross-page handoffs consume before opening and save the next stage only after all targets confirm.
+4. Validation/errors: already-visible Edit form→stop without opening; denied guard→no opening/submission; missing/ambiguous visible form controls→stop; no new row→unconfirmed, no alternate submission. Only null allows copy-dialog fallback, whose video-selection requirement must be explicit.
+5. Cases: good—create two folders with no video/batch/copy controls; base—reuse a normalized existing name without submitting; bad—submit a hidden old copy form, edit an existing folder or retry through the copy dialog after uncertainty.
+6. Tests: `test/legacy-sidebar-create.test.js` covers empty page, native input events, hidden/unrelated controls, denied guard, preexisting form, unknown result, web creator and consume-before-open resumed preparation.
+7. Wrong/correct: wrong—assume sidebar creation shares copy-dialog controls, or assume the first own folder has content. Correct—adapter-scoped independent form, single submission, observed target, null-only fallback.
+
 `utils/favoriteNames.js` trims leading/trailing whitespace but preserves internal spaces. Normalize all entry paths, including resumed tasks, and reuse an existing normalized-name target. Creation success requires observing the actual target, not just a button click. Do not submit again while the previous result is uncertain.
 
 ## Inventory and destructive operations

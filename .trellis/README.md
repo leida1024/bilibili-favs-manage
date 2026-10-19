@@ -17,7 +17,7 @@ Read the [development handbook](DEVELOPMENT.md), [workflow](workflow.md), [front
 | 4 | [Unsubscribe](tasks/archive/2026-10/10-18-batch-unsubscribe/) | Folder subscriptions with identity safeguards, synthetic acceptance |
 | Follow-up | [Panel usability](tasks/archive/2026-10/10-18-panel-usability/) | Adjacent copy pairs, separate task views and one task scroller |
 
-The latest local build2.2.4 passed93 tests and build. Exact legacy `.be-toast` copy success and both layouts' real hover-menu triggers are supported; management records/footer include the actual item cause. Two user-authorized disposable create/delete cycles passed on VUI console injection, with temporary objects absent and original folder IDs unchanged afterward. See the [legacy-copy-result task](tasks/archive/2026-10/10-19-legacy-copy-result/) for evidence and limits. Records retain two content modes and full bounded navigation histories. No push/release. Legacy live mutations, live copy/unsubscribe, GM sandbox and automatic navigation remain unverified.
+The latest local build2.2.5 passed99 tests and build. Legacy sidebar creation now uses its independent visible form without requiring videos; unavailable subscription targets open an informational preview with explicit Settings→API guidance and no executable ticket. See the [empty-legacy/preview task](tasks/archive/2026-10/10-19-legacy-sidebar-create/). This iteration used synthetic fixtures/browser checks only. Earlier2.2.4 verified two user-authorized disposable VUI create/delete cycles; see the [legacy-copy-result task](tasks/archive/2026-10/10-19-legacy-copy-result/) for those historical results. No push/release. Live legacy operations, live copy/unsubscribe, GM sandbox and automatic navigation remain unverified.
 
 ## Records
 

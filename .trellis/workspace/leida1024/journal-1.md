@@ -433,3 +433,36 @@ Recognized actual legacy toast; repaired both native hover triggers and manageme
 ### Next Steps
 
 - None - task complete
+
+
+## Session 14: Empty legacy creation and unavailable subscription preview
+
+**Date**: 2026-10-19
+**Task**: Empty legacy creation and unavailable subscription preview
+**Branch**: `develop`
+
+### Summary
+
+Local 2.2.5: adapted the independent legacy sidebar form without videos; unavailable subscriptions now show target IDs and explicit Settings-to-API guidance without executable tickets. 99 tests/build and fictional desktop/375px UI checks passed. No real mutations, push or release; legacy live behavior remains unverified. Evidence: .trellis/tasks/archive/2026-10/10-19-legacy-sidebar-create/.
+
+### Main Changes
+
+Scoped legacy sidebar form controls and null-only fallback; informational unavailable-subscription review with Settings/back actions. Detailed evidence is in the owning archived task.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f4e3964` | fix: support empty legacy creation and unavailable target previews |
+
+### Testing
+
+- [OK] Build,99/99 tests, diff checks and fictional desktop/375px UI checks passed.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Await user legacy-page testing; no remote publication authorized.
