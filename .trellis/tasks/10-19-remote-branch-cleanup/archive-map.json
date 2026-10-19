@@ -1,0 +1,14 @@
+{
+  "api": {
+    "sha": "81c3166d2971af32393189ffd6b164c6c40e580c",
+    "archive_tag": "archive/api-2026-10-19"
+  },
+  "dev": {
+    "sha": "4b73bcba7c0527b1c0a985aa5435f05952a5c1b0",
+    "archive_tag": "archive/dev-2026-10-19"
+  },
+  "revert-2-dev": {
+    "sha": "da7570eb200fcc5df98fdaa92c369f1e8419cd56",
+    "archive_tag": "archive/revert-2-dev-2026-10-19"
+  }
+}

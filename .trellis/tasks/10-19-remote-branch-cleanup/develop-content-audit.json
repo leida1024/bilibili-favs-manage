@@ -1,0 +1,8 @@
+{
+  "pending_blob_count": 763,
+  "text_blobs_scanned": 738,
+  "high_confidence_secret_findings": [],
+  "known_private_test_marker_findings": [],
+  "forbidden_runtime_files": [],
+  "limit": "Targeted pattern and tracked-path review, not a general privacy certification. Fictional screenshot provenance reviewed during release."
+}

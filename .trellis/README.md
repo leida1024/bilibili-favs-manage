@@ -8,6 +8,8 @@ Read the [development handbook](DEVELOPMENT.md), [workflow](workflow.md), [front
 
 ## Completed local scope
 
+Remote branch organization: master is the product/release branch and develop is the maintained development branch. Historical api/dev/revert-2-dev tips are retained under archive/<branch>-2026-10-19 tags; obsolete rollback PR#3 is closed. The user's cleanup scope includes synchronizing reviewed develop history. See [branch cleanup task](tasks/archive/2026-10/10-19-remote-branch-cleanup/) for exact refs, audit and restoration evidence.
+
 Published2.2.13: [PR#4](https://github.com/leida1024/bilibili-favs-manage/pull/4) merged to master21f2578. Matching master push webhook returned200; Greasy Fork metadata/download code report2.2.13 and code body matches the verified artifact. Public description, screenshots, QQ anchor/image and documentation links checked in browser. Local master/develop synchronized; completed release branch/worktree removed. See [publication evidence](tasks/archive/2026-10/10-19-publish-2-2-13/) and [release assembly](tasks/archive/2026-10/10-19-release-2-2-13/). Existing149-test acceptance and live-test limits remain.
 
 Latest local follow-up2.2.13 clarifies notice scrolling controls and updates the public contributor/release workflow. Build and149 tests passed. The archived [notice/release handoff](tasks/archive/2026-10/10-19-notice-release-handoff/) records22 product candidates for master, excluded development commits and release checks still required. No push or publication.
