@@ -1,0 +1,29 @@
+{
+  "id": "legacy-subscription-pagination",
+  "name": "legacy-subscription-pagination",
+  "title": "Fix legacy subscription pagination and mixed unsubscribe",
+  "description": "Fix duplicate legacy scrollbar page triggers and await source/DOM alignment; mixed available/unavailable native batches.",
+  "status": "completed",
+  "dev_type": "frontend",
+  "scope": "native pagination",
+  "package": "userscript",
+  "priority": "P2",
+  "creator": "leida1024",
+  "assignee": "leida1024",
+  "createdAt": "2026-10-19",
+  "completedAt": "2026-10-19",
+  "branch": "develop",
+  "base_branch": "develop",
+  "worktree_path": null,
+  "commit": "1550101",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "src/core/WebFolderClient.js",
+    "test/native-subscriptions.test.js"
+  ],
+  "notes": "Local2.2.8; exact old-error red→green regression,126 tests/build, live VUI read-only loading and normal/unavailable selection. No real unsubscribe or push/publication.",
+  "meta": {}
+}

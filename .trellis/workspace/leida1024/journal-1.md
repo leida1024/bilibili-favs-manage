@@ -532,3 +532,36 @@ Legacy selector/fold/pagination fixes; exact component/link subscription binding
 ### Next Steps
 
 - User may test legacy locally. Actual unsubscribe and GM sandbox remain unverified; no push/release authorized.
+
+
+## Session 17: Fix duplicate legacy scrollbar pagination requests
+
+**Date**: 2026-10-19
+**Task**: Fix duplicate legacy scrollbar pagination requests
+**Branch**: `develop`
+
+### Summary
+
+Local2.2.8 fixes a reproduced legacy double-trigger race: scroll plus reach-end appended the same page twice.126 tests/build pass, mixed normal/unavailable batches with both readers; source/DOM rendering awaited. Live logged-in VUI50→229 read-only parity and both item identities resolved; no actual unsubscribe/push/release. See archived legacy-subscription-pagination verification and bug analysis.
+
+### Main Changes
+
+One native pagination trigger; await Vue source/DOM alignment; concrete corrupted-cache refresh guidance. Regression reproduces the exact old error; five new native tests cover async event translation and mixed-target batches. See `.trellis/tasks/archive/2026-10/10-19-legacy-subscription-pagination/verification.md` and `bug-analysis.md`.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1550101` | fix: avoid duplicate native legacy subscription page requests |
+
+### Testing
+
+- [OK]126 tests/build/diff; logged-in VUI read-only50→229 and exact normal/unavailable rows. No real unsubscribe.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- After updating refresh the whole webpage to clear any2.2.7 duplicated native cache. Legacy live unsubscribe and GM sandbox remain unverified; no push/release authorized.
