@@ -9,7 +9,7 @@ import { CONFIG } from '../src/config/config.js';
 import { readFileSync } from 'node:fs';
 
 function fixture(t) {
-  const dom = new JSDOM('', { url: 'https://space.bilibili.com/50/favlist' });
+  const dom = new JSDOM('', { url: 'https://space.bilibili.com/60/favlist' });
   globalThis.window = dom.window; globalThis.document = dom.window.document;
   document.cookie = 'DedeUserID=50';
   let reads = 0, mutations = 0;

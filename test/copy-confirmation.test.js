@@ -10,7 +10,7 @@ import { setLoggerPanel, setLoggerStore, log } from '../src/utils/logger.js';
 import { CONFIG } from '../src/config/config.js';
 
 function realm(t, uid = '50', html = '<div class="favlist-aside"></div>', denied = false) {
-  const dom = new JSDOM(html, { url: `https://space.bilibili.com/${uid}/favlist` });
+  const dom = new JSDOM(html, { url: `https://space.bilibili.com/${uid}/favlist?fid=100&ftype=create` });
   globalThis.window = dom.window; globalThis.document = dom.window.document; globalThis.localStorage = dom.window.localStorage;
   document.cookie = 'DedeUserID=50';
   if (denied) Object.defineProperty(window, 'sessionStorage', { get() { throw Error('denied'); } });
@@ -32,7 +32,7 @@ test('six seconds reports waiting; a seven-second platform result confirms and r
 });
 
 test('VUI nested wrapper and localized delayed success confirm once beyond the old UI-delay timeout', async t => {
-  realm(t);
+  realm(t, '60');
   const delays = { ...CONFIG.DELAY }, confirmation = { ...CONFIG.COPY_CONFIRMATION };
   Object.keys(CONFIG.DELAY).forEach(key => { CONFIG.DELAY[key] = 0; });
   Object.assign(CONFIG.COPY_CONFIRMATION, { TIMEOUT: 100, SLOW_NOTICE: 5 });
@@ -75,7 +75,7 @@ test('stale, hidden, unrelated, negative success text and dialog disappearance n
 });
 
 test('actual legacy Vue toast appears hidden then shows decorated success and continues both copy tasks', async t => {
-  realm(t, '50', '<div id="fav-createdList-container"></div><div class="edit-video-modal"><div class="modal-footer"><button class="btn">确定</button></div></div>');
+  realm(t, '60', '<div id="fav-createdList-container"></div><div class="edit-video-modal"><div class="modal-footer"><button class="btn">确定</button></div></div>');
   const delays = { ...CONFIG.DELAY }, confirmation = { ...CONFIG.COPY_CONFIRMATION };
   Object.keys(CONFIG.DELAY).forEach(key => { CONFIG.DELAY[key] = 0; });
   Object.assign(CONFIG.COPY_CONFIRMATION, { TIMEOUT: 100, SLOW_NOTICE: 80 });

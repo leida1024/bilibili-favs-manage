@@ -1,5 +1,6 @@
 import { normalizeCopyTasks, normalizeFavoriteName, assertUnambiguousFavoriteName } from '../utils/favoriteNames.js';
 import { stableId, pause } from './FolderClient.js';
+import { assertCopyContext } from './copyContext.js';
 
 const fail = (detail, outcome = 'failed') => { const error = new Error(detail); error.outcome = outcome; throw error; };
 export class ApiCopyFlow {
@@ -7,6 +8,7 @@ export class ApiCopyFlow {
   check(expected, signal) {
     if (signal?.aborted) fail('已停止后续复制', 'interrupted');
     const current = this.context();
+    assertCopyContext(expected, current);
     if (!stableId(current.actor) || current.actor !== expected.actor || current.pageOwner !== expected.pageOwner) fail('账号或来源空间变化，已停止');
   }
   require(result) { if (result?.status !== 'confirmed') fail(result?.detail || '结果未识别', result?.status === 'unknown' ? 'unknown' : 'failed'); }

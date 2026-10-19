@@ -1,5 +1,6 @@
 import { CheckboxItem } from './UIComponents.js';
 import { EventHandlers } from './EventHandlers.js';
+import { copyBlockReason, currentCopyContext } from '../core/copyContext.js';
 import { PageDetector } from '../core/PageDetector.js';
 import { OperationState } from '../core/OperationState.js';
 import { LogStore } from '../utils/logStore.js';
@@ -96,7 +97,7 @@ export class FloatingPanel {
     this.workspace.append(heading);
     this.leftPanel = element('section', 'bf-sources');
     this.selectionTools = new SelectionToolbar({
-      rows: () => this.favCheckboxItemList.map(item => ({ input: item.checkbox, node: item.checkboxContainer, name: item.getLabelValue(), eligible: !item.ambiguous })),
+      rows: () => this.favCheckboxItemList.map(item => ({ input: item.checkbox, node: item.checkboxContainer, name: item.getLabelValue(), eligible: !item.ambiguous && !copyBlockReason(currentCopyContext()) })),
       busy: () => this.busy, change: () => this.updateSelectionReview()
     });
     this.selectionTools.search.addEventListener('input', () => this.updateSelectionReview());
@@ -251,16 +252,20 @@ export class FloatingPanel {
   }
 
   updateSelectionReview() {
+    const blocked = !!copyBlockReason(currentCopyContext());
     const tasks = this.getSelectedTasks();
     const missing = tasks.some(task => !task.target.trim());
     this.selectionTools.update();
     if (missing) this.selectionReview.textContent = '请填好已选来源的目标名称';
     for (const item of this.favCheckboxItemList) {
+      item.checkbox.disabled = this.busy || blocked || item.ambiguous;
+      item.inputText.disabled = this.busy || blocked || item.ambiguous;
       item.checkboxContainer.dataset.selected = String(item.checkbox.checked);
       item.inputText.setAttribute('aria-invalid', String(item.checkbox.checked && !item.inputText.value.trim()));
     }
     this.startBatchTransferButton.textContent = this.busy ? '操作中…' : tasks.length ? `复制 ${tasks.length} 个收藏夹` : '开始复制';
-    this.startBatchTransferButton.disabled = this.busy || !tasks.length || missing;
+    this.startBatchTransferButton.disabled = this.busy || blocked || !tasks.length || missing;
+    this.updateModeSummary();
   }
 
   setBusy(busy) {
@@ -306,6 +311,8 @@ export class FloatingPanel {
   async startBatchTransfer() {
     if (this.busy) return;
     try {
+      const reason = copyBlockReason(currentCopyContext());
+      if (reason) throw new Error(reason);
       const tasks = normalizeCopyTasks(this.getSelectedTasks());
       if (!tasks.length) throw new Error('请至少选择一个源收藏夹。');
       this.setBusy(true);
@@ -427,10 +434,12 @@ export class FloatingPanel {
   }
 
   updateModeSummary() {
+    const reason = copyBlockReason(currentCopyContext());
+    this.copyHelp.textContent = reason || '同名则复用，否则新建；来源保留。';
     if (!this.manager.modes) return;
     const name = value => value === 'api' ? 'API' : '网页';
     const modes = this.manager.modes;
-    this.copyHelp.textContent = `${name(modes.copy)}复制 · ${name(modes.create)}创建 · 来源保留`;
+    this.copyHelp.textContent = reason || `${name(modes.copy)}复制 · ${name(modes.create)}创建 · 来源保留`;
     this.modeButton.title = `读取/统计：${name(modes.read)}；复制：${name(modes.copy)}；创建：${name(modes.create)}；删除/退订：${name(modes.manage)}`;
     this.modeButton.setAttribute('aria-label', `设置。${this.modeButton.title}`);
     if (this.logScope) this.logScope.options[0].textContent = ({ copy: '复制功能', statistics: '统计功能', manage: '管理功能', settings: '设置' })[this.activeView];
