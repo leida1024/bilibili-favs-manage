@@ -1,0 +1,10 @@
+{
+  "id": 487232,
+  "name": "Bilibili 收藏夹批量管理",
+  "version": "2.2.13",
+  "code_url": "https://update.greasyfork.org/scripts/487232/Bilibili%20%E6%94%B6%E8%97%8F%E5%A4%B9%E6%89%B9%E9%87%8F%E7%AE%A1%E7%90%86.user.js",
+  "code_updated_at": "2026-10-19T09:20:39.000Z",
+  "code_version": "2.2.13",
+  "body_matches_release": true,
+  "live_body_sha256": "0140e22f0f842be0bcddb86ca5f40f33f802236906904b64675b4b0fdd44571d"
+}

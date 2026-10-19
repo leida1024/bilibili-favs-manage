@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 20
+- **Total Sessions**: 21
 - **Last Active**: 2026-10-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~671 | Active |
+| `journal-1.md` | ~705 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 21 | 2026-10-19 | Publish 2.2.13 and verify Greasy Fork synchronization | `21f2578`, `bf553d3` | `develop` |
 | 20 | 2026-10-19 | Prepare verified product-only 2.2.13 release PR | `27ad234`, `f47f3f5` | `develop` |
 | 19 | 2026-10-19 | Clarify notice scrolling and contributor release handoff | `0eb73bd` | `develop` |
 | 18 | 2026-10-19 | Guard operations, add help and verify detailed statistics | `172051a`, `260b1ae`, `594be17`, `41ea877`, `b692cd3` | `develop` |

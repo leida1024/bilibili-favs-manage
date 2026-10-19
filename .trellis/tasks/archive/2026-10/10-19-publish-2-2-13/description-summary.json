@@ -1,0 +1,24 @@
+{
+  "contributingLink": true,
+  "images": [
+    {
+      "loaded": true,
+      "naturalWidth": 600,
+      "src": "https://raw.githubusercontent.com/leida1024/bilibili-favs-manage/master/docs/assets/panel-preview.png",
+      "width": 600
+    },
+    {
+      "loaded": true,
+      "naturalWidth": 1152,
+      "src": "https://raw.githubusercontent.com/leida1024/bilibili-favs-manage/master/docs/assets/qq-group.jpg",
+      "width": 180
+    }
+  ],
+  "managementDocLink": true,
+  "obsoleteLocalWording": false,
+  "qqAnchor": "#qq-group",
+  "qqHeading": true,
+  "updatedDescription": true,
+  "url": "https://greasyfork.org/zh-CN/scripts/487232-bilibili-%E6%94%B6%E8%97%8F%E5%A4%B9%E6%89%B9%E9%87%8F%E7%AE%A1%E7%90%86",
+  "version": true
+}
