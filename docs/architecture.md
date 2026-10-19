@@ -79,3 +79,15 @@ FavoriteManager 持有有界 LogStore；入口在面板挂载前接入同一记�
 `adapters/NativeVideoReader` 使用 `nativeControls` 的旧版/新版选择器，操作原生页码与下一页，从第一页读取，等待页码和视频卡片内容就绪；连续翻页不依赖所有数字按钮均可见。每次等待和读取检查账号、空间、收藏夹 ID/类型，搜索中的页面要求先清空搜索。不进行 HTTP 请求或自动回退 API。网页无法展示的元数据仍为未知。
 
 默认最多500页、10000条；停止、权限、重复分页、总数变化和上限均记录为具体覆盖问题。单夹不可读仍继续其他选中项，取消立即停止后续读取。即使已到最后一页，平台标称总数与实际返回不符也保留为不完整报告，展示两个数字并允许导出；不伪造缺失条目。统计面板本地视频明细每页50项，可搜索视频/作者/收藏夹，完整已读数据在 JSON 中。帮助为第五个普通面板，不发请求；顶部 QQ 提示使用 CSS 动画，支持暂停、聚焦/悬停停止和减少动态效果。
+
+## 兼容性边界与检查
+
+| 职责 | 旧版 | 新版 VUI | 共用逻辑 |
+| --- | --- | --- | --- |
+| 复制控件、创建表单 | LegacyPageAdapter | VuiPageAdapter | BilibiliAPI / FavoriteManager |
+| 列表、菜单、视频卡片 | nativeControls.legacy | nativeControls.vui | WebFolderClient / NativeVideoReader |
+| 订阅条目身份 | 链接与只读 Vue2 来源 | 精确 DOM 对应的 VNode props | nativeBindings，禁止按顺序猜测 |
+| 页码与下一页 | be-pager | vui_pagenation | nativePagination，供统计和复制共用 |
+| HTTP 与结果汇总 | 不依赖页面版本 | 不依赖页面版本 | FolderClient / InventoryService / BatchOperations |
+
+网页复制读取数字页码或“共 N 页”，开始前回到第一页，每次翻页等待实际视频内容变化与稳定，禁止把未知页码当成完整单页。跨页空任务在消费后立即拒绝。网页扫描开始时固定账号/空间，不能在同一次多夹扫描中混入另一个账号；未知提交仍停止且不重试。代码检查覆盖身份、异步状态、一次性确认、适配边界、DOM 文本安全、资源上限与键盘访问。本项目使用 Node 行为测试和 Rollup 构建，尚未配置 ESLint/TypeScript；不能把通过测试等同于完成静态分析或真实平台全部兼容认证。

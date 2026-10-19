@@ -15,11 +15,10 @@ import { InventoryService } from './InventoryService.js';
 import { BatchOperations } from './BatchOperations.js';
 import { LogStore } from '../utils/logStore.js';
 import { browserStore, panelPreferences, validModes } from '../utils/preferences.js';
-import { FolderClient } from './FolderClient.js';
+import { FolderClient, stableId } from './FolderClient.js';
 import { WebFolderClient } from './WebFolderClient.js';
 import { TransportClient } from './TransportClient.js';
 import { assertCopyContext, currentCopyContext } from './copyContext.js';
-import { stableId } from './FolderClient.js';
 import { ApiCopyFlow } from './ApiCopyFlow.js';
 
 export class FavoriteManager {
@@ -78,6 +77,8 @@ export class FavoriteManager {
     this.copyStep = '打开来源收藏夹';
 
     // 1. 点击源收藏夹
+    const oldId = new URL(window.location.href).searchParams.get('fid');
+    const before = this.api.getCopyPageSnapshot?.();
     const clickSuccess = await this.api.clickFavorite(sourceFavName);
     if (!clickSuccess) {
       return false;
@@ -87,7 +88,8 @@ export class FavoriteManager {
 
     assertCopyContext(expected);
     const fid = stableId(new URL(window.location.href).searchParams.get('fid'));
-    if (!fid) throw new Error('来源收藏夹 ID 未确认，未提交复制');
+    if (!fid || new URL(window.location.href).searchParams.get('ftype') !== 'create')
+      throw new Error('来源收藏夹 ID 或创建类型未确认，未提交复制');
 
     // 2. 获取当前收藏夹信息
     const currentName = this.api.getCurrentFavoriteName();
@@ -96,7 +98,12 @@ export class FavoriteManager {
       return false;
     }
 
-    const totalPages = this.api.getTotalPages();
+    const check = () => {
+      assertCopyContext(expected);
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('fid') !== fid || url.searchParams.get('ftype') !== 'create') throw new Error('来源收藏夹已变化，未继续复制');
+    };
+    const totalPages = this.api.prepareCopyPages ? await this.api.prepareCopyPages(check, oldId !== fid ? before : null) : this.api.getTotalPages();
     log(`收藏夹 [${currentName}] 共 ${totalPages} 页`);
 
     // 3. 进入批量操作模式
@@ -121,7 +128,7 @@ export class FavoriteManager {
       // 如果不是最后一页，点击下一页
       if (page < totalPages) {
         this.copyStep = '前往下一页';
-        const nextSuccess = await this.api.clickNextPage();
+        const nextSuccess = await this.api.clickNextPage(check);
         if (!nextSuccess) {
           warn(`无法跳转到第 ${page + 1} 页`);
           return false;
@@ -142,7 +149,8 @@ export class FavoriteManager {
     expected ||= { ...currentCopyContext(), fid: stableId(new URL(window.location.href).searchParams.get('fid')) };
     const check = () => {
       assertCopyContext(expected);
-      if (!expected.fid || new URL(window.location.href).searchParams.get('fid') !== expected.fid)
+      const url = new URL(window.location.href);
+      if (!expected.fid || url.searchParams.get('fid') !== expected.fid || url.searchParams.get('ftype') !== 'create')
         throw new Error('来源收藏夹已变化或 ID 未确认，未继续复制');
     };
     check();
@@ -171,7 +179,7 @@ export class FavoriteManager {
     }
 
     // 3. 等待对话框
-    let dialog = await this.api.waitForDialog();
+    const dialog = await this.api.waitForDialog();
     if (!dialog) {
       error('对话框未出现');
       return false;

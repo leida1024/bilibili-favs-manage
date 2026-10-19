@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.2.11
+// @version      2.2.12
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       leida1024
 // @match        https://space.bilibili.com/*
@@ -20,9 +20,7 @@
 
   /** 两版页面共用的输入框、提示和按钮文字；差异位于 core/adapters/。 */
   const SELECTORS = {
-    CREATE_FAV_NAME_INPUT: 'input.add-fav-input',
-    NEXT_PAGE_TEXT: ['下一页', 'next', '>']
-  };
+    CREATE_FAV_NAME_INPUT: 'input.add-fav-input'};
 
   const BUTTON_TEXTS = {
     BATCH_OPERATION: '批量操作',
@@ -208,15 +206,41 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.2.11',
+      VERSION: '2.2.12',
       NAME: 'BiliBili 收藏夹批量管理',
       DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
+    }
+  };
+
+  /** Native page controls, separate from HTTP transport and panel UI. */
+  const nativeControls = {
+    vui: {
+      group: '.favlist-aside .vui_collapse_item', heading: '.vui_collapse_item_header',
+      row: '.fav-sidebar-item', title: '.vui_ellipsis', click: '.vui_sidebar-item', more: '.fav-collapse-more',
+      menu: '.menu-popover .more-vertical', menuItem: '.menu-popover__panel-item',
+      detailTitle: '.favlist-info-detail__title-row', data: '.favlist-info-detail__data', owner: '.favlist-info-detail__data a.link',
+      cards: '.favlist-main .bili-video-card', duration: '.bili-cover-card__stat',
+      videoTitle: '.bili-video-card__title', videoAuthor: 'a.bili-video-card__author', unavailable: '.bili-video-card__title--disabled',
+      search: '.fav-list-header-filter__search input, input.fav-list-header-filter__search', loading: '.favlist-main .vui_loading',
+      dialog: '.vui_dialog--content', confirm: 'button.vui_button--blue',
+      pagination: '.vui_pagenation', page: '.vui_pagenation--btn-num', activePage: '[aria-current="page"], .vui_button--active',
+      next: 'button[aria-label="下一页"]'
+    },
+    legacy: {
+      created: '#fav-createdList-container', subscribed: '#fav-list-container', row: '.fav-item',
+      title: 'a.text', click: 'a.text', more: '.more', menu: '.be-dropdown', menuItem: '.be-dropdown-item',
+      detailTitle: '.favInfo-details .fav-name', data: '.favInfo-details', owner: '.favInfo-details a[href*="space.bilibili.com"]',
+      cards: '.fav-video-list .small-item', duration: '.length', dialog: '.modal', confirm: '.modal-footer .btn',
+      videoTitle: 'a.title', videoAuthor: 'a.up-name, a[href*="space.bilibili.com"]', unavailable: '.disabled, .invalid',
+      search: '.fav-search input', loading: '.fav-video-list .loading',
+      pagination: '.be-pager', page: '.be-pager-item', activePage: '.be-pager-item-active', next: '.be-pager-next'
     }
   };
 
   /** 旧版个人空间（带“体验新版”入口）。 */
   const LegacyPageAdapter = {
     name: '旧版个人空间',
+    nativeControls: nativeControls.legacy,
     notification: '.be-toast, .vui_toast, .bili-message, .bili-toast, .be-message, .toast-text',
     sidebar: '#fav-createdList-container',
     sidebarCreate: '#fav-createdList-container',
@@ -249,6 +273,7 @@
   /** 新版 VUI 收藏夹页。 */
   const VuiPageAdapter = {
     name: '新版 (VUI)',
+    nativeControls: nativeControls.vui,
     notification: '.vui_toast',
     sidebar: '.favlist-aside',
     sidebarCreate: '.favlist-aside',
@@ -386,6 +411,182 @@
     return { result, cancel: () => finish({ status: 'unknown', detail: '复制提交过程已中断，请先核对目标收藏夹。' }) };
   }
 
+  const stableId = value => /^(?:[1-9]\d*)$/.test(String(value)) && Number.isSafeInteger(Number(value)) ? String(value) : null;
+  const knownCount = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+  const folderKey = folder => `${folder.kind}:${folder.id}`;
+
+  function normalizeFolder(raw, kind, index = 0, membership = false) {
+    const id = stableId(raw.id);
+    const ownerId = stableId(raw.upper?.mid ?? raw.mid);
+    const protectionReason = kind !== 'created' ? null : index === 0 ? 'default' :
+      [true, 1].includes(raw.is_kid_playlist) || (raw.type !== undefined && raw.type !== 11) ? 'special' :
+        [false, 0].includes(raw.is_kid_playlist) ? null : 'unknown';
+    return Object.freeze({ id, ownerId, kind: kind === 'created' ? 'created' : raw.type === 11 ? 'subscribed' : raw.type === 21 ? 'season' : 'unsupported',
+      identityConflict: !!(stableId(raw.mid) && stableId(raw.upper?.mid) && stableId(raw.mid) !== stableId(raw.upper.mid)),
+      name: typeof raw.title === 'string' ? raw.title : '（名称未知）', count: knownCount(raw.media_count),
+      // Current API uses booleans; older responses used 0/1. Missing stays protected.
+      protected: protectionReason !== null, protectionReason,
+      available: (kind === 'created' ? raw.state === undefined || raw.state === 0 : raw.state === 0) &&
+        !(stableId(raw.mid) && stableId(raw.upper?.mid) && stableId(raw.mid) !== stableId(raw.upper.mid)), subscribed: membership || raw.fav_state === 1 });
+  }
+
+  function pause(ms, signal) {
+    return new Promise((resolve, reject) => {
+      const abort = () => { clearTimeout(timer); reject(new DOMException('已取消', 'AbortError')); };
+      const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, ms);
+      if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
+    });
+  }
+
+  class FolderClient {
+    constructor(fetcher = (...args) => fetch(...args)) { this.fetcher = fetcher; }
+
+    async request(path, params, signal) {
+      const json = await this.fetchJSON(`${path}?${new URLSearchParams(params)}`, {}, signal);
+      if (json.code !== 0 || !json.data || typeof json.data !== 'object') throw new Error(`读取失败（平台代码 ${Number.isInteger(json.code) ? json.code : '未知'}）`);
+      return json.data;
+    }
+
+    async fetchJSON(path, options, signal) {
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
+      const timer = setTimeout(abort, 15000);
+      try {
+        const response = await this.fetcher(`https://api.bilibili.com${path}`, { ...options, credentials: 'include', signal: controller.signal });
+        if (!response.ok) throw new Error(`读取失败 HTTP ${response.status}`);
+        return await response.json();
+      } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+    }
+
+    async mutate(action, folder, signal) {
+      if (!['delete', 'unsubscribe'].includes(action) || !stableId(folder.id)) return { status: 'failed', detail: '操作或 ID 无效，未提交' };
+      if (signal?.aborted) return { status: 'not_started', detail: '取消，未提交' };
+      const token = document.cookie.split(';').map(part => part.trim()).find(part => part.startsWith('bili_jct='))?.slice(9);
+      if (!token) return { status: 'failed', detail: '登录校验缺失，未提交；请重新登录后检查' };
+      const body = new URLSearchParams({ platform: 'web', csrf: token });
+      if (action === 'delete') body.set('media_ids', folder.id);
+      const path = action === 'delete' ? '/x/v3/fav/folder/del' : folder.kind === 'season' ?
+        `/x/v3/fav/season/unfav?${new URLSearchParams({ season_id: folder.id, platform: 'web' })}` : `/x/v3/fav/folder/unfav?${new URLSearchParams({ media_id: folder.id })}`;
+      try {
+        const json = await this.fetchJSON(path, { method: 'POST', body }, signal);
+        if (!json || !Number.isInteger(json.code)) return { status: 'unknown', detail: '响应未识别；请检查平台结果，勿直接重试' };
+        return json.code === 0 ? { status: 'confirmed', detail: '平台已确认成功' } : { status: 'failed', detail: `平台拒绝（代码 ${json.code}），已停止` };
+      } catch { return { status: 'unknown', detail: '请求后未取得明确结果；请检查平台，勿直接重试' }; }
+    }
+
+    async folders(ownerId, kind, signal, pace = 400) {
+      if (!stableId(ownerId) || !['created', 'subscribed'].includes(kind)) throw new Error('收藏夹范围无效');
+      if (kind === 'created') {
+        const data = await this.request('/x/v3/fav/folder/created/list-all', { up_mid: ownerId }, signal);
+        if (data.count === 0 && data.list === null) data.list = [];
+        if (!Array.isArray(data.list) || data.list.length !== data.count) throw new Error('收藏夹列表不完整，请稍后重新加载');
+        return this.normalizeList(data.list, kind);
+      }
+      const rows = [];
+      let expected = null;
+      for (let pn = 1; pn <= 100; pn++) {
+        if (pn > 1) await pause(pace, signal);
+        const data = await this.request('/x/v3/fav/folder/collected/list', { up_mid: ownerId, pn, ps: 20, platform: 'web' }, signal);
+        if (data.count === 0 && data.list === null && data.has_more === false) data.list = [];
+        if (!Array.isArray(data.list) || typeof data.has_more !== 'boolean') throw new Error('订阅列表格式未识别');
+        if (knownCount(data.count) === null || (expected !== null && expected !== data.count)) throw new Error('订阅总数未知或读取期间变化');
+        expected = data.count;
+        rows.push(...data.list);
+        if (!data.has_more) {
+          if (rows.length !== data.count) throw new Error('订阅列表变化或不完整，请重新加载');
+          return this.normalizeList(rows, kind);
+        }
+        if (!data.list.length) break;
+      }
+      throw new Error('订阅列表超过读取上限或分页未推进');
+    }
+
+    normalizeList(rows, kind) {
+      const result = rows.map((row, index) => normalizeFolder(row, kind, index, kind === 'subscribed'));
+      if (result.some(row => !row.id) || new Set(result.map(folderKey)).size !== result.length) throw new Error('收藏夹身份缺失或重复');
+      return result;
+    }
+
+    async videos(folderId, pn, signal, folder) {
+      if (!stableId(folderId)) throw new Error('收藏夹 ID 无效');
+      if (folder?.kind === 'season') {
+        if (pn !== 1) throw new Error('合集列表未完整返回，不重复请求同一完整列表');
+        const data = await this.request('/x/space/fav/season/list', { season_id: folderId, pn, ps: 20 }, signal);
+        const count = knownCount(data.info?.media_count);
+        if (!Array.isArray(data.medias) || count === null || stableId(data.info?.id) !== folderId) throw new Error('合集分页格式未识别');
+        // This endpoint returns the whole season and ignores pn/ps; count mismatch stays partial.
+        return { ...data, medias: data.medias.map(row => ({ ...row, type: 2 })), has_more: false };
+      }
+      const data = await this.request('/x/v3/fav/resource/list', { media_id: folderId, pn, ps: 20, platform: 'web' }, signal);
+      if (data.medias === null && data.info?.media_count === 0 && data.has_more === false) data.medias = [];
+      return data;
+    }
+
+    async post(path, values, signal) {
+      if (signal?.aborted) return { status: 'not_started', detail: '已取消，未提交' };
+      const csrf = document.cookie.split(';').map(x => x.trim()).find(x => x.startsWith('bili_jct='))?.slice(9);
+      if (!csrf) return { status: 'failed', detail: '登录校验缺失，未提交' };
+      try {
+        const json = await this.fetchJSON(path, { method: 'POST', body: new URLSearchParams({ ...values, csrf, platform: 'web' }) }, signal);
+        if (!Number.isInteger(json?.code)) return { status: 'unknown', detail: '响应未识别，请核对结果，勿直接重试' };
+        return json.code === 0 ? { status: 'confirmed', detail: '平台已确认', data: json.data } : { status: 'failed', detail: `平台拒绝（代码 ${json.code}）` };
+      } catch { return { status: 'unknown', detail: '提交后结果未知，请核对结果，勿直接重试' }; }
+    }
+    create(name, signal) { return this.post('/x/v3/fav/folder/add', { title: name, intro: '', privacy: '1', cover: '' }, signal); }
+    copy(source, target, resources, actor, signal) {
+      if (!stableId(source.id) || !stableId(target.id) || !stableId(actor) || !resources.length || resources.length > 20 || resources.some(id => !stableId(id)))
+        return Promise.resolve({ status: 'failed', detail: '复制身份或批次无效，未提交' });
+      return this.post('/x/v3/fav/resource/copy', { src_media_id: source.id, tar_media_id: target.id, mid: actor, resources: resources.map(id => `${id}:2`).join(',') }, signal);
+    }
+  }
+
+  const text$2 = node => node?.textContent.trim() || '';
+  const nativeControlEnabled = node => !!node && !node.disabled && node.getAttribute('aria-disabled') !== 'true' && !/disabled/.test(node.className);
+  const currentNativePage = selectors => Number(text$2(document.querySelector(selectors.pagination)?.querySelector(selectors.activePage))) || 1;
+  function nativePageSnapshot(selectors) {
+    const cards = [...document.querySelectorAll(selectors.cards)];
+    return { first: cards[0], signature: cards.map(card => card.querySelector('a[href*="/video/"]')?.getAttribute('href') || text$2(card)).join('|') };
+  }
+  function nativePageCount(selectors) {
+    const pager = document.querySelector(selectors.pagination);
+    if (!pager) return 1;
+    const explicit = text$2(pager).match(/共\s*(\d+)\s*页/);
+    const numbers = [...pager.querySelectorAll(selectors.page)].map(node => Number(text$2(node))).filter(n => Number.isSafeInteger(n) && n > 0);
+    const count = explicit ? Number(explicit[1]) : Math.max(0, ...numbers);
+    if (!Number.isSafeInteger(count) || count < currentNativePage(selectors)) throw new Error('网页总页数未识别，未将部分内容当作完整任务');
+    return count;
+  }
+  async function waitNativePage(selectors, pn, { guard = () => {}, ready = () => true, before, signal, wait } = {}) {
+    let signature = null, stableSince = Date.now();
+    const check = () => {
+      if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
+      guard();
+      if (currentNativePage(selectors) !== pn || !ready() || (selectors.loading && document.querySelector(selectors.loading))) return false;
+      const current = nativePageSnapshot(selectors).signature;
+      if (before && current === before.signature && before.first?.isConnected) return false;
+      if (current !== signature) { signature = current; stableSince = Date.now(); return false; }
+      return Date.now() - stableSince >= 240;
+    };
+    if (wait) return wait(check, signal);
+    const deadline = Date.now() + 8000;
+    do { if (check()) return; await pause(80, signal); } while (Date.now() < deadline);
+    throw new Error('网页翻页后内容未确认，已停止后续操作');
+  }
+  async function goNativePage(selectors, pn, options = {}) {
+    if (options.signal?.aborted) throw new DOMException('已取消', 'AbortError');
+    options.guard?.();
+    const current = currentNativePage(selectors);
+    if (current === pn) return waitNativePage(selectors, pn, options);
+    if (pn !== 1 && pn !== current + 1) throw new Error('网页页码未连续推进，请重新开始');
+    const pager = document.querySelector(selectors.pagination);
+    const button = [...(pager?.querySelectorAll(selectors.page) || [])].find(node => text$2(node) === String(pn)) || (pn === current + 1 ? pager?.querySelector(selectors.next) : null);
+    if (!nativeControlEnabled(button)) throw new Error('网页页码入口不可用，未继续处理');
+    const before = nativePageSnapshot(selectors);
+    button.click();
+    await waitNativePage(selectors, pn, { ...options, before });
+  }
+
   /**
    * B 站收藏夹页面 API 封装
    * 封装所有与 B 站页面 DOM 交互的操作
@@ -441,9 +642,14 @@
      * @returns {number} 总页数
      */
     static getTotalPages() {
-      const pageInfoText = document.querySelector(pageAdapter().pagination)?.textContent || '';
-      const match = pageInfoText.match(/共\s*(\d+)\s*页/);
-      return match ? parseInt(match[1]) : 1;
+      return nativePageCount(pageAdapter().nativeControls);
+    }
+
+    static getCopyPageSnapshot() { return nativePageSnapshot(pageAdapter().nativeControls); }
+
+    static async prepareCopyPages(guard, before) {
+      await goNativePage(pageAdapter().nativeControls, 1, { guard, before });
+      return this.getTotalPages();
     }
 
     /**
@@ -748,33 +954,13 @@
      * 点击下一页按钮
      * @returns {Promise<boolean>} 是否成功
      */
-    static async clickNextPage() {
-      const paginationEl = document.querySelector(pageAdapter().pagination);
-      if (!paginationEl) {
-        debug('判断为单页收藏夹');
-        return false;
-      }
-
-      const allButtons = paginationEl.querySelectorAll(pageAdapter().next);
-      let nextBtn = null;
-
-      for (const btn of allButtons) {
-        const text = btn.textContent.trim();
-        if (SELECTORS.NEXT_PAGE_TEXT.some(t => text === t || text.includes(t))) {
-          nextBtn = btn;
-          break;
-        }
-      }
-
-      if (nextBtn && !nextBtn.disabled && !nextBtn.classList.contains('be-pager-disabled')) {
-        log('点击下一页');
-        nextBtn.click();
-        await delay(CONFIG.DELAY.MIDDLE);
-        return true;
-      } else {
-        log('已到最后一页或找不到下一页按钮');
-        return false;
-      }
+    static async clickNextPage(guard = () => {}) {
+      const controls = pageAdapter().nativeControls;
+      const next = document.querySelector(controls.pagination)?.querySelector(controls.next);
+      if (!nativeControlEnabled(next)) { log('已到最后一页或找不到下一页按钮'); return false; }
+      log('点击下一页');
+      await goNativePage(controls, currentNativePage(controls) + 1, { guard });
+      return true;
     }
 
     /**
@@ -836,136 +1022,6 @@
       if (!favName) return false;
       const favList = this.getFavoriteListInDialog(dialog);
       return favList.some(fav => fav.name === favName);
-    }
-  }
-
-  const stableId = value => /^(?:[1-9]\d*)$/.test(String(value)) && Number.isSafeInteger(Number(value)) ? String(value) : null;
-  const knownCount = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
-  const folderKey = folder => `${folder.kind}:${folder.id}`;
-
-  function normalizeFolder(raw, kind, index = 0, membership = false) {
-    const id = stableId(raw.id);
-    const ownerId = stableId(raw.upper?.mid ?? raw.mid);
-    const protectionReason = kind !== 'created' ? null : index === 0 ? 'default' :
-      [true, 1].includes(raw.is_kid_playlist) || (raw.type !== undefined && raw.type !== 11) ? 'special' :
-        [false, 0].includes(raw.is_kid_playlist) ? null : 'unknown';
-    return Object.freeze({ id, ownerId, kind: kind === 'created' ? 'created' : raw.type === 11 ? 'subscribed' : raw.type === 21 ? 'season' : 'unsupported',
-      identityConflict: !!(stableId(raw.mid) && stableId(raw.upper?.mid) && stableId(raw.mid) !== stableId(raw.upper.mid)),
-      name: typeof raw.title === 'string' ? raw.title : '（名称未知）', count: knownCount(raw.media_count),
-      // Current API uses booleans; older responses used 0/1. Missing stays protected.
-      protected: protectionReason !== null, protectionReason,
-      available: (kind === 'created' ? raw.state === undefined || raw.state === 0 : raw.state === 0) &&
-        !(stableId(raw.mid) && stableId(raw.upper?.mid) && stableId(raw.mid) !== stableId(raw.upper.mid)), subscribed: membership || raw.fav_state === 1 });
-  }
-
-  function pause(ms, signal) {
-    return new Promise((resolve, reject) => {
-      const abort = () => { clearTimeout(timer); reject(new DOMException('已取消', 'AbortError')); };
-      const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, ms);
-      if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
-    });
-  }
-
-  class FolderClient {
-    constructor(fetcher = (...args) => fetch(...args)) { this.fetcher = fetcher; }
-
-    async request(path, params, signal) {
-      const json = await this.fetchJSON(`${path}?${new URLSearchParams(params)}`, {}, signal);
-      if (json.code !== 0 || !json.data || typeof json.data !== 'object') throw new Error(`读取失败（平台代码 ${Number.isInteger(json.code) ? json.code : '未知'}）`);
-      return json.data;
-    }
-
-    async fetchJSON(path, options, signal) {
-      const controller = new AbortController();
-      const abort = () => controller.abort();
-      if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
-      const timer = setTimeout(abort, 15000);
-      try {
-        const response = await this.fetcher(`https://api.bilibili.com${path}`, { ...options, credentials: 'include', signal: controller.signal });
-        if (!response.ok) throw new Error(`读取失败 HTTP ${response.status}`);
-        return await response.json();
-      } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
-    }
-
-    async mutate(action, folder, signal) {
-      if (!['delete', 'unsubscribe'].includes(action) || !stableId(folder.id)) return { status: 'failed', detail: '操作或 ID 无效，未提交' };
-      if (signal?.aborted) return { status: 'not_started', detail: '取消，未提交' };
-      const token = document.cookie.split(';').map(part => part.trim()).find(part => part.startsWith('bili_jct='))?.slice(9);
-      if (!token) return { status: 'failed', detail: '登录校验缺失，未提交；请重新登录后检查' };
-      const body = new URLSearchParams({ platform: 'web', csrf: token });
-      if (action === 'delete') body.set('media_ids', folder.id);
-      const path = action === 'delete' ? '/x/v3/fav/folder/del' : folder.kind === 'season' ?
-        `/x/v3/fav/season/unfav?${new URLSearchParams({ season_id: folder.id, platform: 'web' })}` : `/x/v3/fav/folder/unfav?${new URLSearchParams({ media_id: folder.id })}`;
-      try {
-        const json = await this.fetchJSON(path, { method: 'POST', body }, signal);
-        if (!json || !Number.isInteger(json.code)) return { status: 'unknown', detail: '响应未识别；请检查平台结果，勿直接重试' };
-        return json.code === 0 ? { status: 'confirmed', detail: '平台已确认成功' } : { status: 'failed', detail: `平台拒绝（代码 ${json.code}），已停止` };
-      } catch { return { status: 'unknown', detail: '请求后未取得明确结果；请检查平台，勿直接重试' }; }
-    }
-
-    async folders(ownerId, kind, signal, pace = 400) {
-      if (!stableId(ownerId) || !['created', 'subscribed'].includes(kind)) throw new Error('收藏夹范围无效');
-      if (kind === 'created') {
-        const data = await this.request('/x/v3/fav/folder/created/list-all', { up_mid: ownerId }, signal);
-        if (data.count === 0 && data.list === null) data.list = [];
-        if (!Array.isArray(data.list) || data.list.length !== data.count) throw new Error('收藏夹列表不完整，请稍后重新加载');
-        return this.normalizeList(data.list, kind);
-      }
-      const rows = [];
-      let expected = null;
-      for (let pn = 1; pn <= 100; pn++) {
-        if (pn > 1) await pause(pace, signal);
-        const data = await this.request('/x/v3/fav/folder/collected/list', { up_mid: ownerId, pn, ps: 20, platform: 'web' }, signal);
-        if (data.count === 0 && data.list === null && data.has_more === false) data.list = [];
-        if (!Array.isArray(data.list) || typeof data.has_more !== 'boolean') throw new Error('订阅列表格式未识别');
-        if (knownCount(data.count) === null || (expected !== null && expected !== data.count)) throw new Error('订阅总数未知或读取期间变化');
-        expected = data.count;
-        rows.push(...data.list);
-        if (!data.has_more) {
-          if (rows.length !== data.count) throw new Error('订阅列表变化或不完整，请重新加载');
-          return this.normalizeList(rows, kind);
-        }
-        if (!data.list.length) break;
-      }
-      throw new Error('订阅列表超过读取上限或分页未推进');
-    }
-
-    normalizeList(rows, kind) {
-      const result = rows.map((row, index) => normalizeFolder(row, kind, index, kind === 'subscribed'));
-      if (result.some(row => !row.id) || new Set(result.map(folderKey)).size !== result.length) throw new Error('收藏夹身份缺失或重复');
-      return result;
-    }
-
-    async videos(folderId, pn, signal, folder) {
-      if (!stableId(folderId)) throw new Error('收藏夹 ID 无效');
-      if (folder?.kind === 'season') {
-        if (pn !== 1) throw new Error('合集列表未完整返回，不重复请求同一完整列表');
-        const data = await this.request('/x/space/fav/season/list', { season_id: folderId, pn, ps: 20 }, signal);
-        const count = knownCount(data.info?.media_count);
-        if (!Array.isArray(data.medias) || count === null || stableId(data.info?.id) !== folderId) throw new Error('合集分页格式未识别');
-        // This endpoint returns the whole season and ignores pn/ps; count mismatch stays partial.
-        return { ...data, medias: data.medias.map(row => ({ ...row, type: 2 })), has_more: false };
-      }
-      const data = await this.request('/x/v3/fav/resource/list', { media_id: folderId, pn, ps: 20, platform: 'web' }, signal);
-      if (data.medias === null && data.info?.media_count === 0 && data.has_more === false) data.medias = [];
-      return data;
-    }
-
-    async post(path, values, signal) {
-      if (signal?.aborted) return { status: 'not_started', detail: '已取消，未提交' };
-      const csrf = document.cookie.split(';').map(x => x.trim()).find(x => x.startsWith('bili_jct='))?.slice(9);
-      if (!csrf) return { status: 'failed', detail: '登录校验缺失，未提交' };
-      try {
-        const json = await this.fetchJSON(path, { method: 'POST', body: new URLSearchParams({ ...values, csrf, platform: 'web' }) }, signal);
-        if (!Number.isInteger(json?.code)) return { status: 'unknown', detail: '响应未识别，请核对结果，勿直接重试' };
-        return json.code === 0 ? { status: 'confirmed', detail: '平台已确认', data: json.data } : { status: 'failed', detail: `平台拒绝（代码 ${json.code}）` };
-      } catch { return { status: 'unknown', detail: '提交后结果未知，请核对结果，勿直接重试' }; }
-    }
-    create(name, signal) { return this.post('/x/v3/fav/folder/add', { title: name, intro: '', privacy: '1', cover: '' }, signal); }
-    copy(source, target, resources, actor, signal) {
-      if (!stableId(source.id) || !stableId(target.id) || !stableId(actor) || !resources.length || resources.length > 20 || resources.some(id => !stableId(id)))
-        return Promise.resolve({ status: 'failed', detail: '复制身份或批次无效，未提交' });
-      return this.post('/x/v3/fav/resource/copy', { src_media_id: source.id, tar_media_id: target.id, mid: actor, resources: resources.map(id => `${id}:2`).join(',') }, signal);
     }
   }
 
@@ -1387,6 +1443,7 @@
       // 只有创建全部确认成功后才保存下一阶段。
       StateManager.clearState();
       state.tasks = normalizeCopyTasks(state.tasks);
+      if (!state.tasks.length) throw new Error('跨页任务为空，已清除；请重新选择来源收藏夹。');
       const operationId = typeof state.operationId === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(state.operationId) ? state.operationId : newOperationId();
       this.manager.logs.restore(state.journal);
       this.manager.operation.begin('批量复制', state.tasks.length, { operationId, phase: state.phase });
@@ -1480,6 +1537,10 @@
   }
 
   const label = value => typeof value === 'string' && value.trim() ? value.trim() : null;
+  function mergeVideoMetadata(target, source) {
+    for (const key of ['id', 'bvid', 'title', 'url', 'duration', 'uploaderId', 'uploaderName', 'publishedAt', 'unavailable'])
+      if (target[key] === null && source[key] !== null) target[key] = source[key];
+  }
   function videoMetadata(raw) {
     const id = raw.type === 2 ? stableId(raw.id) : null;
     const bvid = raw.type === 2 && /^BV[0-9A-Za-z]{10}$/.test(raw.bvid) ? raw.bvid : null;
@@ -1495,12 +1556,12 @@
     async scan(folders, { signal, onPage = () => {}, maxPages = 500, maxEntries = 10000 } = {}) {
       if (this.running) throw new Error('已有扫描正在进行');
       if (!folders.length || folders.some(f => !stableId(f.id) || f.kind === 'unsupported') || new Set(folders.map(folderKey)).size !== folders.length) throw new Error('请选择有效的收藏夹');
+      const client = this.client.capture?.() || this.client;
       this.running = true;
-      const report = { scope: folders.map(f => ({ id: f.id, ownerId: f.ownerId, name: f.name })), complete: false, cancelled: false, folders: [], entries: 0,
+      const report = { scope: folders.map(f => ({ id: f.id, kind: f.kind, ownerId: f.ownerId, name: f.name })), complete: false, cancelled: false, folders: [], entries: 0,
         occurrences: 0, uniqueVideos: 0, duplicateOccurrences: 0, unknownIdentity: 0, unavailable: 0, knownDurationSeconds: 0, unknownDurations: 0, unknownUploaders: 0, videos: [], unidentified: [] };
       const videos = new Set(), aliases = new Map();
       let requests = 0;
-      const client = this.client.capture?.() || this.client;
       try {
         for (const folder of folders) {
           const coverage = { id: folder.id, kind: folder.kind, name: folder.name, pages: 0, loaded: 0, expected: null, complete: false, issue: null };
@@ -1525,10 +1586,11 @@
                 const metadata = videoMetadata(raw);
                 if (metadata.unavailable) report.unavailable++;
                 const membership = { id: folder.id, kind: folder.kind, ownerId: folder.ownerId, name: folder.name, occurrences: 1, collectedAt: knownCount(raw.fav_time) };
-                if (!metadata.id && !metadata.bvid) { report.unknownIdentity++; metadata.folders.push(membership); report.unidentified.push(metadata); continue; }
+                if (!metadata.id && !metadata.bvid) { report.unknownIdentity++; metadata.occurrences = 1; metadata.folders.push(membership); report.unidentified.push(metadata); continue; }
                 report.occurrences++;
                 const byId = metadata.id && aliases.get(`av:${metadata.id}`), byBV = metadata.bvid && aliases.get(metadata.bvid);
                 if (byId && byBV && byId !== byBV) {
+                  mergeVideoMetadata(byId, byBV);
                   byId.occurrences += byBV.occurrences;
                   for (const entry of byBV.folders) {
                     const old = byId.folders.find(f => folderKey(f) === folderKey(entry));
@@ -1538,8 +1600,7 @@
                   videos.delete(byBV);
                 }
                 const video = byId || byBV || metadata;
-                for (const key of ['id', 'bvid', 'title', 'url', 'duration', 'uploaderId', 'uploaderName', 'publishedAt', 'unavailable'])
-                  if (video[key] === null && metadata[key] !== null) video[key] = metadata[key];
+                mergeVideoMetadata(video, metadata);
                 if (metadata.bvid) video.url = metadata.url;
                 if (metadata.id) aliases.set(`av:${metadata.id}`, video);
                 if (metadata.bvid) aliases.set(metadata.bvid, video);
@@ -1733,16 +1794,13 @@
   }
 
   const text$1 = node => node?.textContent.trim() || '';
-  const enabled = node => node && !node.disabled && node.getAttribute('aria-disabled') !== 'true' && !/disabled/.test(node.className);
 
   /** Reads only the page's native cards and pagination; never requests HTTP. */
   class NativeVideoReader {
     constructor(client) { this.client = client; }
-    page() {
-      return Number(text$1(document.querySelector(this.client.selectors.pagination)?.querySelector(this.client.selectors.activePage))) || 1;
-    }
+    page() { return currentNativePage(this.client.selectors); }
     cards() { return [...document.querySelectorAll(this.client.selectors.cards)]; }
-    signature() { return this.cards().map(card => card.querySelector('a[href*="/video/"]')?.getAttribute('href') || text$1(card)).join('|'); }
+    signature() { return nativePageSnapshot(this.client.selectors).signature; }
     check(folder) {
       const url = new URL(window.location.href);
       if (!this.context || this.context.key !== folderKey(folder) || PageDetector.getLoginUserUID() !== this.context.actor ||
@@ -1753,18 +1811,13 @@
       const search = document.querySelector(this.client.selectors.search);
       if (search?.value.trim()) throw new Error('网页正在筛选视频，请清空页面搜索后重新统计');
     }
-    async settle(folder, pn, signal, before = null) {
-      let signature = null, stableSince = Date.now();
-      await this.client.wait(() => {
-        this.check(folder);
-        const s = this.client.selectors;
-        if (this.page() !== pn || normalizeFavoriteName(text$1(document.querySelector(s.detailTitle))) !== normalizeFavoriteName(folder.name)) return false;
-        if (s.loading && document.querySelector(s.loading)) return false;
-        const current = this.signature();
-        if (before && current === before.signature && before.first?.isConnected) return false;
-        if (current !== signature) { signature = current; stableSince = Date.now(); return false; }
-        return Date.now() - stableSince >= 240;
-      }, signal);
+    options(folder, signal, before) {
+      return { guard: () => this.check(folder), signal, before,
+        ready: () => normalizeFavoriteName(text$1(document.querySelector(this.client.selectors.detailTitle))) === normalizeFavoriteName(folder.name),
+        wait: (check, signal) => this.client.wait(check, signal) };
+    }
+    settle(folder, pn, signal, before = null) {
+      return waitNativePage(this.client.selectors, pn, this.options(folder, signal, before));
     }
     async read(id, pn, signal, folder) {
       if (!folder || folder.id !== id || !Number.isSafeInteger(pn) || pn < 1) throw new Error('网页统计缺少目标身份或页码无效');
@@ -1780,17 +1833,12 @@
       } else this.check(folder);
       let current = this.page();
       if (pn !== current) {
-        if (pn !== 1 && pn !== current + 1) throw new Error('网页统计页码未连续推进，请重新开始统计');
-        const s = this.client.selectors, pager = document.querySelector(s.pagination);
-        const button = [...(pager?.querySelectorAll(s.page) || [])].find(node => text$1(node) === String(pn)) || (pn === current + 1 ? pager?.querySelector(s.next) : null);
-        if (!enabled(button)) throw new Error('网页页码入口不可用，统计不完整');
-        const before = { first: this.cards()[0], signature: this.signature() };
-        button.click(); await this.settle(folder, pn, signal, before);
+        await goNativePage(this.client.selectors, pn, this.options(folder, signal));
         current = this.page();
       }
       this.check(folder);
       if (current !== pn) throw new Error('网页当前页与统计页不一致');
-      // Re-check after a microtask boundary before reading the final card set.
+      // Re-check after an asynchronous boundary before reading the final card set.
       await pause(0, signal); this.check(folder);
       const s = this.client.selectors;
       const medias = this.cards().map(card => {
@@ -1809,40 +1857,24 @@
       const count = countText === undefined ? knownCount(folder.count) : knownCount(Number(countText));
       const next = document.querySelector(s.pagination)?.querySelector(s.next);
       if (!medias.length && count !== 0) throw new Error('网页未展示视频条目，请检查空页或权限；已读取结果保留');
-      return { info: { id, media_count: count }, medias, has_more: !!enabled(next) };
+      return { info: { id, media_count: count }, medias, has_more: nativeControlEnabled(next) };
     }
   }
-
-  /** Native page controls, separate from HTTP transport and panel UI. */
-  const nativeControls = {
-    vui: {
-      group: '.favlist-aside .vui_collapse_item', heading: '.vui_collapse_item_header',
-      row: '.fav-sidebar-item', title: '.vui_ellipsis', click: '.vui_sidebar-item', more: '.fav-collapse-more',
-      menu: '.menu-popover .more-vertical', menuItem: '.menu-popover__panel-item',
-      detailTitle: '.favlist-info-detail__title-row', data: '.favlist-info-detail__data', owner: '.favlist-info-detail__data a.link',
-      cards: '.favlist-main .bili-video-card', duration: '.bili-cover-card__stat',
-      videoTitle: '.bili-video-card__title', videoAuthor: 'a.bili-video-card__author', unavailable: '.bili-video-card__title--disabled',
-      search: '.fav-list-header-filter__search input, input.fav-list-header-filter__search', loading: '.favlist-main .vui_loading',
-      dialog: '.vui_dialog--content', confirm: 'button.vui_button--blue',
-      pagination: '.vui_pagenation', page: '.vui_pagenation--btn-num', activePage: '[aria-current="page"], .vui_button--active',
-      next: 'button[aria-label="下一页"]'
-    },
-    legacy: {
-      created: '#fav-createdList-container', subscribed: '#fav-list-container', row: '.fav-item',
-      title: 'a.text', click: 'a.text', more: '.more', menu: '.be-dropdown', menuItem: '.be-dropdown-item',
-      detailTitle: '.favInfo-details .fav-name', data: '.favInfo-details', owner: '.favInfo-details a[href*="space.bilibili.com"]',
-      cards: '.fav-video-list .small-item', duration: '.length', dialog: '.modal', confirm: '.modal-footer .btn',
-      videoTitle: 'a.title', videoAuthor: 'a.up-name, a[href*="space.bilibili.com"]', unavailable: '.disabled, .invalid',
-      search: '.fav-search input', loading: '.fav-video-list .loading',
-      pagination: '.be-pager', page: '.be-pager-item', activePage: '.be-pager-item-active', next: '.be-pager-next'
-    }
-  };
 
   const text = node => node?.textContent.trim() || '';
   const numberFrom = value => /^\d+$/.test(value || '') ? Number(value) : null;
   class WebFolderClient {
     constructor() { this.identities = new WeakMap(); this.boundRows = new WeakSet(); this.videoReader = new NativeVideoReader(this); }
     get selectors() { return document.querySelector('.favlist-aside') ? nativeControls.vui : nativeControls.legacy; }
+    capture() {
+      const actor = PageDetector.getLoginUserUID(), owner = PageDetector.getCurrentPageUID();
+      const check = () => {
+        if (actor !== PageDetector.getLoginUserUID() || owner !== PageDetector.getCurrentPageUID())
+          throw new Error('账号或空间已变化，网页读取已停止；请重新加载列表');
+      };
+      const read = method => async (...args) => { check(); const data = await this[method](...args); check(); return data; };
+      return { folders: read('folders'), videos: read('videos'), mutate: (...args) => this.mutate(...args) };
+    }
     async wait(check, signal, timeout = 8000) {
       const end = Date.now() + timeout;
       do {
@@ -2055,7 +2087,8 @@
     constructor(api, web, modes) { this.api = api; this.web = web; this.modes = modes; }
     capture() {
       const read = this[this.modes.read], write = this[this.modes.manage];
-      return { folders: (...args) => read.folders(...args), videos: (...args) => read.videos(...args), mutate: (...args) => write.mutate(...args) };
+      const reader = read.capture?.() || read;
+      return { folders: (...args) => reader.folders(...args), videos: (...args) => reader.videos(...args), mutate: (...args) => write.mutate(...args) };
     }
     folders(...args) { return this.capture().folders(...args); }
     videos(...args) { return this.capture().videos(...args); }
@@ -2215,6 +2248,8 @@
       this.copyStep = '打开来源收藏夹';
 
       // 1. 点击源收藏夹
+      const oldId = new URL(window.location.href).searchParams.get('fid');
+      const before = this.api.getCopyPageSnapshot?.();
       const clickSuccess = await this.api.clickFavorite(sourceFavName);
       if (!clickSuccess) {
         return false;
@@ -2224,7 +2259,8 @@
 
       assertCopyContext(expected);
       const fid = stableId(new URL(window.location.href).searchParams.get('fid'));
-      if (!fid) throw new Error('来源收藏夹 ID 未确认，未提交复制');
+      if (!fid || new URL(window.location.href).searchParams.get('ftype') !== 'create')
+        throw new Error('来源收藏夹 ID 或创建类型未确认，未提交复制');
 
       // 2. 获取当前收藏夹信息
       const currentName = this.api.getCurrentFavoriteName();
@@ -2233,7 +2269,12 @@
         return false;
       }
 
-      const totalPages = this.api.getTotalPages();
+      const check = () => {
+        assertCopyContext(expected);
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('fid') !== fid || url.searchParams.get('ftype') !== 'create') throw new Error('来源收藏夹已变化，未继续复制');
+      };
+      const totalPages = this.api.prepareCopyPages ? await this.api.prepareCopyPages(check, oldId !== fid ? before : null) : this.api.getTotalPages();
       log(`收藏夹 [${currentName}] 共 ${totalPages} 页`);
 
       // 3. 进入批量操作模式
@@ -2258,7 +2299,7 @@
         // 如果不是最后一页，点击下一页
         if (page < totalPages) {
           this.copyStep = '前往下一页';
-          const nextSuccess = await this.api.clickNextPage();
+          const nextSuccess = await this.api.clickNextPage(check);
           if (!nextSuccess) {
             warn(`无法跳转到第 ${page + 1} 页`);
             return false;
@@ -2279,7 +2320,8 @@
       expected ||= { ...currentCopyContext(), fid: stableId(new URL(window.location.href).searchParams.get('fid')) };
       const check = () => {
         assertCopyContext(expected);
-        if (!expected.fid || new URL(window.location.href).searchParams.get('fid') !== expected.fid)
+        const url = new URL(window.location.href);
+        if (!expected.fid || url.searchParams.get('fid') !== expected.fid || url.searchParams.get('ftype') !== 'create')
           throw new Error('来源收藏夹已变化或 ID 未确认，未继续复制');
       };
       check();
@@ -2308,7 +2350,7 @@
       }
 
       // 3. 等待对话框
-      let dialog = await this.api.waitForDialog();
+      const dialog = await this.api.waitForDialog();
       if (!dialog) {
         error('对话框未出现');
         return false;
@@ -3343,6 +3385,7 @@
       style.textContent = panelStyles;
       this.floatingPanel = root;
       this.header = element('header', 'bf-header');
+      this.header.setAttribute('role', 'group');
       this.header.tabIndex = 0;
       this.header.title = '拖动标题移动；聚焦标题后方向键移动，Shift + 方向键调整大小';
       this.header.setAttribute('aria-label', this.header.title);

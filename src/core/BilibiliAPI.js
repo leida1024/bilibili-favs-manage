@@ -11,6 +11,7 @@ import { getPageAdapter } from './adapters/index.js';
 import { VuiPageAdapter } from './adapters/VuiPageAdapter.js';
 import { normalizeFavoriteName, assertUnambiguousFavoriteName } from '../utils/favoriteNames.js';
 import { watchCopyConfirmation } from './adapters/copyConfirmation.js';
+import { currentNativePage, nativePageCount, nativePageSnapshot, nativeControlEnabled, goNativePage } from './adapters/nativePagination.js';
 
 const pageAdapter = () => getPageAdapter() || VuiPageAdapter;
 
@@ -61,9 +62,14 @@ export class BilibiliAPI {
    * @returns {number} 总页数
    */
   static getTotalPages() {
-    const pageInfoText = document.querySelector(pageAdapter().pagination)?.textContent || '';
-    const match = pageInfoText.match(/共\s*(\d+)\s*页/);
-    return match ? parseInt(match[1]) : 1;
+    return nativePageCount(pageAdapter().nativeControls);
+  }
+
+  static getCopyPageSnapshot() { return nativePageSnapshot(pageAdapter().nativeControls); }
+
+  static async prepareCopyPages(guard, before) {
+    await goNativePage(pageAdapter().nativeControls, 1, { guard, before });
+    return this.getTotalPages();
   }
 
   /**
@@ -368,33 +374,13 @@ export class BilibiliAPI {
    * 点击下一页按钮
    * @returns {Promise<boolean>} 是否成功
    */
-  static async clickNextPage() {
-    const paginationEl = document.querySelector(pageAdapter().pagination);
-    if (!paginationEl) {
-      debug('判断为单页收藏夹');
-      return false;
-    }
-
-    const allButtons = paginationEl.querySelectorAll(pageAdapter().next);
-    let nextBtn = null;
-
-    for (const btn of allButtons) {
-      const text = btn.textContent.trim();
-      if (SELECTORS.NEXT_PAGE_TEXT.some(t => text === t || text.includes(t))) {
-        nextBtn = btn;
-        break;
-      }
-    }
-
-    if (nextBtn && !nextBtn.disabled && !nextBtn.classList.contains('be-pager-disabled')) {
-      log('点击下一页');
-      nextBtn.click();
-      await delay(CONFIG.DELAY.MIDDLE);
-      return true;
-    } else {
-      log('已到最后一页或找不到下一页按钮');
-      return false;
-    }
+  static async clickNextPage(guard = () => {}) {
+    const controls = pageAdapter().nativeControls;
+    const next = document.querySelector(controls.pagination)?.querySelector(controls.next);
+    if (!nativeControlEnabled(next)) { log('已到最后一页或找不到下一页按钮'); return false; }
+    log('点击下一页');
+    await goNativePage(controls, currentNativePage(controls) + 1, { guard });
+    return true;
   }
 
   /**

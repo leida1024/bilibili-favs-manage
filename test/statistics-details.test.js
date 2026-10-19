@@ -6,6 +6,8 @@ import { NativeVideoReader } from '../src/core/adapters/NativeVideoReader.js';
 import { nativeControls } from '../src/core/adapters/nativeControls.js';
 import { WebFolderClient } from '../src/core/WebFolderClient.js';
 import { videoDetails } from '../src/ui/VideoDetails.js';
+import { BilibiliAPI } from '../src/core/BilibiliAPI.js';
+import { FavoriteManager } from '../src/core/FavoriteManager.js';
 
 const folder = { id: '100', ownerId: '50', kind: 'created', name: 'Fictional folder', count: 5 };
 const media = (id, extra = {}) => ({ id, type: 2, title: `Fictional video ${id}`, duration: 60, upper: { mid: '90', name: 'Fictional author' }, ...extra });
@@ -20,9 +22,9 @@ test('details retain titles, safe links and memberships; aid/BV alias bridge ded
   const bvid = 'BV1xx411c7mD';
   const folders = [folder, { ...folder, id: '101', name: 'Second folder' }];
   const report = await new InventoryService({ videos: async id => id === '100' ? page(id, [media('1', { title: null, duration: null, upper: null })]) :
-    page(id, [media(null, { bvid }), media('1', { bvid, fav_time: 123 })]) }, 0).scan(folders);
+    page(id, [media(null, { bvid, title: 'Known title' }), media('1', { bvid, title: null, duration: null, upper: null, fav_time: 123 })]) }, 0).scan(folders);
   assert.equal(report.complete, true); assert.equal(report.uniqueVideos, 1); assert.equal(report.duplicateOccurrences, 2);
-  const video = report.videos[0]; assert.equal(video.title, 'Fictional video 1'); assert.equal(video.duration, 60);
+  const video = report.videos[0]; assert.equal(video.title, 'Known title'); assert.equal(video.duration, 60);
   assert.equal(video.uploaderName, 'Fictional author'); assert.equal(video.url, `https://www.bilibili.com/video/${bvid}`);
   assert.equal(video.occurrences, 3); assert.deepEqual(video.folders.map(f => f.occurrences), [1, 2]);
   assert.equal(report.knownDurationSeconds, 60); assert.equal(report.unknownDurations, 0);
@@ -36,6 +38,20 @@ test('one unreadable or count-mismatched folder retains partial data and continu
   assert.equal(report.complete, false); assert.equal(report.folders.length, 2); assert.equal(report.entries, 2);
   assert.match(report.folders[0].issue, /permission/); assert.match(report.folders[1].issue, /标称 3.*读取 2/);
   assert.equal(report.unidentified[0].title, 'Unknown resource'); assert.equal(report.unidentified[0].url, null);
+  assert.equal(report.unidentified[0].occurrences, 1);
+});
+
+test('one native scan keeps its starting account across folders and captures typed scope', async t => {
+  realm(t); const client = new WebFolderClient(); let calls = 0;
+  client.videos = async id => { calls++; return page(id, [media('1')]); };
+  const report = await new InventoryService(client, 0).scan([folder, { ...folder, id: '101' }], { onPage: () => { document.cookie = 'DedeUserID=60; path=/'; } });
+  assert.equal(report.complete, false); assert.equal(calls, 1); assert.match(report.folders[1].issue, /账号或空间/);
+  assert.equal(report.scope[0].kind, 'created');
+});
+
+test('reader capture failure never strands inventory admission', async () => {
+  const service = new InventoryService({ capture: () => { throw Error('Synthetic capture failure'); } });
+  await assert.rejects(service.scan([folder]), /capture/); assert.equal(service.running, false);
 });
 
 for (const layout of ['legacy', 'vui']) {
@@ -66,6 +82,28 @@ for (const layout of ['legacy', 'vui']) {
     assert.equal(report.complete, true); assert.equal(report.entries, 5); assert.deepEqual(clicks, [1, 2, 3]);
     assert.deepEqual(report.videos.map(v => v.id), ['1', '2', '3', '4', '5']); assert.equal(report.videos[0].title, 'Fictional video 1');
     assert.equal(report.knownDurationSeconds, 300); assert.equal(report.videos[0].uploaderName, 'Fictional author');
+
+    // The same native pagination contract also protects multi-page copy.
+    const sidebar = document.createElement('div');
+    if (vui) sidebar.className = 'favlist-aside'; else sidebar.id = 'fav-createdList-container';
+    document.body.append(sidebar); current = 2; renderCards(2); renderPager(); clicks.length = 0;
+    if (vui) {
+      const last = document.createElement('button'); last.className = 'vui_pagenation--btn-num'; last.textContent = '3'; last.onclick = () => navigate(3); pager.append(last);
+    } else pager.append(document.createTextNode('共 3 页'));
+    assert.equal(BilibiliAPI.getTotalPages(), 3, 'numeric VUI pages must not collapse to one');
+    // Each subsequent pager render includes the last numeric page / total.
+    pager.addEventListener('click', () => {
+      if (vui) { const last = document.createElement('button'); last.className = 'vui_pagenation--btn-num'; last.textContent = '3'; last.onclick = () => navigate(3); pager.append(last); }
+      else if (!pager.textContent.includes('共')) pager.append(document.createTextNode('共 3 页'));
+    });
+    window.history.replaceState(null, '', '/60/favlist?fid=100&ftype=create');
+    const manager = new FavoriteManager(), copiedPages = [];
+    manager.api = { clickFavorite: async () => true, getCurrentFavoriteName: () => folder.name, ensureBatchModeActive: async () => true,
+      getCopyPageSnapshot: () => BilibiliAPI.getCopyPageSnapshot(), prepareCopyPages: (...args) => BilibiliAPI.prepareCopyPages(...args),
+      clickNextPage: guard => BilibiliAPI.clickNextPage(guard) };
+    manager.copyOnePage = async () => { copiedPages.push(current); return true; };
+    assert.equal(await manager.copyFavorite(folder.name, 'Target'), true);
+    assert.deepEqual(copiedPages, [1, 2, 3]); assert.deepEqual(clicks, [1, 2, 3]);
   });
 }
 

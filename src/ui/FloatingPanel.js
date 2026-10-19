@@ -50,6 +50,7 @@ export class FloatingPanel {
     style.textContent = panelStyles;
     this.floatingPanel = root;
     this.header = element('header', 'bf-header');
+    this.header.setAttribute('role', 'group');
     this.header.tabIndex = 0;
     this.header.title = '拖动标题移动；聚焦标题后方向键移动，Shift + 方向键调整大小';
     this.header.setAttribute('aria-label', this.header.title);

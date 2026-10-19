@@ -89,6 +89,28 @@ test('source navigation during delayed handoff never saves executable state', as
   window.history.replaceState(null, '', '/60/favlist?fid=101'); t.mock.timers.tick(3000); await assert.rejects(pending, /来源页面/);
 });
 
+test('native copy rejects subscription content even in a foreign space', async t => {
+  realm(t); window.history.replaceState(null, '', '?fid=100&ftype=collect&ctype=11');
+  const manager = new FavoriteManager(); manager.api = { ensureBatchModeActive: () => assert.fail('must not select subscription content') };
+  await assert.rejects(manager.copyOnePage('Target'), /变化|未确认/);
+});
+
+test('empty saved handoff is consumed before any preparation or next handoff', async t => {
+  realm(t, '50'); const manager = new FavoriteManager(); let pending = { phase: 'creating', tasks: [], returnURL: 'https://space.bilibili.com/60/favlist' };
+  t.mock.method(StateManager, 'loadState', () => pending); t.mock.method(StateManager, 'clearState', () => { pending = null; });
+  t.mock.method(StateManager, 'saveState', () => assert.fail('no empty queue'));
+  await assert.rejects(manager.crossPageFlow.resumeFlow(), /为空/); assert.equal(pending, null);
+});
+
+test('account drift during return countdown leaves preparation consumed and does not save next phase', async t => {
+  realm(t, '50'); t.mock.timers.enable({ apis: ['setTimeout'] }); const manager = new FavoriteManager();
+  manager.getAllFavoriteNames = () => ['Target']; let pending = { phase: 'creating', actorId: '50', tasks, returnURL: 'https://space.bilibili.com/60/favlist' };
+  t.mock.method(StateManager, 'loadState', () => pending); t.mock.method(StateManager, 'clearState', () => { pending = null; });
+  t.mock.method(StateManager, 'saveState', () => assert.fail('changed actor must not save copying phase'));
+  const work = manager.crossPageFlow.resumeFlow(); document.cookie = 'DedeUserID=70; path=/'; t.mock.timers.tick(3000);
+  await assert.rejects(work, /变化/); assert.equal(pending, null);
+});
+
 test('foreign native unsubscribe preview explains required route without issuing ticket', t => {
   realm(t); const manager = new FavoriteManager(); manager.getAllFavoriteNames = () => [];
   const panel = new FloatingPanel(manager); panel.init(); t.after(() => panel.destroy()); panel.showView('manage');

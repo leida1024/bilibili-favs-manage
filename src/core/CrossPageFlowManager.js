@@ -199,6 +199,7 @@ export class CrossPageFlowManager {
     // 只有创建全部确认成功后才保存下一阶段。
     StateManager.clearState();
     state.tasks = normalizeCopyTasks(state.tasks);
+    if (!state.tasks.length) throw new Error('跨页任务为空，已清除；请重新选择来源收藏夹。');
     const operationId = typeof state.operationId === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(state.operationId) ? state.operationId : newOperationId();
     this.manager.logs.restore(state.journal);
     this.manager.operation.begin('批量复制', state.tasks.length, { operationId, phase: state.phase });
