@@ -48,6 +48,16 @@ The current flow is creating -> return to source -> copying. Resume checks that 
 
 `utils/favoriteNames.js` trims leading/trailing whitespace but preserves internal spaces. Normalize all entry paths, including resumed tasks, and reuse an existing normalized-name target. Creation success requires observing the actual target, not just a button click. Do not submit again while the previous result is uncertain.
 
+## Scenario: settings continuity and duplicate names
+
+1. Trigger: save any read/copy/create/manage method (including no-op), or encounter equal normalized names across distinct IDs/types.
+2. Signatures: `duplicateFavoriteNames(names):Set<string>`; `assertUnambiguousFavoriteName(names,name)` throws an actionable copy error; Settings save invalidates `MutationPanel` confirmation rather than calling `InventoryPanel.resetCatalog()`.
+3. Contract: catalogs/reports are retained read snapshots; selections, filters, export and scroll remain. Fresh scan/load/preview captures saved methods; every destructive execution still revalidates exact kind:id. Native normal management may resolve same-name rows through routes, while unavailable native IDs require explicit API. No positional matching or automatic transport switch.
+4. Validation/errors: no identity→excluded or explicit API load; duplicate name-based copy→rename guidance before native source/destination click or creation; consumed cross-page preparation validates all existing destination names before any missing target is created. Busy save performs no change/I/O. Explicit reload/scope/mutation still resets the catalog.
+5. Cases: good—save API writer then re-preview existing identified unavailable selections; base—same-name folder and season use separate composite keys, even equal numeric IDs; bad—clear unrelated statistics after changing copy, preserve executable confirmation, or pick the first duplicate name.
+6. Tests: actual save controls preserve exact row/report nodes and independent selections/filters/scroll without I/O; new reader used on next scan/load; stale ticket rejects; duplicate typed IDs stay distinct through reordering/filtering; native/API management/copy regressions and consumed handoff remain passing.
+7. Wrong/correct: wrong—assume API can infer which name-only copy target the user meant. Correct—reject ambiguous name-based copy, while type/ID-based management remains supported. No silent change of transport.
+
 ## Inventory and destructive operations
 
 `FolderClient.folders(ownerId, kind, signal)` validates complete enumeration and returns normalized immutable identities. `InventoryService.scan(folders, options)` returns explicit selected-scope coverage; unknown metadata stays null. Type11 folder subscriptions and type21 seasons remain distinct composite identities (`kind:id`); unsupported types never become either supported type. Season content returns one complete list irrespective of pn/ps; count mismatch stays incomplete. Null lists count as empty only with explicit zero totals and no further pages.

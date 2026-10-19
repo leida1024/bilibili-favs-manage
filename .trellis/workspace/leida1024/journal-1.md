@@ -466,3 +466,36 @@ Scoped legacy sidebar form controls and null-only fallback; informational unavai
 ### Next Steps
 
 - Await user legacy-page testing; no remote publication authorized.
+
+
+## Session 15: Settings continuity and duplicate identity handling
+
+**Date**: 2026-10-19
+**Task**: Settings continuity and duplicate identity handling
+**Branch**: `develop`
+
+### Summary
+
+Local 2.2.6 preserves loaded catalogs, selections, filters, reports/export and scroll after saving methods; only old management confirmation is invalidated. Same-name management/statistics rows reveal type/ID/owner; name-based copy rejects ambiguity before native clicks or cross-page creation.106 tests/build and fictional desktop/375px UI checks passed. No real writes/push/release. Evidence: .trellis/tasks/archive/2026-10/10-19-settings-catalog-continuity/.
+
+### Main Changes
+
+Retain inert read snapshots on Settings save; show conditional same-name identities and block ambiguous name-based copy before submission. Detailed design and evidence are in the owning archive.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4670c41` | fix: retain loaded catalogs and reject ambiguous copy names |
+
+### Testing
+
+- [OK]106/106 tests, build, source/generated review, diff checks and fictional desktop/375px UI checks.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Await user testing; no push or release authorized. Copy still requires unique names; no ID picker introduced.

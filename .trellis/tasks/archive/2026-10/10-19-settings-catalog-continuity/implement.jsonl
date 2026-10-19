@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Read snapshot continuity and conditional duplicate identity display"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Captured transports, type:ID identities and name-based copy preflight"}
