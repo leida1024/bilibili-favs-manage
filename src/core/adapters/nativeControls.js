@@ -6,8 +6,10 @@ export const nativeControls = {
     menu: '.menu-popover .more-vertical', menuItem: '.menu-popover__panel-item',
     detailTitle: '.favlist-info-detail__title-row', data: '.favlist-info-detail__data', owner: '.favlist-info-detail__data a.link',
     cards: '.favlist-main .bili-video-card', duration: '.bili-cover-card__stat',
+    videoTitle: '.bili-video-card__title', videoAuthor: 'a.bili-video-card__author', unavailable: '.bili-video-card__title--disabled',
+    search: '.fav-list-header-filter__search input, input.fav-list-header-filter__search', loading: '.favlist-main .vui_loading',
     dialog: '.vui_dialog--content', confirm: 'button.vui_button--blue',
-    pagination: '.vui_pagenation', page: '.vui_pagenation--btn-num', activePage: '[aria-current="page"]',
+    pagination: '.vui_pagenation', page: '.vui_pagenation--btn-num', activePage: '[aria-current="page"], .vui_button--active',
     next: 'button[aria-label="下一页"]'
   },
   legacy: {
@@ -15,6 +17,8 @@ export const nativeControls = {
     title: 'a.text', click: 'a.text', more: '.more', menu: '.be-dropdown', menuItem: '.be-dropdown-item',
     detailTitle: '.favInfo-details .fav-name', data: '.favInfo-details', owner: '.favInfo-details a[href*="space.bilibili.com"]',
     cards: '.fav-video-list .small-item', duration: '.length', dialog: '.modal', confirm: '.modal-footer .btn',
+    videoTitle: 'a.title', videoAuthor: 'a.up-name, a[href*="space.bilibili.com"]', unavailable: '.disabled, .invalid',
+    search: '.fav-search input', loading: '.fav-video-list .loading',
     pagination: '.be-pager', page: '.be-pager-item', activePage: '.be-pager-item-active', next: '.be-pager-next'
   }
 };
