@@ -67,7 +67,7 @@ test('catalog invalidation clears obsolete statistics status without erasing a r
 });
 
 test('copy submission uncertainty reaches the UI once with its page and stops all remaining folders', async t => {
-  realm(t);
+  realm(t, '60'); window.history.replaceState(null, '', '/60/favlist?fid=100&ftype=create');
   const old = { ...CONFIG.DELAY }; for (const key of Object.keys(CONFIG.DELAY)) CONFIG.DELAY[key] = 0;
   t.after(() => Object.assign(CONFIG.DELAY, old));
   const manager = new FavoriteManager(); manager.getAllFavoriteNames = () => ['Source A', 'Source B'];
@@ -79,6 +79,7 @@ test('copy submission uncertainty reaches the UI once with its page and stops al
     copySubmission: { status: 'unknown', detail: '已提交但未确认。' },
     clickConfirmButton: async () => { submissions++; return false; }
   };
+  const execute = manager.batchCopy.bind(manager); manager.batchCopy = tasks => execute(tasks, { skipCrossPage: true });
   const panel = new FloatingPanel(manager); panel.init(); setLoggerPanel(panel);
   t.after(() => panel.destroy());
   for (const row of panel.favCheckboxItemList) row.checkbox.checked = true;

@@ -1,3 +1,4 @@
+import { PageDetector } from '../core/PageDetector.js';
 import { element, button } from './elements.js';
 import { eligibility } from '../core/BatchOperations.js';
 import { folderRow } from './folderRow.js';
@@ -75,6 +76,8 @@ export class MutationPanel {
     this.invalidate();
     this.results.replaceChildren();
     try {
+      if (this.action === 'unsubscribe' && this.panel.manager.modes?.manage === 'web' && !PageDetector.isOwnPage())
+        throw new Error('网页退订请先打开我的收藏夹页面，再加载“我的订阅”；也可在设置中明确选择 API。');
       const description = descriptions[this.action];
       this.ticket = this.engine.prepare(this.action, this.selected());
       const mode = this.panel.manager.modes?.manage;

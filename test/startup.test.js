@@ -145,6 +145,7 @@ test('油猴 Window 代理拒绝删除属性时仍能启动、离开和重新打
     assert.equal(dom.window.document.querySelectorAll('.bili-favs-manage-panel').length, 1);
     await Promise.resolve();
   } finally {
+    sandbox.BiliFavPanel?.destroy();
     dom.window.close();
   }
 });

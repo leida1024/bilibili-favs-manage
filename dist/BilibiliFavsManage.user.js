@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.2.8
+// @version      2.2.9
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       leida1024
 // @match        https://space.bilibili.com/*
@@ -208,7 +208,7 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.2.8',
+      VERSION: '2.2.9',
       NAME: 'BiliBili 收藏夹批量管理',
       DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
     }
@@ -320,10 +320,16 @@
 
   /** 在任何跳转或提交前检查整个任务列表；同时兼容旧版本保存的任务。 */
   function normalizeCopyTasks(tasks) {
+    if (!Array.isArray(tasks)) throw new Error('复制任务必须是列表');
+    const seen = new Set();
     return tasks.map(task => {
+      if (!task || typeof task !== 'object' || Array.isArray(task)) throw new Error('复制任务格式无效');
       const source = normalizeFavoriteName(task.source);
       const target = normalizeFavoriteName(task.target);
       if (!source || !target) throw new Error('源收藏夹和目标收藏夹名称不能为空或仅包含空白');
+      const pair = JSON.stringify([source, target]);
+      if (seen.has(pair)) throw new Error('存在重复的来源与目标任务，请移除重复项');
+      seen.add(pair);
       return { ...task, source, target };
     });
   }
@@ -833,491 +839,6 @@
     }
   }
 
-  /**
-   * 页面类型检测工具
-   * 用于判断当前是否在用户自己的收藏夹页面
-   */
-
-  class PageDetector {
-    /**
-     * 获取当前页面的用户 UID
-     * @returns {string|null}
-     */
-    static getCurrentPageUID() {
-      const match = window.location.pathname.match(/^\/(\d+)\/favlist(?:\/|$)/);
-      return match ? match[1] : null;
-    }
-
-    /**
-     * 获取登录用户的 UID
-     * @returns {string|null}
-     */
-    static getLoginUserUID() {
-      // 方案 1: 从 Cookie 获取
-      const cookies = document.cookie.split(';');
-      for (const cookie of cookies) {
-        const [key, value] = cookie.trim().split('=');
-        if (key === 'DedeUserID') {
-          return value;
-        }
-      }
-
-      // 方案 2: 从页面状态获取（备选）
-      if (window.__INITIAL_STATE__?.mid) {
-        return String(window.__INITIAL_STATE__.mid);
-      }
-
-      return null;
-    }
-
-    /**
-     * 检测当前页面是否为用户自己的页面
-     * @returns {boolean}
-     */
-    static isOwnPage() {
-      const pageUID = this.getCurrentPageUID();
-      const loginUID = this.getLoginUserUID();
-
-      if (!pageUID || !loginUID) {
-        return false;
-      }
-
-      return pageUID === loginUID;
-    }
-
-    /**
-     * 生成用户自己的收藏夹页面 URL
-     * @returns {string|null}
-     */
-    static getOwnFavListURL() {
-      const loginUID = this.getLoginUserUID();
-      return loginUID ? `https://space.bilibili.com/${loginUID}/favlist` : null;
-    }
-  }
-
-  /**
-   * 跨页面状态管理器
-   * 使用 GM_setValue/GM_getValue 持久化状态
-   */
-
-  const STATE_KEY = 'bilibili_fav_cross_page_state';
-  const STATE_EXPIRE_TIME = 30 * 60 * 1000; // 30 分钟
-
-  class StateManager {
-    /**
-     * 保存跨页面状态
-     * @param {Object} state - 状态对象
-     */
-    static saveState(state) {
-      const data = {
-        ...state,
-        timestamp: Date.now()
-      };
-
-      // 如果 GM_setValue 可用，使用 GM API；否则使用 localStorage
-      if (typeof GM_setValue !== 'undefined') {
-        GM_setValue(STATE_KEY, JSON.stringify(data));
-      } else {
-        localStorage.setItem(STATE_KEY, JSON.stringify(data));
-      }
-    }
-
-    /**
-     * 加载跨页面状态
-     * @returns {Object|null}
-     */
-    static loadState() {
-      let dataStr = null;
-
-      // 尝试从 GM API 读取
-      if (typeof GM_getValue !== 'undefined') {
-        dataStr = GM_getValue(STATE_KEY, null);
-      } else {
-        dataStr = localStorage.getItem(STATE_KEY);
-      }
-
-      if (!dataStr) return null;
-
-      try {
-        const state = JSON.parse(dataStr);
-
-        // 检查是否过期
-        if (Date.now() - state.timestamp > STATE_EXPIRE_TIME) {
-          this.clearState();
-          return null;
-        }
-
-        return state;
-      } catch (e) {
-        console.error('[StateManager] 解析状态失败:', e);
-        return null;
-      }
-    }
-
-    /**
-     * 清除跨页面状态
-     */
-    static clearState() {
-      if (typeof GM_deleteValue !== 'undefined') {
-        GM_deleteValue(STATE_KEY);
-      } else {
-        localStorage.removeItem(STATE_KEY);
-      }
-    }
-
-    /**
-     * 检查状态是否存在
-     * @returns {boolean}
-     */
-    static hasState() {
-      return this.loadState() !== null;
-    }
-  }
-
-  /** Structured diagnostics only: never interpreted as executable state. */
-  function sanitizeLog(value) {
-    return String(value)
-      .replace(/https?:\/\/[^\s<>]+/gi, '[URL omitted]')
-      .replace(/((?:cookie|authorization|bearer|token|csrf|bili_jct|sessdata|password|secret)\s*[=:]?\s*)[^\s,;]+/gi, '$1[redacted]')
-      .slice(0, 2000);
-  }
-
-  const newOperationId = () => globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  const identifier = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(value) ? value : '';
-  const views = ['copy', 'statistics', 'manage', 'system'];
-  const contextOf = context => ({
-    view: views.includes(context?.view) ? context.view : 'system',
-    operationId: identifier(context?.operationId),
-    phase: identifier(context?.phase)
-  });
-
-  class LogStore {
-    constructor(limit = 500, storage = null) {
-      this.limit = Math.max(1, limit);
-      this.entries = [];
-      this.dropped = 0;
-      this.clearedAt = 0;
-      this.context = contextOf();
-      this.storage = storage;
-      try { if (storage) this.restore(storage.read()); } catch { /* memory-only */ }
-    }
-
-    setContext(context) { this.context = contextOf(context); }
-
-    add(message, level = 'info', context = this.context) {
-      this.entries.push({ id: newOperationId(), time: new Date(Math.max(Date.now(), this.clearedAt + 1)).toISOString(),
-        level: ['info', 'warn', 'error', 'debug'].includes(level) ? level : 'info',
-        ...contextOf(context), message: sanitizeLog(message).trim() });
-      this.trim();
-      this.persist();
-    }
-
-    trim() {
-      while (this.entries.length > this.limit) { this.entries.shift(); this.dropped++; }
-    }
-
-    persist() { try { this.storage?.write(this.snapshot()); } catch { /* diagnostics stay usable */ } }
-    clear() { this.entries = []; this.dropped = 0; this.clearedAt = Date.now(); this.persist(); }
-    filter(level = 'all', view = 'all') {
-      return this.entries.filter(entry => (level === 'all' || (level === 'normal' ? entry.level !== 'debug' : entry.level === level)) &&
-        (view === 'all' || entry.view === view || entry.view === 'system'));
-    }
-    snapshot(operationId) {
-      return { schemaVersion: 2, dropped: this.dropped, clearedAt: this.clearedAt,
-        entries: this.entries.filter(entry => !operationId || entry.operationId === operationId).map(entry => ({ ...entry })) };
-    }
-    restore(snapshot) {
-      if (snapshot?.schemaVersion !== 2 || !Array.isArray(snapshot.entries)) return;
-      const clearedAt = Number.isSafeInteger(snapshot.clearedAt) && snapshot.clearedAt >= 0 && snapshot.clearedAt <= Date.now() ? snapshot.clearedAt : 0;
-      if (clearedAt > this.clearedAt) this.dropped = 0;
-      this.clearedAt = Math.max(this.clearedAt, clearedAt);
-      const entries = new Map(this.entries.filter(entry => Date.parse(entry.time) > this.clearedAt).map(entry => [entry.id, entry]));
-      for (const raw of snapshot.entries.slice(-this.limit)) {
-        if (!identifier(raw?.id) || typeof raw.time !== 'string' || !Number.isFinite(Date.parse(raw.time)) ||
-            typeof raw.message !== 'string' || !['info', 'warn', 'error', 'debug'].includes(raw.level) || Date.parse(raw.time) <= this.clearedAt) continue;
-        entries.set(raw.id, { id: raw.id, time: new Date(raw.time).toISOString(), level: raw.level,
-          ...contextOf(raw), message: sanitizeLog(raw.message) });
-      }
-      this.entries = [...entries.values()].sort((a, b) => a.time.localeCompare(b.time));
-      if (clearedAt === this.clearedAt) this.dropped = Math.max(this.dropped, Number.isSafeInteger(snapshot.dropped) && snapshot.dropped >= 0 ? snapshot.dropped : 0);
-      this.trim();
-      this.persist();
-    }
-    export() { return JSON.stringify(this.snapshot(), null, 2); }
-  }
-
-  /**
-   * 跨页面流程管理器
-   * 处理跨页面创建收藏夹的完整流程
-   */
-
-
-  class CrossPageFlowManager {
-    constructor(manager) {
-      this.manager = manager;
-    }
-
-    /**
-     * 开始跨页面流程：保存状态并跳转到自己页面
-     *
-     * 注意：此时处于「他人页面」，无法在此判断「自己」缺哪些收藏夹
-     * （`getAllFavoriteNames()` 此处取到的是对方的收藏夹）。因此本方法
-     * 不做缺失对比，缺失对比延后到 `resumeFlow()` 的 creating 阶段（自己页面）。
-     * @param {Array<{source: string, target: string}>} tasks - 复制任务列表
-     * @returns {Promise<void>}
-     */
-    async startCrossPageFlow(tasks) {
-      tasks = normalizeCopyTasks(tasks);
-      // 跳转到自己的收藏夹页面
-      const ownURL = PageDetector.getOwnFavListURL();
-      const actorId = PageDetector.getLoginUserUID();
-      if (!ownURL) {
-        error('无法获取用户自己的收藏夹页面 URL');
-        throw new Error('无法确认登录身份，请登录后再复制');
-      }
-
-      this.manager.operation.update({ phase: 'creating', detail: '即将前往我的空间，检查并准备目标收藏夹。' });
-      this.manager.logs.setContext({ view: 'copy', operationId: this.manager.operation.state.operationId, phase: 'creating' });
-      log('3 秒后前往我的空间准备目标，随后返回来源继续复制。');
-      await delay(3000);
-      if (PageDetector.getLoginUserUID() !== actorId) throw new Error('登录账号已变化，跨页任务未交接。');
-      this.manager.operation.finish('waiting', '已交接跨页任务，等待目的页面继续。');
-      StateManager.saveState({
-        phase: 'creating', returnURL: window.location.href, tasks, actorId,
-        operationId: this.manager.operation.state.operationId,
-        journal: this.manager.logs.snapshot()
-      });
-
-      window.location.href = ownURL;
-    }
-
-    /**
-     * 在自己页面批量创建收藏夹
-     * @param {Array<string>} favNames - 收藏夹名称列表
-     * @returns {Promise<boolean>}
-     */
-    async batchCreateFavorites(favNames) {
-      favNames = [...new Set(favNames.map(normalizeFavoriteName))];
-      if (favNames.some(name => !name)) return false;
-      log('开始批量创建收藏夹');
-      log(`共 ${favNames.length} 个: ${favNames.join(', ')}`);
-
-      for (let i = 0; i < favNames.length; i++) {
-        const favName = favNames[i];
-        log(`[${i + 1}/${favNames.length}] 创建收藏夹: ${favName}`);
-
-        const success = await this.createSingleFavorite(favName);
-        if (!success) {
-          error(`创建收藏夹 [${favName}] 失败`);
-          return false;
-        }
-
-        // 创建间隔延迟
-        if (i < favNames.length - 1) {
-          await delay(CONFIG.DELAY.MIDDLE);
-        }
-      }
-
-      log('✓ 批量创建完成!');
-      return true;
-    }
-
-    /**
-     * 创建单个收藏夹：仅侧栏入口不存在时回退，结果未确认时停止。
-     * @param {string} favName - 收藏夹名称
-     * @returns {Promise<boolean>}
-     */
-    async createSingleFavorite(favName) {
-      favName = normalizeFavoriteName(favName);
-      if (!favName) return false;
-      assertUnambiguousFavoriteName(this.manager.getAllFavoriteNames(), favName);
-      if (this.manager.getAllFavoriteNames().map(normalizeFavoriteName).includes(favName)) return true;
-      // 优先：左侧边栏原生"新建收藏夹"入口（最简，无需批量模式/复制对话框）
-      const result = await BilibiliAPI.createFavoriteViaSidebar(favName);
-      if (result === true) {
-        log(`✓ 创建收藏夹 [${favName}] 成功（侧边栏入口）`);
-        return true;
-      }
-      if (result !== null) return false;
-
-      // Only a missing sidebar entry permits the copy-dialog alternative.
-      log('未找到左侧“新建收藏夹”，尝试通过复制弹窗新建（需要可选视频）');
-      return await this.createViaCopyDialog(favName);
-    }
-
-    /**
-     * 通过批量模式复制对话框创建收藏夹（需可选视频的备用入口）
-     * @param {string} favName - 收藏夹名称
-     * @returns {Promise<boolean>}
-     */
-    async createViaCopyDialog(favName) {
-      // 1. 打开第一个收藏夹；空收藏夹可能没有可选视频。
-      const allFavs = BilibiliAPI.getAllFavorites();
-      if (allFavs.length === 0) {
-        error('找不到任何收藏夹');
-        return false;
-      }
-
-      await BilibiliAPI.clickFavorite(BilibiliAPI.getFavoriteName(allFavs[0]));
-      await delay(CONFIG.DELAY.MIDDLE);
-
-      // 2. 进入批量操作模式
-      const batchSuccess = await BilibiliAPI.ensureBatchModeActive();
-      if (!batchSuccess) {
-        error('当前收藏夹无法进入批量模式。复制弹窗新建需要可选视频；请先在自己的空间手动新建目标收藏夹，再重新开始。');
-        return false;
-      }
-
-      // 3. 全选当前页视频（否则"复制至"按钮不可用，对话框不会弹出）
-      if (!BilibiliAPI.clickSelectAll()) {
-        error('当前页没有可选视频，无法通过复制弹窗新建。请先在自己的空间手动新建目标收藏夹，再重新开始。');
-        return false;
-      }
-      await delay(CONFIG.DELAY.SHORT);
-
-      // 4. 点击复制按钮打开对话框
-      if (!await BilibiliAPI.clickCopyButton()) {
-        return false;
-      }
-
-      // 4. 等待对话框
-      const dialog = await BilibiliAPI.waitForDialog();
-      if (!dialog) {
-        error('对话框未出现');
-        return false;
-      }
-
-      // 5. 创建新收藏夹
-      const createSuccess = await this.manager.createNewFavorite(dialog, favName);
-      if (!createSuccess) {
-        // 关闭对话框
-        BilibiliAPI.closeDialog(dialog);
-        return false;
-      }
-
-      // 6. 关闭对话框
-      await delay(CONFIG.DELAY.SHORT);
-      const currentDialog = await BilibiliAPI.waitForDialog();
-      if (currentDialog) BilibiliAPI.closeDialog(currentDialog);
-      await delay(CONFIG.DELAY.SHORT);
-
-      return true;
-    }
-
-    /**
-     * 恢复跨页面流程（页面加载时调用）
-     * @returns {Promise<boolean>} 是否处理了跨页面流程
-     */
-    async resumeFlow() {
-      const state = StateManager.loadState();
-      if (!state) {
-        return false; // 没有跨页面状态
-      }
-      if (state.actorId && state.actorId !== PageDetector.getLoginUserUID()) {
-        StateManager.clearState();
-        this.manager.operation.finish('failed', '登录账号已变化，跨页任务已停止。请使用原账号重新选择任务。');
-        return true;
-      }
-
-      // 脚本会在空间站内导航后重新挂载，只有任务预期的页面才能恢复。
-      if (state.phase === 'creating' && !PageDetector.isOwnPage()) return false;
-      if (state.phase === 'copying') {
-        const returnURL = new URL(state.returnURL, window.location.origin);
-        if (returnURL.origin !== window.location.origin ||
-            returnURL.pathname !== window.location.pathname) return false;
-      }
-      if (!['creating', 'copying'].includes(state.phase)) return false;
-
-      // 执行前消费任务：失败、刷新或异常退出不能自动重放创建/复制请求。
-      // 只有创建全部确认成功后才保存下一阶段。
-      StateManager.clearState();
-      state.tasks = normalizeCopyTasks(state.tasks);
-      const operationId = typeof state.operationId === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(state.operationId) ? state.operationId : newOperationId();
-      this.manager.logs.restore(state.journal);
-      this.manager.operation.begin('批量复制', state.tasks.length, { operationId, phase: state.phase });
-      this.manager.logs.setContext({ view: 'copy', operationId, phase: state.phase });
-      log(state.phase === 'creating' ? '已到达我的空间，继续准备目标。' : '已返回来源空间，继续复制。');
-
-      if (state.phase === 'creating') {
-        // 当前已在「自己页面」，此时 getAllFavoriteNames() = 自己的收藏夹
-        // 在此对比目标名称，找出真正缺失（自己还没有）的收藏夹
-        const ownNames = this.manager.getAllFavoriteNames().map(normalizeFavoriteName);
-        for (const task of state.tasks) assertUnambiguousFavoriteName(ownNames, task.target);
-        const missing = state.tasks
-          .map(t => t.target)
-          .filter((name, index, self) => self.indexOf(name) === index) // 去重
-          .filter(name => !ownNames.includes(name)); // 过滤自己已有的
-
-        if (missing.length > 0) {
-          log(`检测到 ${missing.length} 个收藏夹需要创建:`, missing.join(', '));
-          const success = await this.batchCreateFavorites(missing);
-          if (!success) {
-            error('收藏夹创建失败，请手动创建后重试');
-            StateManager.clearState();
-            this.manager.operation.finish('failed', '创建未确认，流程已停止。请检查页面结果后手动重试。');
-            return true;
-          }
-        } else {
-          log('所有目标收藏夹均已存在，无需创建');
-        }
-
-        // 更新状态：准备返回复制
-        log('目标准备完成，3 秒后返回来源空间继续复制。');
-        await delay(3000);
-        this.manager.operation.finish('waiting', '目标准备完成，等待返回来源页面继续复制。');
-        StateManager.saveState({ ...state, operationId, phase: 'copying',
-          journal: this.manager.logs.snapshot() });
-
-        window.location.href = state.returnURL;
-
-        return true;
-      } else if (state.phase === 'copying') {
-        // 回到原页面，继续复制流程
-        // 执行复制（跳过跨页面检测，避免重复触发跳转）
-        await this.manager.batchCopy(state.tasks, { skipCrossPage: true, operationId });
-
-        // 复制完成后清除状态
-        StateManager.clearState();
-
-        return true;
-      }
-
-      return false;
-    }
-  }
-
-  /** Ephemeral progress; confirmed counts must represent observed outcomes. */
-  class OperationState {
-    constructor() {
-      this.listeners = new Set();
-      this.state = { status: 'idle', operationId: '', phase: '', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '' };
-    }
-
-    subscribe(listener) {
-      this.listeners.add(listener);
-      listener({ ...this.state });
-      return () => this.listeners.delete(listener);
-    }
-
-    update(changes) {
-      this.state = { ...this.state, ...changes };
-      for (const listener of this.listeners) listener({ ...this.state });
-    }
-
-    begin(action, total = null, { operationId = newOperationId(), phase = '' } = {}) {
-      this.update({ status: 'running', operationId, phase, action, total, confirmed: 0, lastConfirmed: '', detail: '正在准备…' });
-    }
-
-    confirm(step) {
-      this.update({ confirmed: this.state.confirmed + 1, lastConfirmed: step });
-    }
-
-    finish(status, detail) {
-      if (!['completed', 'failed', 'interrupted', 'unknown', 'waiting'].includes(status)) throw new Error('Invalid terminal operation status');
-      this.update({ status, detail });
-    }
-  }
-
   const stableId = value => /^(?:[1-9]\d*)$/.test(String(value)) && Number.isSafeInteger(Number(value)) ? String(value) : null;
   const knownCount = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
   const folderKey = folder => `${folder.kind}:${folder.id}`;
@@ -1445,6 +966,516 @@
       if (!stableId(source.id) || !stableId(target.id) || !stableId(actor) || !resources.length || resources.length > 20 || resources.some(id => !stableId(id)))
         return Promise.resolve({ status: 'failed', detail: '复制身份或批次无效，未提交' });
       return this.post('/x/v3/fav/resource/copy', { src_media_id: source.id, tar_media_id: target.id, mid: actor, resources: resources.map(id => `${id}:2`).join(',') }, signal);
+    }
+  }
+
+  /**
+   * 页面类型检测工具
+   * 用于判断当前是否在用户自己的收藏夹页面
+   */
+
+  class PageDetector {
+    /**
+     * 获取当前页面的用户 UID
+     * @returns {string|null}
+     */
+    static getCurrentPageUID() {
+      const match = window.location.pathname.match(/^\/(\d+)\/favlist(?:\/|$)/);
+      return match ? match[1] : null;
+    }
+
+    /**
+     * 获取登录用户的 UID
+     * @returns {string|null}
+     */
+    static getLoginUserUID() {
+      // 方案 1: 从 Cookie 获取
+      const cookies = document.cookie.split(';');
+      for (const cookie of cookies) {
+        const [key, value] = cookie.trim().split('=');
+        if (key === 'DedeUserID') {
+          return stableId(value);
+        }
+      }
+
+      // __INITIAL_STATE__.mid identifies the visited profile, not the actor.
+      return null;
+    }
+
+    /**
+     * 检测当前页面是否为用户自己的页面
+     * @returns {boolean}
+     */
+    static isOwnPage() {
+      const pageUID = this.getCurrentPageUID();
+      const loginUID = this.getLoginUserUID();
+
+      if (!pageUID || !loginUID) {
+        return false;
+      }
+
+      return pageUID === loginUID;
+    }
+
+    /**
+     * 生成用户自己的收藏夹页面 URL
+     * @returns {string|null}
+     */
+    static getOwnFavListURL() {
+      const loginUID = this.getLoginUserUID();
+      return loginUID ? `https://space.bilibili.com/${loginUID}/favlist` : null;
+    }
+  }
+
+  /**
+   * 跨页面状态管理器
+   * 使用 GM_setValue/GM_getValue 持久化状态
+   */
+
+  const STATE_KEY = 'bilibili_fav_cross_page_state';
+  const STATE_EXPIRE_TIME = 30 * 60 * 1000; // 30 分钟
+
+  class StateManager {
+    /**
+     * 保存跨页面状态
+     * @param {Object} state - 状态对象
+     */
+    static saveState(state) {
+      const data = {
+        ...state,
+        timestamp: Date.now()
+      };
+
+      // 如果 GM_setValue 可用，使用 GM API；否则使用 localStorage
+      if (typeof GM_setValue !== 'undefined') {
+        GM_setValue(STATE_KEY, JSON.stringify(data));
+      } else {
+        localStorage.setItem(STATE_KEY, JSON.stringify(data));
+      }
+    }
+
+    /**
+     * 加载跨页面状态
+     * @returns {Object|null}
+     */
+    static loadState() {
+      let dataStr = null;
+
+      // 尝试从 GM API 读取
+      if (typeof GM_getValue !== 'undefined') {
+        dataStr = GM_getValue(STATE_KEY, null);
+      } else {
+        dataStr = localStorage.getItem(STATE_KEY);
+      }
+
+      if (!dataStr) return null;
+
+      try {
+        const state = JSON.parse(dataStr);
+
+        // 检查是否过期
+        if (Date.now() - state.timestamp > STATE_EXPIRE_TIME) {
+          this.clearState();
+          return null;
+        }
+
+        return state;
+      } catch (e) {
+        console.error('[StateManager] 解析状态失败:', e);
+        return null;
+      }
+    }
+
+    /**
+     * 清除跨页面状态
+     */
+    static clearState() {
+      if (typeof GM_deleteValue !== 'undefined') {
+        GM_deleteValue(STATE_KEY);
+      } else {
+        localStorage.removeItem(STATE_KEY);
+      }
+    }
+
+    /**
+     * 检查状态是否存在
+     * @returns {boolean}
+     */
+    static hasState() {
+      return this.loadState() !== null;
+    }
+  }
+
+  const currentCopyContext = () => ({ actor: PageDetector.getLoginUserUID(), pageOwner: PageDetector.getCurrentPageUID() });
+
+  function copyBlockReason({ actor, pageOwner }) {
+    if (!stableId(actor)) return '请先登录 B 站，再复制他人的收藏夹。';
+    if (!stableId(pageOwner)) return '请打开他人的收藏夹页面后复制。';
+    if (actor === pageOwner) return '当前是我的空间；复制请前往他人的收藏夹页面，统计和管理可正常使用。';
+    return '';
+  }
+
+  function assertCopyContext(expected = currentCopyContext(), current = currentCopyContext()) {
+    const reason = copyBlockReason(current);
+    if (reason) throw new Error(reason);
+    if (current.actor !== expected.actor || current.pageOwner !== expected.pageOwner)
+      throw new Error('账号或来源空间已变化，未继续复制。请重新选择任务。');
+    return expected;
+  }
+
+  /** Structured diagnostics only: never interpreted as executable state. */
+  function sanitizeLog(value) {
+    return String(value)
+      .replace(/https?:\/\/[^\s<>]+/gi, '[URL omitted]')
+      .replace(/((?:cookie|authorization|bearer|token|csrf|bili_jct|sessdata|password|secret)\s*[=:]?\s*)[^\s,;]+/gi, '$1[redacted]')
+      .slice(0, 2000);
+  }
+
+  const newOperationId = () => globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const identifier = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(value) ? value : '';
+  const views = ['copy', 'statistics', 'manage', 'system'];
+  const contextOf = context => ({
+    view: views.includes(context?.view) ? context.view : 'system',
+    operationId: identifier(context?.operationId),
+    phase: identifier(context?.phase)
+  });
+
+  class LogStore {
+    constructor(limit = 500, storage = null) {
+      this.limit = Math.max(1, limit);
+      this.entries = [];
+      this.dropped = 0;
+      this.clearedAt = 0;
+      this.context = contextOf();
+      this.storage = storage;
+      try { if (storage) this.restore(storage.read()); } catch { /* memory-only */ }
+    }
+
+    setContext(context) { this.context = contextOf(context); }
+
+    add(message, level = 'info', context = this.context) {
+      this.entries.push({ id: newOperationId(), time: new Date(Math.max(Date.now(), this.clearedAt + 1)).toISOString(),
+        level: ['info', 'warn', 'error', 'debug'].includes(level) ? level : 'info',
+        ...contextOf(context), message: sanitizeLog(message).trim() });
+      this.trim();
+      this.persist();
+    }
+
+    trim() {
+      while (this.entries.length > this.limit) { this.entries.shift(); this.dropped++; }
+    }
+
+    persist() { try { this.storage?.write(this.snapshot()); } catch { /* diagnostics stay usable */ } }
+    clear() { this.entries = []; this.dropped = 0; this.clearedAt = Date.now(); this.persist(); }
+    filter(level = 'all', view = 'all') {
+      return this.entries.filter(entry => (level === 'all' || (level === 'normal' ? entry.level !== 'debug' : entry.level === level)) &&
+        (view === 'all' || entry.view === view || entry.view === 'system'));
+    }
+    snapshot(operationId) {
+      return { schemaVersion: 2, dropped: this.dropped, clearedAt: this.clearedAt,
+        entries: this.entries.filter(entry => !operationId || entry.operationId === operationId).map(entry => ({ ...entry })) };
+    }
+    restore(snapshot) {
+      if (snapshot?.schemaVersion !== 2 || !Array.isArray(snapshot.entries)) return;
+      const clearedAt = Number.isSafeInteger(snapshot.clearedAt) && snapshot.clearedAt >= 0 && snapshot.clearedAt <= Date.now() ? snapshot.clearedAt : 0;
+      if (clearedAt > this.clearedAt) this.dropped = 0;
+      this.clearedAt = Math.max(this.clearedAt, clearedAt);
+      const entries = new Map(this.entries.filter(entry => Date.parse(entry.time) > this.clearedAt).map(entry => [entry.id, entry]));
+      for (const raw of snapshot.entries.slice(-this.limit)) {
+        if (!identifier(raw?.id) || typeof raw.time !== 'string' || !Number.isFinite(Date.parse(raw.time)) ||
+            typeof raw.message !== 'string' || !['info', 'warn', 'error', 'debug'].includes(raw.level) || Date.parse(raw.time) <= this.clearedAt) continue;
+        entries.set(raw.id, { id: raw.id, time: new Date(raw.time).toISOString(), level: raw.level,
+          ...contextOf(raw), message: sanitizeLog(raw.message) });
+      }
+      this.entries = [...entries.values()].sort((a, b) => a.time.localeCompare(b.time));
+      if (clearedAt === this.clearedAt) this.dropped = Math.max(this.dropped, Number.isSafeInteger(snapshot.dropped) && snapshot.dropped >= 0 ? snapshot.dropped : 0);
+      this.trim();
+      this.persist();
+    }
+    export() { return JSON.stringify(this.snapshot(), null, 2); }
+  }
+
+  /**
+   * 跨页面流程管理器
+   * 处理跨页面创建收藏夹的完整流程
+   */
+
+
+  class CrossPageFlowManager {
+    constructor(manager) {
+      this.manager = manager;
+    }
+
+    /**
+     * 开始跨页面流程：保存状态并跳转到自己页面
+     *
+     * 注意：此时处于「他人页面」，无法在此判断「自己」缺哪些收藏夹
+     * （`getAllFavoriteNames()` 此处取到的是对方的收藏夹）。因此本方法
+     * 不做缺失对比，缺失对比延后到 `resumeFlow()` 的 creating 阶段（自己页面）。
+     * @param {Array<{source: string, target: string}>} tasks - 复制任务列表
+     * @returns {Promise<void>}
+     */
+    async startCrossPageFlow(tasks) {
+      tasks = normalizeCopyTasks(tasks);
+      if (!tasks.length) throw new Error('请至少选择一个来源收藏夹');
+      const expected = assertCopyContext();
+      const returnURL = window.location.href;
+      // 跳转到自己的收藏夹页面
+      const ownURL = PageDetector.getOwnFavListURL();
+      const actorId = PageDetector.getLoginUserUID();
+      if (!ownURL) {
+        error('无法获取用户自己的收藏夹页面 URL');
+        throw new Error('无法确认登录身份，请登录后再复制');
+      }
+
+      this.manager.operation.update({ phase: 'creating', detail: '即将前往我的空间，检查并准备目标收藏夹。' });
+      this.manager.logs.setContext({ view: 'copy', operationId: this.manager.operation.state.operationId, phase: 'creating' });
+      log('3 秒后前往我的空间准备目标，随后返回来源继续复制。');
+      await delay(3000);
+      assertCopyContext(expected);
+      if (window.location.href !== returnURL) throw new Error('来源页面已变化，跨页任务未交接。');
+      this.manager.operation.finish('waiting', '已交接跨页任务，等待目的页面继续。');
+      StateManager.saveState({
+        phase: 'creating', returnURL, tasks, actorId,
+        operationId: this.manager.operation.state.operationId,
+        journal: this.manager.logs.snapshot()
+      });
+
+      window.location.href = ownURL;
+    }
+
+    /**
+     * 在自己页面批量创建收藏夹
+     * @param {Array<string>} favNames - 收藏夹名称列表
+     * @returns {Promise<boolean>}
+     */
+    async batchCreateFavorites(favNames, check = () => {}) {
+      favNames = [...new Set(favNames.map(normalizeFavoriteName))];
+      if (favNames.some(name => !name)) return false;
+      log('开始批量创建收藏夹');
+      log(`共 ${favNames.length} 个: ${favNames.join(', ')}`);
+
+      for (let i = 0; i < favNames.length; i++) {
+        const favName = favNames[i];
+        log(`[${i + 1}/${favNames.length}] 创建收藏夹: ${favName}`);
+
+        check();
+        const success = await this.createSingleFavorite(favName, check);
+        check();
+        if (!success) {
+          error(`创建收藏夹 [${favName}] 失败`);
+          return false;
+        }
+
+        // 创建间隔延迟
+        if (i < favNames.length - 1) {
+          await delay(CONFIG.DELAY.MIDDLE);
+        }
+      }
+
+      log('✓ 批量创建完成!');
+      return true;
+    }
+
+    /**
+     * 创建单个收藏夹：仅侧栏入口不存在时回退，结果未确认时停止。
+     * @param {string} favName - 收藏夹名称
+     * @returns {Promise<boolean>}
+     */
+    async createSingleFavorite(favName, check = () => {}) {
+      favName = normalizeFavoriteName(favName);
+      if (!favName) return false;
+      assertUnambiguousFavoriteName(this.manager.getAllFavoriteNames(), favName);
+      if (this.manager.getAllFavoriteNames().map(normalizeFavoriteName).includes(favName)) return true;
+      // 优先：左侧边栏原生"新建收藏夹"入口（最简，无需批量模式/复制对话框）
+      const result = await BilibiliAPI.createFavoriteViaSidebar(favName, () => { check(); return true; });
+      if (result === true) {
+        log(`✓ 创建收藏夹 [${favName}] 成功（侧边栏入口）`);
+        return true;
+      }
+      if (result !== null) return false;
+
+      // Only a missing sidebar entry permits the copy-dialog alternative.
+      log('未找到左侧“新建收藏夹”，尝试通过复制弹窗新建（需要可选视频）');
+      return await this.createViaCopyDialog(favName, check);
+    }
+
+    /**
+     * 通过批量模式复制对话框创建收藏夹（需可选视频的备用入口）
+     * @param {string} favName - 收藏夹名称
+     * @returns {Promise<boolean>}
+     */
+    async createViaCopyDialog(favName, check = () => {}) {
+      // 1. 打开第一个收藏夹；空收藏夹可能没有可选视频。
+      const allFavs = BilibiliAPI.getAllFavorites();
+      if (allFavs.length === 0) {
+        error('找不到任何收藏夹');
+        return false;
+      }
+
+      await BilibiliAPI.clickFavorite(BilibiliAPI.getFavoriteName(allFavs[0]));
+      await delay(CONFIG.DELAY.MIDDLE);
+
+      // 2. 进入批量操作模式
+      const batchSuccess = await BilibiliAPI.ensureBatchModeActive();
+      if (!batchSuccess) {
+        error('当前收藏夹无法进入批量模式。复制弹窗新建需要可选视频；请先在自己的空间手动新建目标收藏夹，再重新开始。');
+        return false;
+      }
+
+      // 3. 全选当前页视频（否则"复制至"按钮不可用，对话框不会弹出）
+      if (!BilibiliAPI.clickSelectAll()) {
+        error('当前页没有可选视频，无法通过复制弹窗新建。请先在自己的空间手动新建目标收藏夹，再重新开始。');
+        return false;
+      }
+      await delay(CONFIG.DELAY.SHORT);
+
+      // 4. 点击复制按钮打开对话框
+      if (!await BilibiliAPI.clickCopyButton()) {
+        return false;
+      }
+
+      // 4. 等待对话框
+      const dialog = await BilibiliAPI.waitForDialog();
+      if (!dialog) {
+        error('对话框未出现');
+        return false;
+      }
+
+      // 5. 创建新收藏夹
+      const createSuccess = await this.manager.createNewFavorite(dialog, favName, check);
+      if (!createSuccess) {
+        // 关闭对话框
+        BilibiliAPI.closeDialog(dialog);
+        return false;
+      }
+
+      // 6. 关闭对话框
+      await delay(CONFIG.DELAY.SHORT);
+      const currentDialog = await BilibiliAPI.waitForDialog();
+      if (currentDialog) BilibiliAPI.closeDialog(currentDialog);
+      await delay(CONFIG.DELAY.SHORT);
+
+      return true;
+    }
+
+    /**
+     * 恢复跨页面流程（页面加载时调用）
+     * @returns {Promise<boolean>} 是否处理了跨页面流程
+     */
+    async resumeFlow() {
+      const state = StateManager.loadState();
+      if (!state) {
+        return false; // 没有跨页面状态
+      }
+      if (state.actorId && state.actorId !== PageDetector.getLoginUserUID()) {
+        StateManager.clearState();
+        this.manager.operation.finish('failed', '登录账号已变化，跨页任务已停止。请使用原账号重新选择任务。');
+        return true;
+      }
+
+      // 脚本会在空间站内导航后重新挂载，只有任务预期的页面才能恢复。
+      if (state.phase === 'creating' && !PageDetector.isOwnPage()) return false;
+      if (state.phase === 'copying') {
+        const returnURL = new URL(state.returnURL, window.location.origin);
+        if (returnURL.origin !== window.location.origin ||
+            returnURL.pathname !== window.location.pathname) return false;
+      }
+      if (!['creating', 'copying'].includes(state.phase)) return false;
+
+      // 执行前消费任务：失败、刷新或异常退出不能自动重放创建/复制请求。
+      // 只有创建全部确认成功后才保存下一阶段。
+      StateManager.clearState();
+      state.tasks = normalizeCopyTasks(state.tasks);
+      const operationId = typeof state.operationId === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(state.operationId) ? state.operationId : newOperationId();
+      this.manager.logs.restore(state.journal);
+      this.manager.operation.begin('批量复制', state.tasks.length, { operationId, phase: state.phase });
+      this.manager.logs.setContext({ view: 'copy', operationId, phase: state.phase });
+      log(state.phase === 'creating' ? '已到达我的空间，继续准备目标。' : '已返回来源空间，继续复制。');
+
+      if (state.phase === 'creating') {
+        const actor = PageDetector.getLoginUserUID();
+        const check = () => {
+          if (PageDetector.getLoginUserUID() !== actor || !PageDetector.isOwnPage())
+            throw new Error('账号或目标准备页面已变化，跨页任务已停止。');
+        };
+        // 当前已在「自己页面」，此时 getAllFavoriteNames() = 自己的收藏夹
+        // 在此对比目标名称，找出真正缺失（自己还没有）的收藏夹
+        const ownNames = this.manager.getAllFavoriteNames().map(normalizeFavoriteName);
+        for (const task of state.tasks) assertUnambiguousFavoriteName(ownNames, task.target);
+        const missing = state.tasks
+          .map(t => t.target)
+          .filter((name, index, self) => self.indexOf(name) === index) // 去重
+          .filter(name => !ownNames.includes(name)); // 过滤自己已有的
+
+        if (missing.length > 0) {
+          log(`检测到 ${missing.length} 个收藏夹需要创建:`, missing.join(', '));
+          const success = await this.batchCreateFavorites(missing, check);
+          if (!success) {
+            error('收藏夹创建失败，请手动创建后重试');
+            StateManager.clearState();
+            this.manager.operation.finish('failed', '创建未确认，流程已停止。请检查页面结果后手动重试。');
+            return true;
+          }
+        } else {
+          log('所有目标收藏夹均已存在，无需创建');
+        }
+
+        // 更新状态：准备返回复制
+        log('目标准备完成，3 秒后返回来源空间继续复制。');
+        await delay(3000);
+        check();
+        this.manager.operation.finish('waiting', '目标准备完成，等待返回来源页面继续复制。');
+        StateManager.saveState({ ...state, operationId, phase: 'copying',
+          journal: this.manager.logs.snapshot() });
+
+        window.location.href = state.returnURL;
+
+        return true;
+      } else if (state.phase === 'copying') {
+        // 回到原页面，继续复制流程
+        // 执行复制（跳过跨页面检测，避免重复触发跳转）
+        await this.manager.batchCopy(state.tasks, { skipCrossPage: true, operationId });
+
+        // 复制完成后清除状态
+        StateManager.clearState();
+
+        return true;
+      }
+
+      return false;
+    }
+  }
+
+  /** Ephemeral progress; confirmed counts must represent observed outcomes. */
+  class OperationState {
+    constructor() {
+      this.listeners = new Set();
+      this.state = { status: 'idle', operationId: '', phase: '', action: '', confirmed: 0, total: null, lastConfirmed: '', detail: '' };
+    }
+
+    subscribe(listener) {
+      this.listeners.add(listener);
+      listener({ ...this.state });
+      return () => this.listeners.delete(listener);
+    }
+
+    update(changes) {
+      this.state = { ...this.state, ...changes };
+      for (const listener of this.listeners) listener({ ...this.state });
+    }
+
+    begin(action, total = null, { operationId = newOperationId(), phase = '' } = {}) {
+      this.update({ status: 'running', operationId, phase, action, total, confirmed: 0, lastConfirmed: '', detail: '正在准备…' });
+    }
+
+    confirm(step) {
+      this.update({ confirmed: this.state.confirmed + 1, lastConfirmed: step });
+    }
+
+    finish(status, detail) {
+      if (!['completed', 'failed', 'interrupted', 'unknown', 'waiting'].includes(status)) throw new Error('Invalid terminal operation status');
+      this.update({ status, detail });
     }
   }
 
@@ -1960,6 +1991,7 @@
     check(expected, signal) {
       if (signal?.aborted) fail('已停止后续复制', 'interrupted');
       const current = this.context();
+      assertCopyContext(expected, current);
       if (!stableId(current.actor) || current.actor !== expected.actor || current.pageOwner !== expected.pageOwner) fail('账号或来源空间变化，已停止');
     }
     require(result) { if (result?.status !== 'confirmed') fail(result?.detail || '结果未识别', result?.status === 'unknown' ? 'unknown' : 'failed'); }
@@ -2102,6 +2134,7 @@
       sourceFavName = normalizeFavoriteName(sourceFavName);
       targetFavName = normalizeFavoriteName(targetFavName);
       if (!sourceFavName || !targetFavName) return false;
+      const expected = assertCopyContext(this.batchContext || currentCopyContext());
       log(`开始复制收藏夹 [${sourceFavName}] 到 [${targetFavName}]`);
       this.copyStep = '打开来源收藏夹';
 
@@ -2112,6 +2145,10 @@
       }
 
       await delay(CONFIG.DELAY.SHORT);
+
+      assertCopyContext(expected);
+      const fid = stableId(new URL(window.location.href).searchParams.get('fid'));
+      if (!fid) throw new Error('来源收藏夹 ID 未确认，未提交复制');
 
       // 2. 获取当前收藏夹信息
       const currentName = this.api.getCurrentFavoriteName();
@@ -2137,7 +2174,7 @@
         this.copyPage = page;
         this.operation.update({ detail: `正在复制第 ${page} / ${totalPages} 页。` });
 
-        const pageSuccess = await this.copyOnePage(targetFavName);
+        const pageSuccess = await this.copyOnePage(targetFavName, { ...expected, fid });
         if (!pageSuccess) {
           return false;
         }
@@ -2162,7 +2199,14 @@
      * @param {string} targetFavName - 目标收藏夹名称
      * @returns {Promise<boolean>} 是否成功
      */
-    async copyOnePage(targetFavName) {
+    async copyOnePage(targetFavName, expected) {
+      expected ||= { ...currentCopyContext(), fid: stableId(new URL(window.location.href).searchParams.get('fid')) };
+      const check = () => {
+        assertCopyContext(expected);
+        if (!expected.fid || new URL(window.location.href).searchParams.get('fid') !== expected.fid)
+          throw new Error('来源收藏夹已变化或 ID 未确认，未继续复制');
+      };
+      check();
       targetFavName = normalizeFavoriteName(targetFavName);
       if (!targetFavName) return false;
       this.copyStep = '进入批量模式';
@@ -2174,6 +2218,7 @@
       }
 
       // 1. 全选
+      check();
       this.copyStep = '选择当前页视频';
       if (!this.api.clickSelectAll()) {
         return false;
@@ -2197,33 +2242,14 @@
       const exists = this.api.isFavoriteExistInDialog(dialog, targetFavName);
 
       if (!exists) {
-        // 检测页面类型
-        const isOwnPage = PageDetector.isOwnPage();
-
-        if (!isOwnPage) {
-          error('目标收藏夹不存在且无法在他人页面创建');
-          error('请使用批量复制功能，脚本会自动处理跨页面创建');
-          // 关闭对话框
-          this.api.closeDialog(dialog);
-          await delay(CONFIG.DELAY.SHORT);
-          return false;
-        }
-
-        // 在自己页面，直接创建
-        log(`目标收藏夹 [${targetFavName}] 不存在，尝试创建`);
-        this.copyStep = '准备目标收藏夹';
-        const createSuccess = await this.createNewFavorite(dialog, targetFavName);
-        if (!createSuccess) {
-          const err = new Error('目标准备未确认，请先检查是否已创建收藏夹。');
-          err.outcome = 'unknown'; throw err;
-        }
-        // 创建后组件可能重渲染，不能继续操作已脱离页面的旧节点。
-        dialog = await this.api.waitForDialog();
-        if (!dialog) return false;
+        error('目标收藏夹不存在，请使用批量复制准备目标后重试');
+        this.api.closeDialog(dialog);
+        return false;
       }
 
       // 5. 选择目标收藏夹
       await delay(CONFIG.DELAY.SHORT);
+      check();
       this.copyStep = '选择目标收藏夹';
       if (!this.api.selectFavoriteInDialog(dialog, targetFavName)) {
         return false;
@@ -2231,6 +2257,7 @@
 
       // 6. 点击确定
       await delay(CONFIG.DELAY.SHORT);
+      check();
       this.copyStep = '确认复制结果';
       const confirmed = await this.api.clickConfirmButton(dialog);
       if (!confirmed && this.api.copySubmission?.status === 'unknown') {
@@ -2248,10 +2275,11 @@
      * @param {string} favName - 收藏夹名称
      * @returns {Promise<boolean>} 是否成功
      */
-    async createNewFavorite(dialog, favName) {
+    async createNewFavorite(dialog, favName, check = () => {}) {
       favName = normalizeFavoriteName(favName);
       if (!favName) return false;
       if (this.api.isFavoriteExistInDialog(dialog, favName)) return true;
+      check();
       // 1. 点击新建收藏夹按钮
       if (!await this.api.clickCreateFavoriteButton(dialog)) {
         return false;
@@ -2262,6 +2290,7 @@
         return false;
       }
 
+      check();
       // 3. 点击创建按钮
       if (!await this.api.clickCreateButton()) {
         return false;
@@ -2280,16 +2309,35 @@
      * @param {boolean} [options.skipCrossPage=false] - 跳过跨页面检测，直接进入复制循环
      * @returns {Promise<void>}
      */
-    async batchCopy(copyList, options = {}) {
+    async guardedCopy(copyList, work) {
+      copyList = normalizeCopyTasks(copyList);
+      if (!copyList.length) throw new Error('请至少选择一个来源收藏夹');
+      if (this.copyRunning) throw new Error('已有复制任务正在进行');
+      this.batchContext = assertCopyContext();
+      this.copyRunning = true;
+      try { return await work(copyList); }
+      finally { this.copyRunning = false; this.batchContext = null; }
+    }
+
+    batchCopy(copyList, options = {}) {
+      return this.guardedCopy(copyList, tasks => this.runBatchCopy(tasks, options));
+    }
+
+    batchCopyWeb(copyList, options = {}) {
+      return this.guardedCopy(copyList, tasks => this.runBatchCopyWeb(tasks, options));
+    }
+
+    async runBatchCopy(copyList, options = {}) {
+      assertCopyContext(this.batchContext || currentCopyContext());
       // A saved webpage handoff must never change execution transport on refresh.
-      if (options.skipCrossPage || options.operationId) return this.batchCopyWeb(copyList, options);
+      if (options.skipCrossPage || options.operationId) return this.runBatchCopyWeb(copyList, options);
       const modes = validModes(this.modes);
       copyList = normalizeCopyTasks(copyList);
       if (modes.copy === 'web') {
         const names = this.getAllFavoriteNames();
         for (const task of copyList) assertUnambiguousFavoriteName(names, task.source);
       }
-      if (modes.copy === 'web' && modes.create === 'web') return this.batchCopyWeb(copyList, options);
+      if (modes.copy === 'web' && modes.create === 'web') return this.runBatchCopyWeb(copyList, options);
       this.operation.begin(`批量复制（${modes.copy === 'api' ? 'API' : '网页'}）`, copyList.length, { phase: 'copying' });
       this.logs.setContext({ view: 'copy', operationId: this.operation.state.operationId, phase: 'copying' });
       log(`本次方式：复制 ${modes.copy}，创建 ${modes.create}；不会自动切换或重试。`);
@@ -2305,14 +2353,15 @@
         }
         const expected = this.apiCopy.context();
         await this.apiCopy.prepareTargets([...new Set(copyList.map(task => task.target))], expected, creator);
-        return await this.batchCopyWeb(copyList, { skipCrossPage: true, operationId: this.operation.state.operationId });
+        return await this.runBatchCopyWeb(copyList, { skipCrossPage: true, operationId: this.operation.state.operationId });
       } catch (error) {
         if (!['failed', 'unknown'].includes(this.operation.state.status)) this.operation.finish(error.outcome === 'unknown' ? 'unknown' : 'failed', error.message);
         throw error;
       }
     }
 
-    async batchCopyWeb(copyList, options = {}) {
+    async runBatchCopyWeb(copyList, options = {}) {
+      assertCopyContext(this.batchContext || currentCopyContext());
       copyList = normalizeCopyTasks(copyList);
       const { skipCrossPage = false } = options;
       if (!options.operationId || this.operation.state.operationId !== options.operationId || this.operation.state.status !== 'running')
@@ -2322,7 +2371,6 @@
       const names = this.getAllFavoriteNames();
       for (const task of copyList) {
         assertUnambiguousFavoriteName(names, task.source);
-        if (PageDetector.isOwnPage()) assertUnambiguousFavoriteName(names, task.target);
       }
       log('开始批量复制，共', copyList.length, '个任务');
 
@@ -2372,6 +2420,7 @@
     constructor({ mount, unmount, refresh, notify, now = Date.now }) {
       Object.assign(this, { mount, unmount, refresh, notify, now });
       this.uid = null;
+      this.actor = null;
       this.sidebar = null;
       this.names = '';
       this.startedAt = now();
@@ -2381,9 +2430,11 @@
 
     tick() {
       const uid = PageDetector.getCurrentPageUID();
-      if (uid !== this.uid) {
+      const actor = PageDetector.getLoginUserUID();
+      if (uid !== this.uid || actor !== this.actor) {
         this.unmount();
         this.uid = uid;
+        this.actor = actor;
         this.sidebar = null;
         this.names = '';
         this.startedAt = this.now();
@@ -2843,6 +2894,8 @@
       this.invalidate();
       this.results.replaceChildren();
       try {
+        if (this.action === 'unsubscribe' && this.panel.manager.modes?.manage === 'web' && !PageDetector.isOwnPage())
+          throw new Error('网页退订请先打开我的收藏夹页面，再加载“我的订阅”；也可在设置中明确选择 API。');
         const description = descriptions[this.action];
         this.ticket = this.engine.prepare(this.action, this.selected());
         const mode = this.panel.manager.modes?.manage;
@@ -3186,7 +3239,7 @@
       this.workspace.append(heading);
       this.leftPanel = element('section', 'bf-sources');
       this.selectionTools = new SelectionToolbar({
-        rows: () => this.favCheckboxItemList.map(item => ({ input: item.checkbox, node: item.checkboxContainer, name: item.getLabelValue(), eligible: !item.ambiguous })),
+        rows: () => this.favCheckboxItemList.map(item => ({ input: item.checkbox, node: item.checkboxContainer, name: item.getLabelValue(), eligible: !item.ambiguous && !copyBlockReason(currentCopyContext()) })),
         busy: () => this.busy, change: () => this.updateSelectionReview()
       });
       this.selectionTools.search.addEventListener('input', () => this.updateSelectionReview());
@@ -3341,16 +3394,20 @@
     }
 
     updateSelectionReview() {
+      const blocked = !!copyBlockReason(currentCopyContext());
       const tasks = this.getSelectedTasks();
       const missing = tasks.some(task => !task.target.trim());
       this.selectionTools.update();
       if (missing) this.selectionReview.textContent = '请填好已选来源的目标名称';
       for (const item of this.favCheckboxItemList) {
+        item.checkbox.disabled = this.busy || blocked || item.ambiguous;
+        item.inputText.disabled = this.busy || blocked || item.ambiguous;
         item.checkboxContainer.dataset.selected = String(item.checkbox.checked);
         item.inputText.setAttribute('aria-invalid', String(item.checkbox.checked && !item.inputText.value.trim()));
       }
       this.startBatchTransferButton.textContent = this.busy ? '操作中…' : tasks.length ? `复制 ${tasks.length} 个收藏夹` : '开始复制';
-      this.startBatchTransferButton.disabled = this.busy || !tasks.length || missing;
+      this.startBatchTransferButton.disabled = this.busy || blocked || !tasks.length || missing;
+      this.updateModeSummary();
     }
 
     setBusy(busy) {
@@ -3396,6 +3453,8 @@
     async startBatchTransfer() {
       if (this.busy) return;
       try {
+        const reason = copyBlockReason(currentCopyContext());
+        if (reason) throw new Error(reason);
         const tasks = normalizeCopyTasks(this.getSelectedTasks());
         if (!tasks.length) throw new Error('请至少选择一个源收藏夹。');
         this.setBusy(true);
@@ -3517,10 +3576,12 @@
     }
 
     updateModeSummary() {
+      const reason = copyBlockReason(currentCopyContext());
+      this.copyHelp.textContent = reason || '同名则复用，否则新建；来源保留。';
       if (!this.manager.modes) return;
       const name = value => value === 'api' ? 'API' : '网页';
       const modes = this.manager.modes;
-      this.copyHelp.textContent = `${name(modes.copy)}复制 · ${name(modes.create)}创建 · 来源保留`;
+      this.copyHelp.textContent = reason || `${name(modes.copy)}复制 · ${name(modes.create)}创建 · 来源保留`;
       this.modeButton.title = `读取/统计：${name(modes.read)}；复制：${name(modes.copy)}；创建：${name(modes.create)}；删除/退订：${name(modes.manage)}`;
       this.modeButton.setAttribute('aria-label', `设置。${this.modeButton.title}`);
       if (this.logScope) this.logScope.options[0].textContent = ({ copy: '复制功能', statistics: '统计功能', manage: '管理功能', settings: '设置' })[this.activeView];

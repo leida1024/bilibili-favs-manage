@@ -18,6 +18,8 @@ import { browserStore, panelPreferences, validModes } from '../utils/preferences
 import { FolderClient } from './FolderClient.js';
 import { WebFolderClient } from './WebFolderClient.js';
 import { TransportClient } from './TransportClient.js';
+import { assertCopyContext, currentCopyContext } from './copyContext.js';
+import { stableId } from './FolderClient.js';
 import { ApiCopyFlow } from './ApiCopyFlow.js';
 
 export class FavoriteManager {
@@ -71,6 +73,7 @@ export class FavoriteManager {
     sourceFavName = normalizeFavoriteName(sourceFavName);
     targetFavName = normalizeFavoriteName(targetFavName);
     if (!sourceFavName || !targetFavName) return false;
+    const expected = assertCopyContext(this.batchContext || currentCopyContext());
     log(`开始复制收藏夹 [${sourceFavName}] 到 [${targetFavName}]`);
     this.copyStep = '打开来源收藏夹';
 
@@ -81,6 +84,10 @@ export class FavoriteManager {
     }
 
     await delay(CONFIG.DELAY.SHORT);
+
+    assertCopyContext(expected);
+    const fid = stableId(new URL(window.location.href).searchParams.get('fid'));
+    if (!fid) throw new Error('来源收藏夹 ID 未确认，未提交复制');
 
     // 2. 获取当前收藏夹信息
     const currentName = this.api.getCurrentFavoriteName();
@@ -106,7 +113,7 @@ export class FavoriteManager {
       this.copyPage = page;
       this.operation.update({ detail: `正在复制第 ${page} / ${totalPages} 页。` });
 
-      const pageSuccess = await this.copyOnePage(targetFavName);
+      const pageSuccess = await this.copyOnePage(targetFavName, { ...expected, fid });
       if (!pageSuccess) {
         return false;
       }
@@ -131,7 +138,14 @@ export class FavoriteManager {
    * @param {string} targetFavName - 目标收藏夹名称
    * @returns {Promise<boolean>} 是否成功
    */
-  async copyOnePage(targetFavName) {
+  async copyOnePage(targetFavName, expected) {
+    expected ||= { ...currentCopyContext(), fid: stableId(new URL(window.location.href).searchParams.get('fid')) };
+    const check = () => {
+      assertCopyContext(expected);
+      if (!expected.fid || new URL(window.location.href).searchParams.get('fid') !== expected.fid)
+        throw new Error('来源收藏夹已变化或 ID 未确认，未继续复制');
+    };
+    check();
     targetFavName = normalizeFavoriteName(targetFavName);
     if (!targetFavName) return false;
     this.copyStep = '进入批量模式';
@@ -143,6 +157,7 @@ export class FavoriteManager {
     }
 
     // 1. 全选
+    check();
     this.copyStep = '选择当前页视频';
     if (!this.api.clickSelectAll()) {
       return false;
@@ -166,33 +181,14 @@ export class FavoriteManager {
     const exists = this.api.isFavoriteExistInDialog(dialog, targetFavName);
 
     if (!exists) {
-      // 检测页面类型
-      const isOwnPage = PageDetector.isOwnPage();
-
-      if (!isOwnPage) {
-        error('目标收藏夹不存在且无法在他人页面创建');
-        error('请使用批量复制功能，脚本会自动处理跨页面创建');
-        // 关闭对话框
-        this.api.closeDialog(dialog);
-        await delay(CONFIG.DELAY.SHORT);
-        return false;
-      }
-
-      // 在自己页面，直接创建
-      log(`目标收藏夹 [${targetFavName}] 不存在，尝试创建`);
-      this.copyStep = '准备目标收藏夹';
-      const createSuccess = await this.createNewFavorite(dialog, targetFavName);
-      if (!createSuccess) {
-        const err = new Error('目标准备未确认，请先检查是否已创建收藏夹。');
-        err.outcome = 'unknown'; throw err;
-      }
-      // 创建后组件可能重渲染，不能继续操作已脱离页面的旧节点。
-      dialog = await this.api.waitForDialog();
-      if (!dialog) return false;
+      error('目标收藏夹不存在，请使用批量复制准备目标后重试');
+      this.api.closeDialog(dialog);
+      return false;
     }
 
     // 5. 选择目标收藏夹
     await delay(CONFIG.DELAY.SHORT);
+    check();
     this.copyStep = '选择目标收藏夹';
     if (!this.api.selectFavoriteInDialog(dialog, targetFavName)) {
       return false;
@@ -200,6 +196,7 @@ export class FavoriteManager {
 
     // 6. 点击确定
     await delay(CONFIG.DELAY.SHORT);
+    check();
     this.copyStep = '确认复制结果';
     const confirmed = await this.api.clickConfirmButton(dialog);
     if (!confirmed && this.api.copySubmission?.status === 'unknown') {
@@ -217,10 +214,11 @@ export class FavoriteManager {
    * @param {string} favName - 收藏夹名称
    * @returns {Promise<boolean>} 是否成功
    */
-  async createNewFavorite(dialog, favName) {
+  async createNewFavorite(dialog, favName, check = () => {}) {
     favName = normalizeFavoriteName(favName);
     if (!favName) return false;
     if (this.api.isFavoriteExistInDialog(dialog, favName)) return true;
+    check();
     // 1. 点击新建收藏夹按钮
     if (!await this.api.clickCreateFavoriteButton(dialog)) {
       return false;
@@ -231,6 +229,7 @@ export class FavoriteManager {
       return false;
     }
 
+    check();
     // 3. 点击创建按钮
     if (!await this.api.clickCreateButton()) {
       return false;
@@ -249,16 +248,35 @@ export class FavoriteManager {
    * @param {boolean} [options.skipCrossPage=false] - 跳过跨页面检测，直接进入复制循环
    * @returns {Promise<void>}
    */
-  async batchCopy(copyList, options = {}) {
+  async guardedCopy(copyList, work) {
+    copyList = normalizeCopyTasks(copyList);
+    if (!copyList.length) throw new Error('请至少选择一个来源收藏夹');
+    if (this.copyRunning) throw new Error('已有复制任务正在进行');
+    this.batchContext = assertCopyContext();
+    this.copyRunning = true;
+    try { return await work(copyList); }
+    finally { this.copyRunning = false; this.batchContext = null; }
+  }
+
+  batchCopy(copyList, options = {}) {
+    return this.guardedCopy(copyList, tasks => this.runBatchCopy(tasks, options));
+  }
+
+  batchCopyWeb(copyList, options = {}) {
+    return this.guardedCopy(copyList, tasks => this.runBatchCopyWeb(tasks, options));
+  }
+
+  async runBatchCopy(copyList, options = {}) {
+    assertCopyContext(this.batchContext || currentCopyContext());
     // A saved webpage handoff must never change execution transport on refresh.
-    if (options.skipCrossPage || options.operationId) return this.batchCopyWeb(copyList, options);
+    if (options.skipCrossPage || options.operationId) return this.runBatchCopyWeb(copyList, options);
     const modes = validModes(this.modes);
     copyList = normalizeCopyTasks(copyList);
     if (modes.copy === 'web') {
       const names = this.getAllFavoriteNames();
       for (const task of copyList) assertUnambiguousFavoriteName(names, task.source);
     }
-    if (modes.copy === 'web' && modes.create === 'web') return this.batchCopyWeb(copyList, options);
+    if (modes.copy === 'web' && modes.create === 'web') return this.runBatchCopyWeb(copyList, options);
     this.operation.begin(`批量复制（${modes.copy === 'api' ? 'API' : '网页'}）`, copyList.length, { phase: 'copying' });
     this.logs.setContext({ view: 'copy', operationId: this.operation.state.operationId, phase: 'copying' });
     log(`本次方式：复制 ${modes.copy}，创建 ${modes.create}；不会自动切换或重试。`);
@@ -274,14 +292,15 @@ export class FavoriteManager {
       }
       const expected = this.apiCopy.context();
       await this.apiCopy.prepareTargets([...new Set(copyList.map(task => task.target))], expected, creator);
-      return await this.batchCopyWeb(copyList, { skipCrossPage: true, operationId: this.operation.state.operationId });
+      return await this.runBatchCopyWeb(copyList, { skipCrossPage: true, operationId: this.operation.state.operationId });
     } catch (error) {
       if (!['failed', 'unknown'].includes(this.operation.state.status)) this.operation.finish(error.outcome === 'unknown' ? 'unknown' : 'failed', error.message);
       throw error;
     }
   }
 
-  async batchCopyWeb(copyList, options = {}) {
+  async runBatchCopyWeb(copyList, options = {}) {
+    assertCopyContext(this.batchContext || currentCopyContext());
     copyList = normalizeCopyTasks(copyList);
     const { skipCrossPage = false } = options;
     if (!options.operationId || this.operation.state.operationId !== options.operationId || this.operation.state.status !== 'running')
@@ -291,7 +310,6 @@ export class FavoriteManager {
     const names = this.getAllFavoriteNames();
     for (const task of copyList) {
       assertUnambiguousFavoriteName(names, task.source);
-      if (PageDetector.isOwnPage()) assertUnambiguousFavoriteName(names, task.target);
     }
     log('开始批量复制，共', copyList.length, '个任务');
 

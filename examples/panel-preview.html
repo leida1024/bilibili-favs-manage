@@ -17,6 +17,7 @@
   <option value="interrupted">已中断</option>
 </select></label>
 <script type="module">
+  import { PageDetector } from '../src/core/PageDetector.js';
   import { FloatingPanel } from '../src/ui/FloatingPanel.js';
   import { OperationState } from '../src/core/OperationState.js';
   import { InventoryService } from '../src/core/InventoryService.js';
@@ -47,6 +48,8 @@
         this.operation.finish('completed', '模拟完成，未发送任何网络请求');
       }
     };
+    PageDetector.getLoginUserUID = () => '50';
+    PageDetector.getCurrentPageUID = () => '60';
     manager.batchOperations = new BatchOperations(manager.inventory.client, () => ({ actor: '50', pageOwner: '50' }), 400);
     panel = new FloatingPanel(manager);
     panel.init();

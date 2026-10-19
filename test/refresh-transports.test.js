@@ -155,14 +155,14 @@ test('season statistics normalize missing type/has_more without inventing metada
 });
 
 function apiFixture() {
-  const source = folder(), target = folder('200', { name: 'Target', count: 0 }); const calls = [];
-  let targets = [], outcome = { status: 'confirmed' }, context = { actor: '50', pageOwner: '50' };
-  const client = { folders: async () => [source, ...targets], videos: async (_, pn) => ({ info: { id: 100, media_count: 21 }, has_more: pn === 1,
+  const source = folder('100', { ownerId: '60' }), target = folder('200', { name: 'Target', count: 0 }); const calls = [];
+  let targets = [], outcome = { status: 'confirmed' }, context = { actor: '50', pageOwner: '60' };
+  const client = { folders: async owner => owner === '60' ? [source] : targets, videos: async (_, pn) => ({ info: { id: 100, media_count: 21 }, has_more: pn === 1,
     medias: Array.from({ length: pn === 1 ? 20 : 1 }, (_, n) => ({ id: (pn - 1) * 20 + n + 1, type: 2 })) }),
     create: async name => { calls.push('create:' + name); targets = [target]; return outcome; },
     copy: async (_, __, ids) => { calls.push(ids); return outcome; } };
   return { client, calls, source, target, flow: new ApiCopyFlow(client, () => context, 0), setOutcome: value => outcome = value,
-    changeActor: () => context = { actor: '60', pageOwner: '50' }, setTargets: value => targets = value };
+    changeActor: () => context = { actor: '70', pageOwner: '60' }, ownContext: () => context = { actor: '50', pageOwner: '50' }, setTargets: value => targets = value };
 }
 
 test('API copy snapshots all source pages before creating, uses batches of20 and explicit creator', async () => {
@@ -176,7 +176,7 @@ test('API copy snapshots all source pages before creating, uses batches of20 and
 test('API copy rejects incomplete sources/ambiguous names/self-copy before writes, stops unknown and account changes', async () => {
   const f = apiFixture(); f.client.videos = async () => ({ info: { id: 100, media_count: 2 }, medias: [{ id: 1, type: 2 }], has_more: false });
   await assert.rejects(f.flow.run([{ source: 'Source', target: 'Target' }]), /不完整/); assert.equal(f.calls.length, 0);
-  const g = apiFixture(); await assert.rejects(g.flow.run([{ source: 'Source', target: 'Source' }]), /相同/); assert.equal(g.calls.length, 0);
+  const g = apiFixture(); g.ownContext(); await assert.rejects(g.flow.run([{ source: 'Source', target: 'Source' }]), /我的空间/); assert.equal(g.calls.length, 0);
   const h = apiFixture(); h.setTargets([h.target, { ...h.target, id: '201' }]);
   await assert.rejects(h.flow.run([{ source: 'Source', target: 'Target' }]), /同名/); assert.equal(h.calls.length, 0);
   const u = apiFixture(); u.setTargets([u.target]); u.setOutcome({ status: 'unknown', detail: 'lost response' });
@@ -330,7 +330,7 @@ test('duplicate typed identities are visible and selection survives filtering an
 });
 
 test('copy source collisions are explained and excluded from bulk selection even after refresh or busy transitions', t => {
-  realm(t); let names = ['Same', 'Other'];
+  realm(t); window.history.replaceState(null, '', '/60/favlist'); document.cookie = 'DedeUserID=50'; let names = ['Same', 'Other'];
   const manager = { getAllFavoriteNames: () => names };
   const p = new FloatingPanel(manager); p.init(); t.after(() => p.destroy());
   p.favCheckboxItemList[0].checkbox.click(); names = ['Same', ' Same ', 'Other']; p.refreshFavorites();

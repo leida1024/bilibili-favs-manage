@@ -9,8 +9,9 @@ import { CONFIG } from '../src/config/config.js';
 import { BilibiliAPI } from '../src/core/BilibiliAPI.js';
 
 function panelFixture(t, batchCopy = async () => {}) {
-  const dom = new JSDOM('', { url: 'https://example.test/' });
+  const dom = new JSDOM('', { url: 'https://space.bilibili.com/60/favlist' });
   globalThis.window = dom.window; globalThis.document = dom.window.document;
+  document.cookie = 'DedeUserID=50';
   const manager = { operation: new OperationState(), getAllFavoriteNames: () => ['虚构课程'], batchCopy };
   const panel = new FloatingPanel(manager); panel.init();
   t.after(() => { panel.destroy(); dom.window.close(); });
@@ -20,7 +21,7 @@ function panelFixture(t, batchCopy = async () => {}) {
 test('log retention, level filtering, truncation and export omit credentials/URLs', () => {
   const store = new LogStore(3);
   store.add('discard');
-  store.add('token=abc bili_jct=def SESSDATA=ghi https://example.test/?secret=abc', 'error');
+  store.add('token=abc bili_jct=def SESSDATA=ghi https://space.bilibili.com/60/favlist?secret=abc', 'error');
   store.add('x'.repeat(3000), 'debug'); store.add('last');
   const exported = store.export();
   assert.equal(store.dropped, 1); assert.equal(store.entries.length, 3);
@@ -75,7 +76,7 @@ test('reading earlier logs disables follow; filters/clear and export review work
 });
 
 test('copy progress stops at last successful folder and never calls later items', async t => {
-  const dom = new JSDOM('', { url: 'https://space.bilibili.com/50/favlist' });
+  const dom = new JSDOM('', { url: 'https://space.bilibili.com/60/favlist' });
   globalThis.window = dom.window; globalThis.document = dom.window.document;
   document.cookie = 'DedeUserID=50'; t.after(() => dom.window.close());
   const manager = new FavoriteManager(); let calls = 0;

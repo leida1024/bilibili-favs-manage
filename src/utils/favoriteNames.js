@@ -22,10 +22,16 @@ export function assertUnambiguousFavoriteName(names, name) {
 
 /** 在任何跳转或提交前检查整个任务列表；同时兼容旧版本保存的任务。 */
 export function normalizeCopyTasks(tasks) {
+  if (!Array.isArray(tasks)) throw new Error('复制任务必须是列表');
+  const seen = new Set();
   return tasks.map(task => {
+    if (!task || typeof task !== 'object' || Array.isArray(task)) throw new Error('复制任务格式无效');
     const source = normalizeFavoriteName(task.source);
     const target = normalizeFavoriteName(task.target);
     if (!source || !target) throw new Error('源收藏夹和目标收藏夹名称不能为空或仅包含空白');
+    const pair = JSON.stringify([source, target]);
+    if (seen.has(pair)) throw new Error('存在重复的来源与目标任务，请移除重复项');
+    seen.add(pair);
     return { ...task, source, target };
   });
 }

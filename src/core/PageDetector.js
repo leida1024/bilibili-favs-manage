@@ -1,3 +1,5 @@
+import { stableId } from './FolderClient.js';
+
 /**
  * 页面类型检测工具
  * 用于判断当前是否在用户自己的收藏夹页面
@@ -23,15 +25,11 @@ export class PageDetector {
     for (const cookie of cookies) {
       const [key, value] = cookie.trim().split('=');
       if (key === 'DedeUserID') {
-        return value;
+        return stableId(value);
       }
     }
 
-    // 方案 2: 从页面状态获取（备选）
-    if (window.__INITIAL_STATE__?.mid) {
-      return String(window.__INITIAL_STATE__.mid);
-    }
-
+    // __INITIAL_STATE__.mid identifies the visited profile, not the actor.
     return null;
   }
 

@@ -8,7 +8,7 @@ import { PageDetector } from '../src/core/PageDetector.js';
 import { CONFIG } from '../src/config/config.js';
 
 function page(t, html) {
-  const dom = new JSDOM(html, { url: 'https://space.bilibili.com/123/favlist' });
+  const dom = new JSDOM(html, { url: 'https://space.bilibili.com/123/favlist?fid=100&ftype=create' });
   for (const key of ['window', 'document', 'Node', 'Event', 'KeyboardEvent']) {
     globalThis[key] = key === 'window' ? dom.window : dom.window[key];
   }
@@ -44,7 +44,7 @@ test('cross-page target preparation consumes state and rejects ambiguous existin
 });
 
 test('a later ambiguous source stops the whole resumed native batch before its first copy', async t => {
-  page(t, legacy); document.cookie = 'DedeUserID=123';
+  page(t, legacy); document.cookie = 'DedeUserID=456';
   const manager = new FavoriteManager(); t.mock.method(manager, 'getAllFavoriteNames', () => ['Unique', 'Same', ' Same ']);
   t.mock.method(manager, 'copyFavorite', () => assert.fail('preflight must precede the first copy'));
   await assert.rejects(manager.batchCopy([{ source: 'Unique', target: 'Target' }, { source: 'Same', target: 'Other' }], { skipCrossPage: true }), /同名.*不同名称/);
@@ -95,6 +95,7 @@ test('新建只提交一次，等待异步更新后的真实列表再返回成�
 
 test('实际复制复用含空格的目标，不打开新建表单', async t => {
   page(t, `${legacy}<div class="edit-video-modal">${row('学习 资料')}<button class="fake-fav-input"></button><div class="modal-footer"><button class="btn">确定</button></div></div>`);
+  document.cookie = 'DedeUserID=456';
   const manager = new FavoriteManager();
   t.mock.method(BilibiliAPI, 'ensureBatchModeActive', async () => true);
   t.mock.method(BilibiliAPI, 'clickSelectAll', () => true);
@@ -169,7 +170,7 @@ test('侧栏已尝试但未确认成功时停止，不换入口再次提交', as
 });
 
 test('批量任务预先拒绝空名称，失败后停止后续任务', async t => {
-  page(t, legacy);
+  page(t, legacy); document.cookie = 'DedeUserID=456';
   const manager = new FavoriteManager();
   let calls = 0;
   t.mock.method(manager, 'copyFavorite', async (source, target) => {
