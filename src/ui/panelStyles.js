@@ -39,6 +39,19 @@ export const panelStyles = `
 .bili-favs-manage-panel .bf-header button { font-size:var(--bf-small); min-height:28px; padding:4px; border-color:transparent; background:transparent; flex-shrink:0; }
 .bili-favs-manage-panel .bf-header button[aria-expanded=true] { color:var(--bf-blue); background:var(--bf-selected); }
 .bili-favs-manage-panel .bf-navigation { display:flex; gap:18px; padding:0 12px; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
+.bili-favs-manage-panel .bf-notice { display:flex; align-items:center; flex:1; min-width:0; gap:2px; margin:0 4px; }
+.bili-favs-manage-panel .bf-notice-window { flex:1; min-width:0; overflow:hidden; }
+.bili-favs-manage-panel .bf-notice button { min-height:24px; padding:2px 4px; font-size:var(--bf-small); border-color:transparent; background:transparent; }
+.bili-favs-manage-panel .bf-notice-text { white-space:nowrap; animation:bf-notice-scroll 18s linear infinite; }
+.bili-favs-manage-panel .bf-notice:hover .bf-notice-text,.bili-favs-manage-panel .bf-notice:focus-within .bf-notice-text,.bili-favs-manage-panel .bf-notice[data-paused=true] .bf-notice-text { animation-play-state:paused; }
+.bili-favs-manage-panel .bf-notice:focus-within .bf-notice-text { transform:none; animation:none; white-space:normal; text-align:left; }
+.bili-favs-manage-panel .bf-help-panel details { border-bottom:1px solid var(--bf-line); padding:8px 0; }
+.bili-favs-manage-panel .bf-help-panel summary { cursor:pointer; font-weight:600; }
+.bili-favs-manage-panel .bf-help-panel h3 { margin-top:12px; }
+.bili-favs-manage-panel a { color:var(--bf-blue); text-decoration:underline; }
+@keyframes bf-notice-scroll { 0%,20% { transform:translateX(0); } 75% { transform:translateX(-40%); } 100% { transform:translateX(0); } }
+@container (max-width:420px) { .bili-favs-manage-panel .bf-notice { display:none; } .bili-favs-manage-panel .bf-navigation { gap:12px; padding:0 8px; } }
+@media (prefers-reduced-motion:reduce) { .bili-favs-manage-panel .bf-notice .bf-notice-text { animation:none; white-space:normal; text-align:left; } }
 .bili-favs-manage-panel .bf-navigation button { border:0; border-bottom:2px solid transparent; border-radius:0; padding:8px 0 6px; background:none; color:var(--bf-muted); }
 .bili-favs-manage-panel .bf-navigation button[aria-pressed=true] { color:var(--bf-blue); font-weight:600; border-bottom-color:var(--bf-blue); }
 .bili-favs-manage-panel .bf-content { grid-column:1; grid-row:1; overflow-y:auto; overflow-x:hidden; padding:8px 12px; min-height:0; scrollbar-width:thin; scrollbar-color:var(--bf-control) transparent; scroll-padding:8px; }

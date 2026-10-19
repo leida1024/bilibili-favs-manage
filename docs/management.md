@@ -1,6 +1,6 @@
 # Local management build
 
-These capabilities are in local build **2.2.9**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
+These capabilities are in local build **2.2.10**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
 
 ## Copy and diagnostics
 
@@ -84,3 +84,5 @@ Local2.2.7 passed121 tests/build and adds realistic legacy pagination/disabled-l
 Local2.2.8 fixes duplicate legacy pagination: the script now sends one native reach-end event per page, without also scrolling/dispatching scroll. It waits for source-to-DOM rendering before counting. Mixed available/unavailable unsubscribe batches have panel regression coverage for both readers with native writes. If2.2.7 already duplicated native pages, refresh the entire webpage after updating; reloading the panel catalog alone cannot clear the website's duplicate cache. Existing duplicated native identities stop before submission with that specific guidance.
 
 Copy is available only on a logged-in visitor’s view of another account’s favorites. Own space remains available for statistics and management. Missing login, ambiguous names, duplicate tasks, overlapping copies, or changed actor/source folder stop before further submission. Native unsubscribe preview requires the own-space subscription page. Cross-page destination preparation still runs in own space.
+
+The top notice links to Help and shows QQ group524764959. Pause it with the adjacent control; hovering/focusing stops motion and reduced-motion displays static text. Help preserves task lists/edits and includes copy scope, statistics coverage, transport choices, confirmations and uncertain results.

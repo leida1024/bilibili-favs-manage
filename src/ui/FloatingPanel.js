@@ -12,6 +12,7 @@ import { SelectionToolbar } from './SelectionToolbar.js';
 import { CONFIG } from '../config/config.js';
 import { panelPreferences } from '../utils/preferences.js';
 import { PanelLayout } from './PanelLayout.js';
+import { helpPanel } from './HelpPanel.js';
 export { element, button } from './elements.js';
 
 const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止', interrupted: '已中断', unknown: '待核对', waiting: '等待跳转' };
@@ -72,6 +73,22 @@ export class FloatingPanel {
     this.dismissButton = button('×', () => { this.onDismiss?.(); this.destroy(); });
     this.dismissButton.setAttribute('aria-label', '关闭'); this.dismissButton.title = '关闭';
     this.header.append(this.logsButton, this.minimizeButton, this.dismissButton);
+    this.notice = element('aside', 'bf-notice');
+    this.notice.setAttribute('aria-label', '交流与帮助');
+    const noticeWindow = element('div', 'bf-notice-window');
+    const noticeText = button('QQ 群 524764959 · 使用帮助与问题反馈 → 帮助', () => this.showView('help'), 'bf-notice-text');
+    noticeWindow.append(noticeText);
+    this.pauseNoticeButton = button('暂停', () => {
+      const paused = this.notice.dataset.paused !== 'true';
+      this.notice.dataset.paused = String(paused);
+      this.pauseNoticeButton.textContent = paused ? '播放' : '暂停';
+      this.pauseNoticeButton.setAttribute('aria-label', paused ? '播放滚动提示' : '暂停滚动提示');
+      this.pauseNoticeButton.setAttribute('aria-pressed', String(paused));
+    });
+    this.pauseNoticeButton.setAttribute('aria-label', '暂停滚动提示');
+    this.pauseNoticeButton.setAttribute('aria-pressed', 'false');
+    this.notice.append(noticeWindow, this.pauseNoticeButton);
+    this.header.insertBefore(this.notice, this.logsButton);
     this.navigation = element('nav', 'bf-navigation');
     this.navigation.setAttribute('aria-label', '管理功能');
     this.viewButtons = new Map();
@@ -86,6 +103,8 @@ export class FloatingPanel {
       this.viewButtons.set('settings', this.modeButton);
       this.navigation.append(this.modeButton);
     }
+    const helpButton = button('帮助', () => this.showView('help'));
+    this.viewButtons.set('help', helpButton); this.navigation.append(helpButton);
     this.content = element('div', 'bf-content');
     this.scope = element('p', 'bf-sr-only');
     this.workspace = element('section', 'bf-workspace');
@@ -127,6 +146,7 @@ export class FloatingPanel {
       this.content.append(this.inventoryPanel.root);
     }
     if (this.manager.modes) { this.createSettingsPanel(); this.content.append(this.settingsRoot); }
+    this.helpRoot = helpPanel(); this.content.append(this.helpRoot);
     this.createDiagnostics();
     this.footer = element('footer', 'bf-footer');
     this.statusBox.append(this.progressDetails);
@@ -160,7 +180,7 @@ export class FloatingPanel {
   }
 
   showView(view) {
-    if (!['copy', 'statistics', 'manage', 'settings'].includes(view) || this.busy || view === this.activeView) return;
+    if (!['copy', 'statistics', 'manage', 'settings', 'help'].includes(view) || this.busy || view === this.activeView) return;
     if ((view === 'statistics' || view === 'manage') && !this.inventoryPanel) return;
     if (view === 'settings' && !this.settingsRoot) return;
     this.viewScroll.set(this.activeView, this.content.scrollTop);
@@ -175,6 +195,7 @@ export class FloatingPanel {
     this.updateModeSummary();
     this.workspace.hidden = view !== 'copy';
     if (this.settingsRoot) this.settingsRoot.hidden = view !== 'settings';
+    this.helpRoot.hidden = view !== 'help';
     if (this.inventoryPanel) {
       this.inventoryPanel.root.hidden = !['statistics', 'manage'].includes(view);
       if (view === 'statistics' || view === 'manage') this.inventoryPanel.setMode(view);
@@ -183,7 +204,7 @@ export class FloatingPanel {
     this.copyActions.hidden = view !== 'copy';
     this.renderOperation(this.operation.state);
     if (this.outputTextBox && this.logsOpen && !this.minimized) this.renderLogs();
-    this.footer.hidden = !!this.minimized || view === 'settings';
+    this.footer.hidden = !!this.minimized || ['settings', 'help'].includes(view);
     for (const [name, control] of this.viewButtons) control.setAttribute('aria-pressed', String(name === view));
   }
 
@@ -305,7 +326,7 @@ export class FloatingPanel {
     this.progressLast.textContent = `最后确认：${state.lastConfirmed || '尚无已确认步骤'}`;
     this.progressLast.hidden = !state.lastConfirmed;
     this.progressMessage.textContent = state.detail;
-    if (this.footer) this.footer.hidden = !!this.minimized;
+    if (this.footer) this.footer.hidden = !!this.minimized || ['settings', 'help'].includes(this.activeView);
   }
 
   async startBatchTransfer() {
@@ -412,7 +433,7 @@ export class FloatingPanel {
     const previousFocus = document.activeElement;
     const close = () => {
       section.remove(); this.exportReview = null;
-      this.content.inert = false; this.navigation.inert = false; this.footer.inert = false; this.header.inert = false; this.diagnostics.inert = false;
+      this.notice.inert = false; this.content.inert = false; this.navigation.inert = false; this.footer.inert = false; this.header.inert = false; this.diagnostics.inert = false;
       previousFocus?.focus();
     };
     section.append(area, button('下载此内容', () => {
@@ -429,7 +450,7 @@ export class FloatingPanel {
       }
     });
     this.floatingPanel.append(section); this.exportReview = section;
-    this.content.inert = true; this.navigation.inert = true; this.footer.inert = true; this.header.inert = true; this.diagnostics.inert = true;
+    this.notice.inert = true; this.content.inert = true; this.navigation.inert = true; this.footer.inert = true; this.header.inert = true; this.diagnostics.inert = true;
     area.focus();
   }
 
@@ -442,7 +463,7 @@ export class FloatingPanel {
     this.copyHelp.textContent = reason || `${name(modes.copy)}复制 · ${name(modes.create)}创建 · 来源保留`;
     this.modeButton.title = `读取/统计：${name(modes.read)}；复制：${name(modes.copy)}；创建：${name(modes.create)}；删除/退订：${name(modes.manage)}`;
     this.modeButton.setAttribute('aria-label', `设置。${this.modeButton.title}`);
-    if (this.logScope) this.logScope.options[0].textContent = ({ copy: '复制功能', statistics: '统计功能', manage: '管理功能', settings: '设置' })[this.activeView];
+    if (this.logScope) this.logScope.options[0].textContent = ({ copy: '复制功能', statistics: '统计功能', manage: '管理功能', settings: '设置', help: '帮助' })[this.activeView];
   }
 
   showModeSettings() { this.showView('settings'); }
@@ -477,7 +498,7 @@ export class FloatingPanel {
     this.minimized = !this.minimized;
     this.floatingPanel.dataset.minimized = String(this.minimized);
     this.content.hidden = this.minimized;
-    this.navigation.hidden = this.minimized; this.footer.hidden = this.minimized || this.activeView === 'settings';
+    this.navigation.hidden = this.minimized; this.notice.hidden = this.minimized; this.footer.hidden = this.minimized || ['settings', 'help'].includes(this.activeView);
     this.diagnostics.hidden = this.minimized || !this.logsOpen;
     this.minimizeButton.textContent = this.minimized ? '□' : '−';
     this.minimizeButton.setAttribute('aria-label', this.minimized ? '恢复面板' : '最小化');

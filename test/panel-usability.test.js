@@ -128,7 +128,7 @@ test('export opens focused review without growing the task list; Escape restores
 
 test('help and progress are directly visible without disclosure; progress updates retain nodes and focus', t => {
   const { panel } = fixture(t);
-  assert.equal(panel.floatingPanel.querySelectorAll('details,summary').length, 0);
+  assert.equal(panel.workspace.querySelectorAll('details,summary').length + panel.footer.querySelectorAll('details,summary').length, 0);
   assert.match(panel.workspace.querySelector('.bf-help').textContent, /同名则复用/);
   panel.operation.begin('Fictional read');
   const progress = panel.progressDetails;
@@ -141,6 +141,22 @@ test('help and progress are directly visible without disclosure; progress update
   panel.operation.finish('failed', 'Fictional failure reason');
   assert.match(progress.textContent, /Fictional failure reason/);
   assert.equal(progress.hidden, false);
+});
+
+test('community notice opens help without I/O and preserves edits and scroll', t => {
+  const { panel, counts } = fixture(t);
+  const row = panel.favCheckboxItemList[0]; row.checkbox.checked = true; row.inputText.value = 'Edited target';
+  panel.content.scrollTop = 77;
+  panel.notice.querySelector('.bf-notice-text').click();
+  assert.equal(panel.activeView, 'help'); assert.equal(panel.helpRoot.hidden, false); assert.equal(panel.footer.hidden, true);
+  assert.match(panel.helpRoot.textContent, /524764959/); assert.match(panel.helpRoot.textContent, /待核对/);
+  assert.deepEqual(counts(), { reads: 0, mutations: 0 });
+  panel.pauseNoticeButton.click(); assert.equal(panel.notice.dataset.paused, 'true');
+  assert.equal(panel.pauseNoticeButton.getAttribute('aria-label'), '播放滚动提示');
+  panel.logsButton.click(); assert.equal(panel.footer.hidden, true);
+  panel.showView('copy'); assert.equal(panel.content.scrollTop, 77); assert.equal(row.inputText.value, 'Edited target');
+  panel.showView('help'); panel.toggleMinimize(); assert.equal(panel.notice.hidden, true);
+  panel.toggleMinimize(); assert.equal(panel.notice.hidden, false); assert.equal(panel.footer.hidden, true);
 });
 
 test('records preserve reading position across navigation and hidden arrivals; filters have explicit empty guidance', t => {
