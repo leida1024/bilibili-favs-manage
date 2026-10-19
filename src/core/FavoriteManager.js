@@ -9,7 +9,7 @@ import { CrossPageFlowManager } from './CrossPageFlowManager.js';
 import { delay } from '../utils/dom.js';
 import { log, error, warn } from '../utils/logger.js';
 import { CONFIG } from '../config/config.js';
-import { normalizeFavoriteName, normalizeCopyTasks } from '../utils/favoriteNames.js';
+import { normalizeFavoriteName, normalizeCopyTasks, assertUnambiguousFavoriteName } from '../utils/favoriteNames.js';
 import { OperationState } from './OperationState.js';
 import { InventoryService } from './InventoryService.js';
 import { BatchOperations } from './BatchOperations.js';
@@ -254,6 +254,10 @@ export class FavoriteManager {
     if (options.skipCrossPage || options.operationId) return this.batchCopyWeb(copyList, options);
     const modes = validModes(this.modes);
     copyList = normalizeCopyTasks(copyList);
+    if (modes.copy === 'web') {
+      const names = this.getAllFavoriteNames();
+      for (const task of copyList) assertUnambiguousFavoriteName(names, task.source);
+    }
     if (modes.copy === 'web' && modes.create === 'web') return this.batchCopyWeb(copyList, options);
     this.operation.begin(`批量复制（${modes.copy === 'api' ? 'API' : '网页'}）`, copyList.length, { phase: 'copying' });
     this.logs.setContext({ view: 'copy', operationId: this.operation.state.operationId, phase: 'copying' });
@@ -284,6 +288,11 @@ export class FavoriteManager {
       this.operation.begin('批量复制', copyList.length, { operationId: options.operationId, phase: 'copying' });
     this.logs.setContext({ view: 'copy', operationId: this.operation.state.operationId, phase: this.operation.state.phase });
     try {
+    const names = this.getAllFavoriteNames();
+    for (const task of copyList) {
+      assertUnambiguousFavoriteName(names, task.source);
+      if (PageDetector.isOwnPage()) assertUnambiguousFavoriteName(names, task.target);
+    }
     log('开始批量复制，共', copyList.length, '个任务');
 
     // 检测是否需要跨页面创建收藏夹（copying 阶段恢复时跳过，避免重复触发跳转）

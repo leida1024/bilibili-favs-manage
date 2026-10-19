@@ -3,6 +3,7 @@ import { PageDetector } from '../core/PageDetector.js';
 import { MutationPanel } from './MutationPanel.js';
 import { folderRow } from './folderRow.js';
 import { SelectionToolbar } from './SelectionToolbar.js';
+import { duplicateFavoriteNames, normalizeFavoriteName } from '../utils/favoriteNames.js';
 
 export class InventoryPanel {
   constructor(panel, service) {
@@ -133,10 +134,11 @@ export class InventoryPanel {
       this.list.replaceChildren();
       this.folders = folders; this.catalogOwner = owner; this.catalogKind = kind;
       this.mutations?.setCatalog(folders, kind);
+      const duplicates = duplicateFavoriteNames(folders.map(folder => folder.name));
       for (const folder of folders) {
         const input = element('input'); input.type = 'checkbox'; input.disabled = folder.kind === 'unsupported';
         input.addEventListener('change', () => this.updateBusy());
-        const node = folderRow(folder, input, folder.kind === 'unsupported' ? '类型未识别' : folder.available === false ? '内容已失效，无法统计' : '');
+        const node = folderRow(folder, input, folder.kind === 'unsupported' ? '类型未识别' : folder.available === false ? '内容已失效，无法统计' : '', duplicates.has(normalizeFavoriteName(folder.name)));
         this.list.append(node); this.rows.push({ input, folder, node });
       }
       if (!folders.length) this.list.append(element('p', 'bf-empty', '这个范围没有可读取的收藏夹。可以更换范围后重新加载。'));

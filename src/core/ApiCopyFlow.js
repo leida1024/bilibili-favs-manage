@@ -1,4 +1,4 @@
-import { normalizeCopyTasks, normalizeFavoriteName } from '../utils/favoriteNames.js';
+import { normalizeCopyTasks, normalizeFavoriteName, assertUnambiguousFavoriteName } from '../utils/favoriteNames.js';
 import { stableId, pause } from './FolderClient.js';
 
 const fail = (detail, outcome = 'failed') => { const error = new Error(detail); error.outcome = outcome; throw error; };
@@ -12,7 +12,7 @@ export class ApiCopyFlow {
   require(result) { if (result?.status !== 'confirmed') fail(result?.detail || '结果未识别', result?.status === 'unknown' ? 'unknown' : 'failed'); }
   resolve(rows, name, required = true) {
     const found = rows.filter(row => normalizeFavoriteName(row.name) === name);
-    if (found.length > 1) fail(`同名收藏夹身份不明确：${name}`);
+    assertUnambiguousFavoriteName(rows.map(row => row.name), name);
     if (!found.length && required) fail(`未找到收藏夹：${name}`);
     return found[0];
   }

@@ -97,7 +97,7 @@ export class WebFolderClient {
     return result;
   }
   async select(folder, signal) {
-    if (folder.available === false) throw new Error('失效条目的网页不提供可核对 ID；请在设置中选择 API 管理后重新加载，未提交');
+    if (folder.available === false) throw new Error('失效条目的网页不提供可核对 ID；请在设置中选择 API 管理后重新预览，未提交');
     const kind = folder.kind === 'created' ? 'created' : 'subscribed';
     const rows = await this.rows(kind, signal);
     let node = rows.find(row => folderKey(this.identities.get(row) || {}) === folderKey(folder));

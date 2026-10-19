@@ -1,7 +1,7 @@
 import { element } from './elements.js';
 
 /** Quiet list row; exact identifiers remain available without overwhelming selection. */
-export function folderRow(folder, input, reason = '') {
+export function folderRow(folder, input, reason = '', duplicate = false) {
   const row = element('div', 'bf-folder-item');
   const label = element('label', 'bf-folder-row');
   label.append(input, element('span', 'bf-folder-name', folder.name),
@@ -10,6 +10,7 @@ export function folderRow(folder, input, reason = '') {
   label.title = `${folder.name} · ${identity}`;
   input.setAttribute('aria-label', `${folder.name} · ${identity}${reason ? ` · 不可选：${reason}` : ''}`);
   row.append(label);
+  if (duplicate) row.append(element('span', 'bf-folder-reason', `同名 · ${identity}`));
   if (reason) row.append(element('span', 'bf-folder-reason', `不可选：${reason}`));
   else if (folder.available === false) row.append(element('span', 'bf-folder-reason', '内容已失效，可取消订阅'));
   return row;

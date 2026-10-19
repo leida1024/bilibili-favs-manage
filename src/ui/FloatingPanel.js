@@ -3,7 +3,7 @@ import { EventHandlers } from './EventHandlers.js';
 import { PageDetector } from '../core/PageDetector.js';
 import { OperationState } from '../core/OperationState.js';
 import { LogStore } from '../utils/logStore.js';
-import { normalizeCopyTasks } from '../utils/favoriteNames.js';
+import { normalizeCopyTasks, duplicateFavoriteNames, normalizeFavoriteName } from '../utils/favoriteNames.js';
 import { panelStyles } from './panelStyles.js';
 import { element, button } from './elements.js';
 import { InventoryPanel } from './InventoryPanel.js';
@@ -96,7 +96,7 @@ export class FloatingPanel {
     this.workspace.append(heading);
     this.leftPanel = element('section', 'bf-sources');
     this.selectionTools = new SelectionToolbar({
-      rows: () => this.favCheckboxItemList.map(item => ({ input: item.checkbox, node: item.checkboxContainer, name: item.getLabelValue(), eligible: true })),
+      rows: () => this.favCheckboxItemList.map(item => ({ input: item.checkbox, node: item.checkboxContainer, name: item.getLabelValue(), eligible: !item.ambiguous })),
       busy: () => this.busy, change: () => this.updateSelectionReview()
     });
     this.selectionTools.search.addEventListener('input', () => this.updateSelectionReview());
@@ -211,8 +211,16 @@ export class FloatingPanel {
 
   createFavPanel() {
     const list = element('div', 'fav-panel');
+    const duplicates = duplicateFavoriteNames(this.favorites);
     this.favCheckboxItemList = this.favorites.map(name => {
       const item = new CheckboxItem(name);
+      item.ambiguous = duplicates.has(normalizeFavoriteName(name));
+      if (item.ambiguous) {
+        item.checkbox.disabled = true; item.inputText.disabled = true;
+        const reason = '同名来源：当前复制按名称匹配，请先改为不同名称；API 也不能代替你决定具体对象。';
+        item.checkboxContainer.append(element('span', 'bf-folder-reason', reason));
+        item.checkbox.setAttribute('aria-label', `${name} · 不可选：${reason}`);
+      }
       item.checkboxContainer.addEventListener('input', () => this.updateSelectionReview());
       list.append(item.checkboxContainer);
       return item;
@@ -228,7 +236,7 @@ export class FloatingPanel {
     this.leftPanel.querySelector('.fav-panel').replaceWith(this.createFavPanel());
     for (const item of this.favCheckboxItemList) {
       const old = previous.get(item.getLabelValue());
-      if (old) { item.checkbox.checked = old.checked; item.inputText.value = old.target; }
+      if (old && !item.ambiguous) { item.checkbox.checked = old.checked; item.inputText.value = old.target; }
     }
     this.updateSelectionReview();
     this.showPageTypeIndicator();
@@ -239,7 +247,7 @@ export class FloatingPanel {
   }
 
   getSelectedTasks() {
-    return this.favCheckboxItemList.filter(item => item.checkbox.checked).map(item => ({ source: item.getLabelValue(), target: item.inputText.value }));
+    return this.favCheckboxItemList.filter(item => item.checkbox.checked && !item.ambiguous).map(item => ({ source: item.getLabelValue(), target: item.inputText.value }));
   }
 
   updateSelectionReview() {
@@ -262,7 +270,7 @@ export class FloatingPanel {
     this.dismissButton.disabled = busy;
     if (this.modeButton) this.modeButton.disabled = busy;
     for (const control of this.viewButtons.values()) control.disabled = busy;
-    for (const item of this.favCheckboxItemList) { item.checkbox.disabled = busy; item.inputText.disabled = busy; }
+    for (const item of this.favCheckboxItemList) { item.checkbox.disabled = busy || item.ambiguous; item.inputText.disabled = busy || item.ambiguous; }
     this.startBatchTransferButton.textContent = busy ? '操作中…' : '开始批量复制';
     this.updateSelectionReview();
     this.inventoryPanel?.updateBusy();
@@ -448,8 +456,8 @@ export class FloatingPanel {
     this.saveModesButton = button('保存设置', () => {
       if (this.busy) return;
       for (const [key, control] of this.modeChoices) this.manager.modes[key] = control.value;
-      this.inventoryPanel?.resetCatalog('设置已更换，请重新加载列表。');
-      this.updateModeSummary(); this.layout.save(); this.settingsStatus.textContent = '已保存。新任务使用以上设置。';
+      this.inventoryPanel?.mutations?.invalidate();
+      this.updateModeSummary(); this.layout.save(); this.settingsStatus.textContent = '已保存。已加载的列表和统计结果保留；新任务使用以上设置，管理操作需重新预览。';
       this.logs.add(this.modeButton.title, 'info', { view: 'system', phase: 'settings' }); this.renderLogs();
     }, 'bf-primary');
     controls.append(this.saveModesButton, button('恢复默认位置和大小', () => this.layout.reset()));

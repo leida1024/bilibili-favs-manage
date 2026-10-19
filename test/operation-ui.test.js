@@ -75,7 +75,11 @@ test('reading earlier logs disables follow; filters/clear and export review work
 });
 
 test('copy progress stops at last successful folder and never calls later items', async t => {
+  const dom = new JSDOM('', { url: 'https://space.bilibili.com/50/favlist' });
+  globalThis.window = dom.window; globalThis.document = dom.window.document;
+  document.cookie = 'DedeUserID=50'; t.after(() => dom.window.close());
   const manager = new FavoriteManager(); let calls = 0;
+  t.mock.method(manager, 'getAllFavoriteNames', () => ['A', 'C', 'E']);
   t.mock.method(manager, 'copyFavorite', async () => ++calls === 1);
   const old = CONFIG.DELAY.MIDDLE; CONFIG.DELAY.MIDDLE = 0; t.after(() => { CONFIG.DELAY.MIDDLE = old; });
   await assert.rejects(manager.batchCopy([{ source: 'A', target: 'B' }, { source: 'C', target: 'D' }, { source: 'E', target: 'F' }], { skipCrossPage: true }));

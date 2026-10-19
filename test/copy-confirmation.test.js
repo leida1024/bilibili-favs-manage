@@ -90,6 +90,7 @@ test('actual legacy Vue toast appears hidden then shows decorated success and co
     setTimeout(() => { node.style.display = ''; }, 5);
   };
   const manager = new FavoriteManager();
+  t.mock.method(manager, 'getAllFavoriteNames', () => ['A', 'B']);
   manager.api = { clickFavorite: async name => { source = name; return true; }, getCurrentFavoriteName: () => source,
     getTotalPages: () => 1, ensureBatchModeActive: async () => true, clickSelectAll: () => true,
     clickCopyButton: async () => true, waitForDialog: async () => dialog, isFavoriteExistInDialog: () => true,
