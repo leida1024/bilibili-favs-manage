@@ -1,6 +1,6 @@
-# Local management build
+# Management features and verification scope
 
-These capabilities are in local build **2.2.13**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
+This document describes version **2.2.13**, visible in the panel title. Versions use ordinary numeric components. The installation link's available version is shown on Greasy Fork; publication follows review and merge to master, followed by a successful webhook sync.
 
 ## Copy and diagnostics
 
