@@ -499,3 +499,36 @@ Retain inert read snapshots on Settings save; show conditional same-name identit
 ### Next Steps
 
 - Await user testing; no push or release authorized. Copy still requires unique names; no ID picker introduced.
+
+
+## Session 16: Native list preparation and unavailable subscription identities
+
+**Date**: 2026-10-19
+**Task**: Native list preparation and unavailable subscription identities
+**Branch**: `develop`
+
+### Summary
+
+Local2.2.7 auto-prepares native lists, uses exact unavailable row bindings and handles VUI unsubscribe confirmation.121 tests/build pass; live native/API229 items (31 unavailable), automatic50→229 loading and native confirmation-open/cancel. No actual unsubscribe, push or release. See archived native-list-preparation verification.
+
+### Main Changes
+
+Legacy selector/fold/pagination fixes; exact component/link subscription bindings; unavailable executable preview; VUI native final confirmation. Evidence: `.trellis/tasks/archive/2026-10/10-19-native-list-preparation/verification.md`.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `da7eb50` | fix: prepare native subscription lists and verify unavailable row identities |
+
+### Testing
+
+- [OK]121 tests, build and diff checks; live read-only loading/identity parity and native open/cancel, no final confirm.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- User may test legacy locally. Actual unsubscribe and GM sandbox remain unverified; no push/release authorized.

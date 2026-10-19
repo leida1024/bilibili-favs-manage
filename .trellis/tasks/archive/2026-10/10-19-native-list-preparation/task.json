@@ -1,0 +1,32 @@
+{
+  "id": "native-list-preparation",
+  "name": "native-list-preparation",
+  "title": "Prepare native lists automatically and identify unavailable subscriptions",
+  "description": "Automatically prepare native subscription lists and support exact unavailable identities with real VUI confirmation.",
+  "status": "completed",
+  "dev_type": "frontend",
+  "scope": "native subscriptions",
+  "package": "userscript",
+  "priority": "P2",
+  "creator": "leida1024",
+  "assignee": "leida1024",
+  "createdAt": "2026-10-19",
+  "completedAt": "2026-10-19",
+  "branch": "develop",
+  "base_branch": "develop",
+  "worktree_path": null,
+  "commit": "da7eb50",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "src/core/WebFolderClient.js",
+    "src/core/adapters/nativeBindings.js",
+    "src/core/adapters/nativeControls.js",
+    "src/ui/MutationPanel.js",
+    "test/native-subscriptions.test.js"
+  ],
+  "notes": "Local2.2.7;121 tests/build; read-only229/31 identity parity, automatic50→229 loading and confirmation-open/cancel. No real unsubscribe, remote push or publication.",
+  "meta": {}
+}
