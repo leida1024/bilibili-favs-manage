@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.2.3
+// @version      2.2.4
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       leida1024
 // @match        https://space.bilibili.com/*
@@ -207,7 +207,7 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.2.3',
+      VERSION: '2.2.4',
       NAME: 'BiliBili 收藏夹批量管理',
       DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
     }
@@ -216,7 +216,7 @@
   /** 旧版个人空间（带“体验新版”入口）。 */
   const LegacyPageAdapter = {
     name: '旧版个人空间',
-    notification: '.vui_toast, .bili-message, .bili-toast, .be-message, .toast-text',
+    notification: '.be-toast, .vui_toast, .bili-message, .bili-toast, .be-message, .toast-text',
     sidebar: '#fav-createdList-container',
     sidebarCreate: null,
     item: '.fav-item',
@@ -307,10 +307,11 @@
     });
   }
 
-  // Operation-success translations in Bilibili's public space bundle. Match the
-  // whole message: negative text containing “成功” must never confirm a copy.
+  // Exact legacy $toast text and operation-success translations in the public
+  // space bundles. Match the whole message: negative text containing “成功” must
+  // never confirm a copy.
   const successTexts = new Set([
-    '操作成功', '复制成功', 'Operation successful', '操作が成功しました', 'نجحت العملية',
+    '操作成功', '复制成功', '复制成功(ง •̀_•́)ง', 'Operation successful', '操作が成功しました', 'نجحت العملية',
     'Operación exitosa', 'Operasi berhasil', 'Operasi berjaya', 'Operação bem-sucedida',
     'Операция успешна', 'ดำเนินการสำเร็จ', 'İşlem başarılı', 'Thao tác thành công'
   ]);
@@ -1580,7 +1581,7 @@
     vui: {
       group: '.favlist-aside .vui_collapse_item', heading: '.vui_collapse_item_header',
       row: '.fav-sidebar-item', title: '.vui_ellipsis', click: '.vui_sidebar-item', more: '.fav-collapse-more',
-      menu: '.menu-popover', menuItem: '.menu-popover__panel-item',
+      menu: '.menu-popover .more-vertical', menuItem: '.menu-popover__panel-item',
       detailTitle: '.favlist-info-detail__title-row', data: '.favlist-info-detail__data', owner: '.favlist-info-detail__data a.link',
       cards: '.favlist-main .bili-video-card', duration: '.bili-cover-card__stat',
       dialog: '.vui_dialog--content', confirm: 'button.vui_button--blue',
@@ -1589,7 +1590,7 @@
     },
     legacy: {
       created: '#fav-createdList-container', subscribed: '#fav-collectedList-container', row: '.fav-item',
-      title: 'a.text', click: 'a.text', more: '.more', menu: '.be-dropdown-trigger', menuItem: '.be-dropdown-item',
+      title: 'a.text', click: 'a.text', more: '.more', menu: '.be-dropdown', menuItem: '.be-dropdown-item',
       detailTitle: '.favInfo-details .fav-name', data: '.favInfo-details', owner: '.favInfo-details a[href*="space.bilibili.com"]',
       cards: '.fav-video-list .small-item', duration: '.length', dialog: '.modal', confirm: '.modal-footer .btn',
       pagination: '.be-pager', page: '.be-pager-item', activePage: '.be-pager-item-active', next: '.be-pager-next'
@@ -1631,15 +1632,23 @@
     async openMenu(node, signal) {
       const s = this.selectors, menu = node.querySelector(s.menu);
       if (!menu) return [];
+      this.closeMenu();
+      // Both layouts use non-bubbling mouseenter on their actual trigger. A
+      // click on the wrapper neither opens a hover popover nor proves ownership.
+      await this.wait(() => ![...document.querySelectorAll(s.menuItem)].some(isElementVisible), signal, 2000);
+      this.activeMenu = menu;
       node.dispatchEvent(new window.MouseEvent('mouseenter'));
       node.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
       menu.dispatchEvent(new window.MouseEvent('mouseenter'));
       menu.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
-      menu.click();
       await this.wait(() => [...document.querySelectorAll(s.menuItem)].some(isElementVisible), signal, 2000);
       return [...document.querySelectorAll(s.menuItem)].filter(isElementVisible);
     }
-    closeMenu() { document.body.click(); }
+    closeMenu() {
+      this.activeMenu?.dispatchEvent(new window.MouseEvent('mouseleave'));
+      this.activeMenu = null;
+      document.body.click();
+    }
     async inspect(node, kind, index, signal) {
       const s = this.selectors, name = normalizeFavoriteName(text(node.querySelector(s.title)));
       if (!name) throw new Error('网页条目缺少名称');
@@ -1699,6 +1708,7 @@
       this.identities.delete(node);
       const fresh = await this.inspect(node, kind, rows.indexOf(node), signal);
       if (['id', 'kind', 'ownerId', 'name'].some(key => folder[key] !== fresh[key])) throw new Error('网页目标身份变化，未提交');
+      if (kind === 'created' && fresh.protectionReason === 'unknown') throw new Error('网页未识别目标的删除菜单；请检查页面或切换操作方式，未提交');
       if ((kind === 'created' && !fresh.available) || (folder.count !== null && fresh.count !== null && folder.count !== fresh.count) ||
         (kind === 'created' && fresh.protected !== folder.protected)) throw new Error('网页目标数量或保护状态变化，未提交');
       return node;
@@ -2688,13 +2698,17 @@
       return this.inventoryUI.run(`${descriptions[ticket.action].verb}收藏夹`, async signal => {
         const report = await this.engine.execute(ticket, { confirmed: true, signal, onResult: result => {
           if (result.status === 'confirmed') this.inventoryUI.operation.confirm(`ID ${result.id}：平台已确认`);
+          this.panel.appendLog(`${descriptions[ticket.action].verb} [${result.name}] · ID ${result.id} · ${statuses[result.status]}：${result.detail}`,
+            result.status === 'confirmed' ? this.panel.normalCode : result.status === 'failed' ? this.panel.errorCode : this.panel.warnCode);
         } });
         this.inventoryUI.resetCatalog('本次操作后列表需要更新，请重新加载。');
         this.results.replaceChildren(element('p', '', report.complete ? '本次目标均已确认。请刷新平台列表核对。' : report.cancelled ? '已取消后续操作。请核对已提交项目。' : '已停止；请检查下列结果后再决定后续操作。'));
         for (const result of report.results) this.results.append(element('p', '', `${result.name} · ID ${result.id} · ${statuses[result.status]}：${result.detail}`));
         this.results.append(button('检查并导出操作结果', () => this.panel.reviewExport(JSON.stringify(report, null, 2), 'bili-operation.json')));
+        const stopped = report.results.find(result => ['failed', 'unknown'].includes(result.status));
         this.inventoryUI.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : report.results.some(result => result.status === 'unknown') ? 'unknown' : 'failed',
-          report.complete ? '已完成；再次操作请重新加载、选择并确认。' : '本次确认已用完。请核对结果，再重新加载和确认。');
+          report.complete ? '已完成；再次操作请重新加载、选择并确认。' :
+            `${stopped ? `${stopped.name}：${stopped.detail}` : '已取消后续操作。'} 请核对结果，再重新加载和确认。`);
       }, ticket.action, ticket.targets.length);
     }
 

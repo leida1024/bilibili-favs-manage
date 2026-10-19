@@ -1,9 +1,10 @@
 import { isElementVisible } from '../../utils/dom.js';
 
-// Operation-success translations in Bilibili's public space bundle. Match the
-// whole message: negative text containing “成功” must never confirm a copy.
+// Exact legacy $toast text and operation-success translations in the public
+// space bundles. Match the whole message: negative text containing “成功” must
+// never confirm a copy.
 const successTexts = new Set([
-  '操作成功', '复制成功', 'Operation successful', '操作が成功しました', 'نجحت العملية',
+  '操作成功', '复制成功', '复制成功(ง •̀_•́)ง', 'Operation successful', '操作が成功しました', 'نجحت العملية',
   'Operación exitosa', 'Operasi berhasil', 'Operasi berjaya', 'Operação bem-sucedida',
   'Операция успешна', 'ดำเนินการสำเร็จ', 'İşlem başarılı', 'Thao tác thành công'
 ]);
