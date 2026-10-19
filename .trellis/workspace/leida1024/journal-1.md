@@ -602,3 +602,36 @@ Shared copy actor/route guards, same-route account lifecycle; fifth Help and pau
 ### Next Steps
 
 - All authorized tasks complete. Local only; live legacy, real mutations and GM sandbox remain unverified. No push/release authorized.
+
+
+## Session 19: Clarify notice scrolling and contributor release handoff
+
+**Date**: 2026-10-19
+**Task**: Clarify notice scrolling and contributor release handoff
+**Branch**: `develop`
+
+### Summary
+
+Local 2.2.13: explicit notice scrolling labels and accessible names; contributor workflow refreshed; 22 ordered product candidates reviewed for master with development records excluded. Build and 149 tests passed. No browser check, real mutation, push or release.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0eb73bd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

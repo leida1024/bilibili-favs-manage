@@ -8,6 +8,8 @@ Read the [development handbook](DEVELOPMENT.md), [workflow](workflow.md), [front
 
 ## Completed local scope
 
+Latest local follow-up2.2.13 clarifies notice scrolling controls and updates the public contributor/release workflow. Build and149 tests passed. The archived [notice/release handoff](tasks/archive/2026-10/10-19-notice-release-handoff/) records22 product candidates for master, excluded development commits and release checks still required. No push or publication.
+
 | Order | Archived task | Result |
 | --- | --- | --- |
 | 0 | [Bootstrap](tasks/archive/2026-10/00-bootstrap-guidelines/) | Dedicated profile and local injection verified |
