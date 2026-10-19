@@ -1,6 +1,6 @@
 # Local management build
 
-These capabilities are in local build **2.2.12**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
+These capabilities are in local build **2.2.13**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
 
 ## Copy and diagnostics
 
@@ -85,7 +85,7 @@ Local2.2.8 fixes duplicate legacy pagination: the script now sends one native re
 
 Copy is available only on a logged-in visitor’s view of another account’s favorites. Own space remains available for statistics and management. Missing login, ambiguous names, duplicate tasks, overlapping copies, or changed actor/source folder stop before further submission. Native unsubscribe preview requires the own-space subscription page. Cross-page destination preparation still runs in own space.
 
-The top notice links to Help and shows QQ group524764959. Pause it with the adjacent control; hovering/focusing stops motion and reduced-motion displays static text. Help preserves task lists/edits and includes copy scope, statistics coverage, transport choices, confirmations and uncertain results.
+The top notice links to Help and shows QQ group524764959. Its adjacent **停止滚动 / 继续滚动** control stops/resumes the notice animation; hovering/focusing stops motion and reduced-motion displays static text. Help preserves task lists/edits and includes copy scope, statistics coverage, transport choices, confirmations and uncertain results.
 
 Statistics now includes searchable video details: title, safe video link, uploader, duration, availability, occurrence count and source folders. JSON also keeps known publication/collection timestamps in seconds. Unknown identity resources are retained separately and are excluded from unique counts. Details render50 items per page; export contains all retained results.
 

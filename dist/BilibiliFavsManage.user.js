@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.2.12
+// @version      2.2.13
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       leida1024
 // @match        https://space.bilibili.com/*
@@ -206,7 +206,7 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.2.12',
+      VERSION: '2.2.13',
       NAME: 'BiliBili 收藏夹批量管理',
       DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
     }
@@ -3414,14 +3414,14 @@
       const noticeWindow = element('div', 'bf-notice-window');
       const noticeText = button('QQ 群 524764959 · 使用帮助与问题反馈 → 帮助', () => this.showView('help'), 'bf-notice-text');
       noticeWindow.append(noticeText);
-      this.pauseNoticeButton = button('暂停', () => {
+      this.pauseNoticeButton = button('停止滚动', () => {
         const paused = this.notice.dataset.paused !== 'true';
         this.notice.dataset.paused = String(paused);
-        this.pauseNoticeButton.textContent = paused ? '播放' : '暂停';
-        this.pauseNoticeButton.setAttribute('aria-label', paused ? '播放滚动提示' : '暂停滚动提示');
+        this.pauseNoticeButton.textContent = paused ? '继续滚动' : '停止滚动';
+        this.pauseNoticeButton.setAttribute('aria-label', paused ? '继续滚动顶部提示' : '停止滚动顶部提示');
         this.pauseNoticeButton.setAttribute('aria-pressed', String(paused));
       });
-      this.pauseNoticeButton.setAttribute('aria-label', '暂停滚动提示');
+      this.pauseNoticeButton.setAttribute('aria-label', '停止滚动顶部提示');
       this.pauseNoticeButton.setAttribute('aria-pressed', 'false');
       this.notice.append(noticeWindow, this.pauseNoticeButton);
       this.header.insertBefore(this.notice, this.logsButton);

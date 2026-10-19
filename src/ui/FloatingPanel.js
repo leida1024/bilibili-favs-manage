@@ -79,14 +79,14 @@ export class FloatingPanel {
     const noticeWindow = element('div', 'bf-notice-window');
     const noticeText = button('QQ 群 524764959 · 使用帮助与问题反馈 → 帮助', () => this.showView('help'), 'bf-notice-text');
     noticeWindow.append(noticeText);
-    this.pauseNoticeButton = button('暂停', () => {
+    this.pauseNoticeButton = button('停止滚动', () => {
       const paused = this.notice.dataset.paused !== 'true';
       this.notice.dataset.paused = String(paused);
-      this.pauseNoticeButton.textContent = paused ? '播放' : '暂停';
-      this.pauseNoticeButton.setAttribute('aria-label', paused ? '播放滚动提示' : '暂停滚动提示');
+      this.pauseNoticeButton.textContent = paused ? '继续滚动' : '停止滚动';
+      this.pauseNoticeButton.setAttribute('aria-label', paused ? '继续滚动顶部提示' : '停止滚动顶部提示');
       this.pauseNoticeButton.setAttribute('aria-pressed', String(paused));
     });
-    this.pauseNoticeButton.setAttribute('aria-label', '暂停滚动提示');
+    this.pauseNoticeButton.setAttribute('aria-label', '停止滚动顶部提示');
     this.pauseNoticeButton.setAttribute('aria-pressed', 'false');
     this.notice.append(noticeWindow, this.pauseNoticeButton);
     this.header.insertBefore(this.notice, this.logsButton);
