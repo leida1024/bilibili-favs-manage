@@ -3,6 +3,7 @@ import { warn } from '../../utils/logger.js';
 /** 新版 VUI 收藏夹页。 */
 export const VuiPageAdapter = {
   name: '新版 (VUI)',
+  notification: '.vui_toast',
   sidebar: '.favlist-aside',
   sidebarCreate: '.favlist-aside',
   item: '.vui_sidebar-item',

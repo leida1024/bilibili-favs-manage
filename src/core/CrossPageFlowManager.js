@@ -30,6 +30,7 @@ export class CrossPageFlowManager {
     tasks = normalizeCopyTasks(tasks);
     // 跳转到自己的收藏夹页面
     const ownURL = PageDetector.getOwnFavListURL();
+    const actorId = PageDetector.getLoginUserUID();
     if (!ownURL) {
       error('无法获取用户自己的收藏夹页面 URL');
       throw new Error('无法确认登录身份，请登录后再复制');
@@ -38,13 +39,15 @@ export class CrossPageFlowManager {
     this.manager.operation.update({ phase: 'creating', detail: '即将前往我的空间，检查并准备目标收藏夹。' });
     this.manager.logs.setContext({ view: 'copy', operationId: this.manager.operation.state.operationId, phase: 'creating' });
     log('3 秒后前往我的空间准备目标，随后返回来源继续复制。');
+    await delay(3000);
+    if (PageDetector.getLoginUserUID() !== actorId) throw new Error('登录账号已变化，跨页任务未交接。');
+    this.manager.operation.finish('waiting', '已交接跨页任务，等待目的页面继续。');
     StateManager.saveState({
-      phase: 'creating', returnURL: window.location.href, tasks,
+      phase: 'creating', returnURL: window.location.href, tasks, actorId,
       operationId: this.manager.operation.state.operationId,
-      journal: this.manager.logs.snapshot(this.manager.operation.state.operationId)
+      journal: this.manager.logs.snapshot()
     });
 
-    await delay(3000);
     window.location.href = ownURL;
   }
 
@@ -169,6 +172,11 @@ export class CrossPageFlowManager {
     if (!state) {
       return false; // 没有跨页面状态
     }
+    if (state.actorId && state.actorId !== PageDetector.getLoginUserUID()) {
+      StateManager.clearState();
+      this.manager.operation.finish('failed', '登录账号已变化，跨页任务已停止。请使用原账号重新选择任务。');
+      return true;
+    }
 
     // 脚本会在空间站内导航后重新挂载，只有任务预期的页面才能恢复。
     if (state.phase === 'creating' && !PageDetector.isOwnPage()) return false;
@@ -213,12 +221,12 @@ export class CrossPageFlowManager {
 
       // 更新状态：准备返回复制
       log('目标准备完成，3 秒后返回来源空间继续复制。');
-      StateManager.saveState({ ...state, operationId, phase: 'copying',
-        journal: this.manager.logs.snapshot(operationId) });
-
       await delay(3000);
-      window.location.href = state.returnURL;
       this.manager.operation.finish('waiting', '目标准备完成，等待返回来源页面继续复制。');
+      StateManager.saveState({ ...state, operationId, phase: 'copying',
+        journal: this.manager.logs.snapshot() });
+
+      window.location.href = state.returnURL;
 
       return true;
     } else if (state.phase === 'copying') {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.2.2
+// @version      2.2.3
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       leida1024
 // @match        https://space.bilibili.com/*
@@ -20,7 +20,6 @@
   /** 两版页面共用的输入框、提示和按钮文字；差异位于 core/adapters/。 */
   const SELECTORS = {
     CREATE_FAV_NAME_INPUT: 'input.add-fav-input',
-    TOAST: '.vui_toast',
     NEXT_PAGE_TEXT: ['下一页', 'next', '>']
   };
 
@@ -28,8 +27,7 @@
     BATCH_OPERATION: '批量操作',
     COPY_TO: '复制至',
     CREATE_NEW: '新建收藏夹',
-    CREATE: '创建',
-    SUCCESS: '操作成功'
+    CREATE: '创建'
   };
 
   /**
@@ -173,6 +171,7 @@
    */
 
   const CONFIG = {
+    COPY_CONFIRMATION: { TIMEOUT: 30000, SLOW_NOTICE: 6000 },
     // 延迟时间（毫秒）
     DELAY: {
       SHORT: 500,
@@ -208,7 +207,7 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.2.2',
+      VERSION: '2.2.3',
       NAME: 'BiliBili 收藏夹批量管理',
       DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
     }
@@ -217,6 +216,7 @@
   /** 旧版个人空间（带“体验新版”入口）。 */
   const LegacyPageAdapter = {
     name: '旧版个人空间',
+    notification: '.vui_toast, .bili-message, .bili-toast, .be-message, .toast-text',
     sidebar: '#fav-createdList-container',
     sidebarCreate: null,
     item: '.fav-item',
@@ -245,6 +245,7 @@
   /** 新版 VUI 收藏夹页。 */
   const VuiPageAdapter = {
     name: '新版 (VUI)',
+    notification: '.vui_toast',
     sidebar: '.favlist-aside',
     sidebarCreate: '.favlist-aside',
     item: '.vui_sidebar-item',
@@ -304,6 +305,57 @@
       if (!source || !target) throw new Error('源收藏夹和目标收藏夹名称不能为空或仅包含空白');
       return { ...task, source, target };
     });
+  }
+
+  // Operation-success translations in Bilibili's public space bundle. Match the
+  // whole message: negative text containing “成功” must never confirm a copy.
+  const successTexts = new Set([
+    '操作成功', '复制成功', 'Operation successful', '操作が成功しました', 'نجحت العملية',
+    'Operación exitosa', 'Operasi berhasil', 'Operasi berjaya', 'Operação bem-sucedida',
+    'Операция успешна', 'ดำเนินการสำเร็จ', 'İşlem başarılı', 'Thao tác thành công'
+  ]);
+  const messageOf = node => node.textContent.trim().replace(/[!！。.]+$/u, '').trim();
+
+  /** Observe only notifications changed by the single pending native submission. */
+  function watchCopyConfirmation(selector, timeout, onSlow, slowNotice) {
+    const baseline = new Map([...document.querySelectorAll(selector)].map(node =>
+      [node, { text: messageOf(node), visible: isElementVisible(node) }]));
+    let settle, timer, slowTimer, done = false;
+    const result = new Promise(resolve => { settle = resolve; });
+    const finish = outcome => {
+      if (done) return;
+      done = true;
+      observer.disconnect(); clearTimeout(timer); clearTimeout(slowTimer);
+      settle(outcome);
+    };
+    const observer = new window.MutationObserver(records => {
+      const candidates = new Set();
+      for (const record of records) {
+        const nodes = record.type === 'childList' ? [record.target, ...record.addedNodes] : [record.target];
+        for (const node of nodes) {
+          const el = node.nodeType === 1 ? node : node.parentElement;
+          const parent = el?.closest(selector);
+          if (parent) candidates.add(parent);
+          // A whole wrapper may be inserted after its descendants are populated.
+          if (record.type === 'attributes' || (record.type === 'childList' && node !== record.target))
+            el?.querySelectorAll?.(selector).forEach(item => candidates.add(item));
+        }
+      }
+      for (const node of candidates) {
+        if (node.closest('.bili-favs-manage-panel, [aria-hidden="true"]') || !isElementVisible(node)) continue;
+        const text = messageOf(node), before = baseline.get(node);
+        if (before?.visible && before.text === text) continue;
+        if (successTexts.has(text)) { finish({ status: 'confirmed', detail: '已观察到平台成功提示' }); return; }
+        if (/失败|稍后再试|过于频繁|权限不足|无权限|\b(?:failed|error)\b/iu.test(text)) {
+          finish({ status: 'failed', detail: `平台提示：${text}` }); return;
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'] });
+    timer = setTimeout(() => finish({ status: 'unknown', detail: '复制已提交，但等待平台确认超时；内容可能已复制，请先核对目标收藏夹。' }), timeout);
+    slowTimer = setTimeout(onSlow, slowNotice);
+    return { result, cancel: () => finish({ status: 'unknown', detail: '复制提交过程已中断，请先核对目标收藏夹。' }) };
   }
 
   /**
@@ -624,34 +676,22 @@
       }
 
       debug('点击确定');
-      // Only a newly rendered success message can confirm this submission.
-      let confirmed = false, finish;
-      const result = new Promise(resolve => { finish = resolve; });
-      const observer = new window.MutationObserver(records => {
-        for (const record of records) {
-          const nodes = record.type === 'childList' ? [...record.addedNodes] : [record.target];
-          for (const node of nodes) {
-            const el = node.nodeType === 1 ? node : node.parentElement;
-            const toast = el?.closest(SELECTORS.TOAST) || el?.querySelector?.(SELECTORS.TOAST);
-            if (toast?.textContent.includes(BUTTON_TEXTS.SUCCESS)) { confirmed = true; finish(); }
-          }
-        }
-      });
-      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-      let timer;
-      this.copySubmission = { status: 'unknown', detail: '复制已提交，但未观察到平台成功提示。' };
+      const watcher = watchCopyConfirmation(pageAdapter().notification, CONFIG.COPY_CONFIRMATION.TIMEOUT,
+        () => log('已提交复制，平台响应较慢，仍在等待确认，请勿重复点击。'), CONFIG.COPY_CONFIRMATION.SLOW_NOTICE);
+      this.copySubmission = { status: 'unknown', detail: '复制已提交，正在等待平台确认。' };
       try {
         confirmBtn.click();
-        await Promise.race([result, new Promise(resolve => { timer = setTimeout(resolve, CONFIG.DELAY.LONG * 3); })]);
+        this.copySubmission = await watcher.result;
       } catch (err) {
         err.outcome = 'unknown'; throw err;
-      } finally { observer.disconnect(); clearTimeout(timer); }
-      if (confirmed) {
-        this.copySubmission = { status: 'confirmed', detail: '已观察到平台成功提示' };
+      } finally { watcher.cancel(); }
+      if (this.copySubmission.status === 'confirmed') {
         log('✓ 复制成功');
         return true;
+      } else if (this.copySubmission.status === 'failed') {
+        error(this.copySubmission.detail);
       } else {
-        warn('复制请求已发送，但未确认结果；已停止，请先检查目标收藏夹');
+        warn(this.copySubmission.detail);
       }
 
       return false;
@@ -988,6 +1028,7 @@
       tasks = normalizeCopyTasks(tasks);
       // 跳转到自己的收藏夹页面
       const ownURL = PageDetector.getOwnFavListURL();
+      const actorId = PageDetector.getLoginUserUID();
       if (!ownURL) {
         error('无法获取用户自己的收藏夹页面 URL');
         throw new Error('无法确认登录身份，请登录后再复制');
@@ -996,13 +1037,15 @@
       this.manager.operation.update({ phase: 'creating', detail: '即将前往我的空间，检查并准备目标收藏夹。' });
       this.manager.logs.setContext({ view: 'copy', operationId: this.manager.operation.state.operationId, phase: 'creating' });
       log('3 秒后前往我的空间准备目标，随后返回来源继续复制。');
+      await delay(3000);
+      if (PageDetector.getLoginUserUID() !== actorId) throw new Error('登录账号已变化，跨页任务未交接。');
+      this.manager.operation.finish('waiting', '已交接跨页任务，等待目的页面继续。');
       StateManager.saveState({
-        phase: 'creating', returnURL: window.location.href, tasks,
+        phase: 'creating', returnURL: window.location.href, tasks, actorId,
         operationId: this.manager.operation.state.operationId,
-        journal: this.manager.logs.snapshot(this.manager.operation.state.operationId)
+        journal: this.manager.logs.snapshot()
       });
 
-      await delay(3000);
       window.location.href = ownURL;
     }
 
@@ -1127,6 +1170,11 @@
       if (!state) {
         return false; // 没有跨页面状态
       }
+      if (state.actorId && state.actorId !== PageDetector.getLoginUserUID()) {
+        StateManager.clearState();
+        this.manager.operation.finish('failed', '登录账号已变化，跨页任务已停止。请使用原账号重新选择任务。');
+        return true;
+      }
 
       // 脚本会在空间站内导航后重新挂载，只有任务预期的页面才能恢复。
       if (state.phase === 'creating' && !PageDetector.isOwnPage()) return false;
@@ -1171,12 +1219,12 @@
 
         // 更新状态：准备返回复制
         log('目标准备完成，3 秒后返回来源空间继续复制。');
-        StateManager.saveState({ ...state, operationId, phase: 'copying',
-          journal: this.manager.logs.snapshot(operationId) });
-
         await delay(3000);
-        window.location.href = state.returnURL;
         this.manager.operation.finish('waiting', '目标准备完成，等待返回来源页面继续复制。');
+        StateManager.saveState({ ...state, operationId, phase: 'copying',
+          journal: this.manager.logs.snapshot() });
+
+        window.location.href = state.returnURL;
 
         return true;
       } else if (state.phase === 'copying') {
@@ -2020,6 +2068,8 @@
         const err = new Error(this.api.copySubmission.detail);
         err.outcome = 'unknown'; throw err;
       }
+      if (!confirmed && this.api.copySubmission?.status === 'failed')
+        throw new Error(this.api.copySubmission.detail);
       return confirmed;
     }
 
@@ -2106,7 +2156,6 @@
           // 由「自己页面」阶段再对比并创建缺失的收藏夹
           log('检测到在别人页面，启动跨页面流程...');
           await this.crossPageFlow.startCrossPageFlow(copyList);
-          this.operation.finish('waiting', '已交接跨页任务，等待目的页面继续。');
           return { status: 'handoff' }; // A navigation is not a completed copy.
         }
       }
@@ -2413,6 +2462,7 @@
 .bili-favs-manage-panel .output-text-box { flex:1; overflow:auto; min-height:32px; border-top:1px solid var(--bf-line); font-size:var(--bf-small); line-height:1.5; scrollbar-width:thin; scroll-padding:8px; }
 .bili-favs-manage-panel .bf-log-row { display:grid; grid-template-columns:54px 28px minmax(0,1fr); gap:0 6px; padding:5px 0; border-bottom:1px solid var(--bf-line); align-items:baseline; }
 .bili-favs-manage-panel .bf-log-context { color:var(--bf-muted); font-size:var(--bf-small); text-align:right; overflow-wrap:anywhere; }
+.bili-favs-manage-panel .bf-log-help { margin:4px 0; }
 .bili-favs-manage-panel .bf-log-row time { color:var(--bf-muted); font-variant-numeric:tabular-nums; }
 .bili-favs-manage-panel .bf-log-level { font-weight:600; }
 .bili-favs-manage-panel .bf-log-message { grid-column:1/-1; white-space:pre-wrap; overflow-wrap:anywhere; min-width:0; }
@@ -2429,11 +2479,12 @@
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-body { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto auto; }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-diagnostics { grid-column:1; grid-row:3; border-left:0; border-top:1px solid var(--bf-line); height:var(--bf-record-height,130px); }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-record-tools { display:block; }
- .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-heading .bf-muted { display:none; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-heading .bf-muted { font-size:var(--bf-small); }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-diagnostics .bf-tools { margin:0; }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-actions { padding:4px 0 0; }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-row { grid-template-columns:54px 28px minmax(0,1fr); gap:4px; padding:4px 0; }
- .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-context { display:none; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-context { grid-column:1/-1; text-align:left; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-row:has(.bf-log-context) .bf-log-message { grid-column:1/-1; }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-message { grid-column:auto; }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-header { padding:6px; gap:2px; flex-wrap:wrap; }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-header strong { font-size:14px; }
@@ -3182,10 +3233,14 @@
       this.logScope.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
       this.logFilter = element('select');
       this.logFilter.setAttribute('aria-label', '记录内容');
-      for (const [value, text] of [['normal', '操作与结果'], ['all', '全部（含调试）'], ['error', '仅错误'], ['warn', '仅警告'], ['info', '仅提示'], ['debug', '仅调试信息']]) {
+      for (const [value, text] of [['normal', '日常记录'], ['all', '排查详情']]) {
         const option = element('option', '', text); option.value = value; this.logFilter.append(option);
       }
       this.logFilter.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
+      this.logHelp = element('p', 'bf-log-help bf-muted');
+      this.logHelp.id = 'bili-favs-record-help';
+      this.logFilter.title = '日常记录显示进度、结果和异常；排查详情包含按钮点击。筛选不删除记录，导出包含全部记录。';
+      this.logFilter.setAttribute('aria-describedby', this.logHelp.id);
       this.followCheckbox = element('input'); this.followCheckbox.type = 'checkbox'; this.followCheckbox.checked = true;
       const followLabel = element('label', '', '跟随最新'); followLabel.prepend(this.followCheckbox);
       this.followCheckbox.addEventListener('change', () => { this.scrollTopEnabled = this.followCheckbox.checked; this.renderLogs(); });
@@ -3215,6 +3270,7 @@
 
     renderLogs() {
       const top = this.logScrollTop || 0;
+      const detailed = this.logFilter.value === 'all';
       const entries = this.logs.filter(this.logFilter.value, this.logScope.value === 'all' ? 'all' : this.activeView);
       this.outputTextBox.replaceChildren(...entries.map(entry => {
         const row = element('div', `bf-log-row bf-log-${entry.level}`);
@@ -3223,11 +3279,17 @@
         const phaseNames = { creating: '准备目标', copying: '复制', loading: '读取列表', scanning: '统计', delete: '删除', unsubscribe: '退订' };
         const viewNames = { copy: '复制', statistics: '统计', manage: '管理', system: '系统' };
         const context = element('span', 'bf-log-context', entry.operationId ? `${viewNames[entry.view]} #${entry.operationId.slice(-6)} ${phaseNames[entry.phase] || entry.phase}` : viewNames[entry.view]);
-        row.append(time, element('span', 'bf-log-level', logLevels[entry.level]), context, element('span', 'bf-log-message', entry.message));
+        row.append(time, element('span', 'bf-log-level', logLevels[entry.level]));
+        if (detailed) row.append(context);
+        row.append(element('span', 'bf-log-message', entry.message));
         return row;
       }));
-      if (!entries.length) this.outputTextBox.append(element('p', 'bf-empty', this.logs.entries.length ? '此级别没有当前范围的记录，可切换范围或级别。' : '暂无记录。后续操作会显示在这里。'));
-      this.logCount.textContent = `${entries.length} / ${this.logs.entries.length} 条${this.logs.dropped ? ` · 已淘汰 ${this.logs.dropped} 条` : ''}`;
+      this.outputTextBox.prepend(this.logHelp);
+      if (!entries.length) this.outputTextBox.append(element('p', 'bf-empty', this.logs.entries.length ? '当前筛选下暂无记录。可查看全部功能或排查详情。' : '暂无记录。后续操作会显示在这里。'));
+      const hidden = this.logs.entries.length - entries.length;
+      this.logCount.textContent = `${entries.length} 条${hidden ? ` · 筛选隐藏 ${hidden} 条` : ''}`;
+      this.logCount.title = `筛选不删除记录。导出包含全部 ${this.logs.entries.length} 条记录。`;
+      this.logHelp.textContent = `${detailed ? '含按钮点击等技术细节。' : '按钮细节见“排查详情”。'}导出包含全部记录。${this.logs.dropped ? `仅保留最近 ${this.logs.limit} 条，已移除更早的 ${this.logs.dropped} 条。` : ''}`;
       this.outputTextBox.scrollTop = this.scrollTopEnabled ? this.outputTextBox.scrollHeight : top;
     }
 

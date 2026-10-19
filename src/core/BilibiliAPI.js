@@ -10,6 +10,7 @@ import { CONFIG } from '../config/config.js';
 import { getPageAdapter } from './adapters/index.js';
 import { VuiPageAdapter } from './adapters/VuiPageAdapter.js';
 import { normalizeFavoriteName } from '../utils/favoriteNames.js';
+import { watchCopyConfirmation } from './adapters/copyConfirmation.js';
 
 const pageAdapter = () => getPageAdapter() || VuiPageAdapter;
 
@@ -323,34 +324,22 @@ export class BilibiliAPI {
     }
 
     debug('点击确定');
-    // Only a newly rendered success message can confirm this submission.
-    let confirmed = false, finish;
-    const result = new Promise(resolve => { finish = resolve; });
-    const observer = new window.MutationObserver(records => {
-      for (const record of records) {
-        const nodes = record.type === 'childList' ? [...record.addedNodes] : [record.target];
-        for (const node of nodes) {
-          const el = node.nodeType === 1 ? node : node.parentElement;
-          const toast = el?.closest(SELECTORS.TOAST) || el?.querySelector?.(SELECTORS.TOAST);
-          if (toast?.textContent.includes(BUTTON_TEXTS.SUCCESS)) { confirmed = true; finish(); }
-        }
-      }
-    });
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-    let timer;
-    this.copySubmission = { status: 'unknown', detail: '复制已提交，但未观察到平台成功提示。' };
+    const watcher = watchCopyConfirmation(pageAdapter().notification, CONFIG.COPY_CONFIRMATION.TIMEOUT,
+      () => log('已提交复制，平台响应较慢，仍在等待确认，请勿重复点击。'), CONFIG.COPY_CONFIRMATION.SLOW_NOTICE);
+    this.copySubmission = { status: 'unknown', detail: '复制已提交，正在等待平台确认。' };
     try {
       confirmBtn.click();
-      await Promise.race([result, new Promise(resolve => { timer = setTimeout(resolve, CONFIG.DELAY.LONG * 3); })]);
+      this.copySubmission = await watcher.result;
     } catch (err) {
       err.outcome = 'unknown'; throw err;
-    } finally { observer.disconnect(); clearTimeout(timer); }
-    if (confirmed) {
-      this.copySubmission = { status: 'confirmed', detail: '已观察到平台成功提示' };
+    } finally { watcher.cancel(); }
+    if (this.copySubmission.status === 'confirmed') {
       log('✓ 复制成功');
       return true;
+    } else if (this.copySubmission.status === 'failed') {
+      error(this.copySubmission.detail);
     } else {
-      warn('复制请求已发送，但未确认结果；已停止，请先检查目标收藏夹');
+      warn(this.copySubmission.detail);
     }
 
     return false;

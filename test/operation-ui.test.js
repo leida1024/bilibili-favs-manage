@@ -64,7 +64,10 @@ test('reading earlier logs disables follow; filters/clear and export review work
   panel.outputTextBox.dispatchEvent(new window.Event('scroll'));
   panel.appendLog('虚构错误', panel.errorCode);
   assert.equal(panel.outputTextBox.scrollTop, 50); assert.equal(panel.followCheckbox.checked, false);
-  panel.logFilter.value = 'error'; panel.renderLogs(); assert.equal(panel.outputTextBox.children.length, 1);
+  panel.appendLog('虚构按钮细节', panel.debugCode);
+  panel.renderLogs(); assert.doesNotMatch(panel.outputTextBox.textContent, /虚构按钮细节/);
+  assert.match(panel.logCount.textContent, /筛选隐藏 1 条/);
+  panel.logFilter.value = 'all'; panel.renderLogs(); assert.match(panel.outputTextBox.textContent, /虚构按钮细节/);
   panel.reviewExport(panel.logs.export(), 'test.json');
   assert.match(panel.exportReview.querySelector('textarea').value, /虚构错误/);
   panel.toggleMinimize(); assert.equal(panel.content.hidden, true);
@@ -83,9 +86,10 @@ test('copy progress stops at last successful folder and never calls later items'
 test('copy submit without observed success is uncertain and must not confirm completion', async t => {
   const { panel } = panelFixture(t);
   document.body.insertAdjacentHTML('beforeend', '<div id="fav-createdList-container"></div><div class="modal-footer"><button class="btn">确定</button></div>');
-  const old = CONFIG.DELAY.LONG; CONFIG.DELAY.LONG = 0; t.after(() => { CONFIG.DELAY.LONG = old; });
+  const old = CONFIG.COPY_CONFIRMATION.TIMEOUT; CONFIG.COPY_CONFIRMATION.TIMEOUT = 10;
+  t.after(() => { CONFIG.COPY_CONFIRMATION.TIMEOUT = old; });
   let calls = 0; document.querySelector('.btn').onclick = () => calls++;
-  document.body.insertAdjacentHTML('beforeend', '<div class="vui_toast">操作成功</div>');
+  document.body.insertAdjacentHTML('beforeend', '<div class="be-message">操作成功</div>');
   assert.equal(await BilibiliAPI.clickConfirmButton(document.body), false);
   assert.equal(calls, 1); assert.equal(panel.operation.state.confirmed, 0);
 });

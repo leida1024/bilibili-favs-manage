@@ -328,10 +328,14 @@ export class FloatingPanel {
     this.logScope.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
     this.logFilter = element('select');
     this.logFilter.setAttribute('aria-label', '记录内容');
-    for (const [value, text] of [['normal', '操作与结果'], ['all', '全部（含调试）'], ['error', '仅错误'], ['warn', '仅警告'], ['info', '仅提示'], ['debug', '仅调试信息']]) {
+    for (const [value, text] of [['normal', '日常记录'], ['all', '排查详情']]) {
       const option = element('option', '', text); option.value = value; this.logFilter.append(option);
     }
     this.logFilter.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
+    this.logHelp = element('p', 'bf-log-help bf-muted');
+    this.logHelp.id = 'bili-favs-record-help';
+    this.logFilter.title = '日常记录显示进度、结果和异常；排查详情包含按钮点击。筛选不删除记录，导出包含全部记录。';
+    this.logFilter.setAttribute('aria-describedby', this.logHelp.id);
     this.followCheckbox = element('input'); this.followCheckbox.type = 'checkbox'; this.followCheckbox.checked = true;
     const followLabel = element('label', '', '跟随最新'); followLabel.prepend(this.followCheckbox);
     this.followCheckbox.addEventListener('change', () => { this.scrollTopEnabled = this.followCheckbox.checked; this.renderLogs(); });
@@ -361,6 +365,7 @@ export class FloatingPanel {
 
   renderLogs() {
     const top = this.logScrollTop || 0;
+    const detailed = this.logFilter.value === 'all';
     const entries = this.logs.filter(this.logFilter.value, this.logScope.value === 'all' ? 'all' : this.activeView);
     this.outputTextBox.replaceChildren(...entries.map(entry => {
       const row = element('div', `bf-log-row bf-log-${entry.level}`);
@@ -369,11 +374,17 @@ export class FloatingPanel {
       const phaseNames = { creating: '准备目标', copying: '复制', loading: '读取列表', scanning: '统计', delete: '删除', unsubscribe: '退订' };
       const viewNames = { copy: '复制', statistics: '统计', manage: '管理', system: '系统' };
       const context = element('span', 'bf-log-context', entry.operationId ? `${viewNames[entry.view]} #${entry.operationId.slice(-6)} ${phaseNames[entry.phase] || entry.phase}` : viewNames[entry.view]);
-      row.append(time, element('span', 'bf-log-level', logLevels[entry.level]), context, element('span', 'bf-log-message', entry.message));
+      row.append(time, element('span', 'bf-log-level', logLevels[entry.level]));
+      if (detailed) row.append(context);
+      row.append(element('span', 'bf-log-message', entry.message));
       return row;
     }));
-    if (!entries.length) this.outputTextBox.append(element('p', 'bf-empty', this.logs.entries.length ? '此级别没有当前范围的记录，可切换范围或级别。' : '暂无记录。后续操作会显示在这里。'));
-    this.logCount.textContent = `${entries.length} / ${this.logs.entries.length} 条${this.logs.dropped ? ` · 已淘汰 ${this.logs.dropped} 条` : ''}`;
+    this.outputTextBox.prepend(this.logHelp);
+    if (!entries.length) this.outputTextBox.append(element('p', 'bf-empty', this.logs.entries.length ? '当前筛选下暂无记录。可查看全部功能或排查详情。' : '暂无记录。后续操作会显示在这里。'));
+    const hidden = this.logs.entries.length - entries.length;
+    this.logCount.textContent = `${entries.length} 条${hidden ? ` · 筛选隐藏 ${hidden} 条` : ''}`;
+    this.logCount.title = `筛选不删除记录。导出包含全部 ${this.logs.entries.length} 条记录。`;
+    this.logHelp.textContent = `${detailed ? '含按钮点击等技术细节。' : '按钮细节见“排查详情”。'}导出包含全部记录。${this.logs.dropped ? `仅保留最近 ${this.logs.limit} 条，已移除更早的 ${this.logs.dropped} 条。` : ''}`;
     this.outputTextBox.scrollTop = this.scrollTopEnabled ? this.outputTextBox.scrollHeight : top;
   }
 

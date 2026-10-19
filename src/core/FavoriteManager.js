@@ -206,6 +206,8 @@ export class FavoriteManager {
       const err = new Error(this.api.copySubmission.detail);
       err.outcome = 'unknown'; throw err;
     }
+    if (!confirmed && this.api.copySubmission?.status === 'failed')
+      throw new Error(this.api.copySubmission.detail);
     return confirmed;
   }
 
@@ -292,7 +294,6 @@ export class FavoriteManager {
         // 由「自己页面」阶段再对比并创建缺失的收藏夹
         log('检测到在别人页面，启动跨页面流程...');
         await this.crossPageFlow.startCrossPageFlow(copyList);
-        this.operation.finish('waiting', '已交接跨页任务，等待目的页面继续。');
         return { status: 'handoff' }; // A navigation is not a completed copy.
       }
     }
