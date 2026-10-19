@@ -110,6 +110,7 @@ export const panelStyles = `
 .bili-favs-manage-panel .output-text-box { flex:1; overflow:auto; min-height:32px; border-top:1px solid var(--bf-line); font-size:var(--bf-small); line-height:1.5; scrollbar-width:thin; scroll-padding:8px; }
 .bili-favs-manage-panel .bf-log-row { display:grid; grid-template-columns:54px 28px minmax(0,1fr); gap:0 6px; padding:5px 0; border-bottom:1px solid var(--bf-line); align-items:baseline; }
 .bili-favs-manage-panel .bf-log-context { color:var(--bf-muted); font-size:var(--bf-small); text-align:right; overflow-wrap:anywhere; }
+.bili-favs-manage-panel .bf-log-help { margin:4px 0; }
 .bili-favs-manage-panel .bf-log-row time { color:var(--bf-muted); font-variant-numeric:tabular-nums; }
 .bili-favs-manage-panel .bf-log-level { font-weight:600; }
 .bili-favs-manage-panel .bf-log-message { grid-column:1/-1; white-space:pre-wrap; overflow-wrap:anywhere; min-width:0; }
@@ -126,11 +127,12 @@ export const panelStyles = `
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-body { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto auto; }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-diagnostics { grid-column:1; grid-row:3; border-left:0; border-top:1px solid var(--bf-line); height:var(--bf-record-height,130px); }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-record-tools { display:block; }
- .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-heading .bf-muted { display:none; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-heading .bf-muted { font-size:var(--bf-small); }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-diagnostics .bf-tools { margin:0; }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-actions { padding:4px 0 0; }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-row { grid-template-columns:54px 28px minmax(0,1fr); gap:4px; padding:4px 0; }
- .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-context { display:none; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-context { grid-column:1/-1; text-align:left; }
+ .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-row:has(.bf-log-context) .bf-log-message { grid-column:1/-1; }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-log-message { grid-column:auto; }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-header { padding:6px; gap:2px; flex-wrap:wrap; }
  .bili-favs-manage-panel[data-records-layout=bottom] .bf-header strong { font-size:14px; }

@@ -152,8 +152,13 @@ test('records preserve reading position across navigation and hidden arrivals; f
   assert.equal(panel.outputTextBox.firstElementChild, row);
   panel.toggleLogs(); assert.equal(panel.outputTextBox.scrollTop, 80);
   assert.match(panel.outputTextBox.textContent, /Hidden fictional arrival/);
-  panel.logFilter.value = 'error'; panel.logFilter.dispatchEvent(new window.Event('change'));
-  assert.match(panel.outputTextBox.textContent, /此级别没有当前范围的记录/);
+  assert.deepEqual([...panel.logFilter.options].map(x => x.textContent), ['日常记录', '排查详情']);
+  panel.logs.clear(); panel.logs.add('Fictional technical click', 'debug'); panel.renderLogs();
+  assert.match(panel.outputTextBox.textContent, /当前筛选下暂无记录/);
+  assert.match(panel.logCount.textContent, /筛选隐藏 1 条/);
+  assert.match(panel.logs.export(), /Fictional technical click/);
+  panel.logFilter.value = 'all'; panel.logFilter.dispatchEvent(new window.Event('change'));
+  assert.match(panel.outputTextBox.textContent, /Fictional technical click/);
   panel.logs.clear(); panel.renderLogs(); assert.match(panel.outputTextBox.textContent, /暂无记录/);
 });
 

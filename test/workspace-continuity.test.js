@@ -146,15 +146,16 @@ test('cross-page handoffs preserve task identity and records, consume before exe
 
 test('copy result watcher accepts fresh delayed confirmation and ignores a stale success message', async t => {
   realm(t);
-  const old = CONFIG.DELAY.LONG; CONFIG.DELAY.LONG = 20; t.after(() => { CONFIG.DELAY.LONG = old; });
-  document.body.insertAdjacentHTML('beforeend', '<div class="vui_toast">操作成功</div><div class="modal-footer"><button class="btn">确定</button></div>');
+  const old = CONFIG.COPY_CONFIRMATION.TIMEOUT; CONFIG.COPY_CONFIRMATION.TIMEOUT = 60;
+  t.after(() => { CONFIG.COPY_CONFIRMATION.TIMEOUT = old; });
+  document.body.insertAdjacentHTML('beforeend', '<div class="be-message">操作成功</div><div class="modal-footer"><button class="btn">确定</button></div>');
   let submissions = 0;
   const confirm = document.querySelector('.btn');
   confirm.onclick = () => { submissions++; };
   assert.equal(await BilibiliAPI.clickConfirmButton(document.body), false);
   assert.equal(BilibiliAPI.copySubmission.status, 'unknown');
   confirm.onclick = () => { submissions++; setTimeout(() => {
-    const toast = document.createElement('div'); toast.className = 'vui_toast'; toast.textContent = '操作成功'; document.body.append(toast);
+    const toast = document.createElement('div'); toast.className = 'be-message'; toast.textContent = '操作成功'; document.body.append(toast);
   }, 30); };
   assert.equal(await BilibiliAPI.clickConfirmButton(document.body), true);
   assert.equal(BilibiliAPI.copySubmission.status, 'confirmed'); assert.equal(submissions, 2);

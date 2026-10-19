@@ -3,6 +3,7 @@
  */
 
 export const CONFIG = {
+  COPY_CONFIRMATION: { TIMEOUT: 30000, SLOW_NOTICE: 6000 },
   // 延迟时间（毫秒）
   DELAY: {
     SHORT: 500,
@@ -38,7 +39,7 @@ export const CONFIG = {
 
   // 脚本信息
   SCRIPT: {
-    VERSION: '2.2.2',
+    VERSION: '2.2.3',
     NAME: 'BiliBili 收藏夹批量管理',
     DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
   }
