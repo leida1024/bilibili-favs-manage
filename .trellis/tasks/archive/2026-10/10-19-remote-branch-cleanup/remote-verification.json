@@ -1,0 +1,24 @@
+{
+  "remote_heads": {
+    "develop": "87c8cff0a9218fe93402da96afdcffd2d82fa5eb",
+    "master": "21f25785e3da2ad247e262ad52652b43c22f6092"
+  },
+  "archive_tags": {
+    "archive/api-2026-10-19": "81c3166d2971af32393189ffd6b164c6c40e580c",
+    "archive/dev-2026-10-19": "4b73bcba7c0527b1c0a985aa5435f05952a5c1b0",
+    "archive/revert-2-dev-2026-10-19": "da7570eb200fcc5df98fdaa92c369f1e8419cd56"
+  },
+  "prs": {
+    "3": {
+      "state": "CLOSED",
+      "url": "https://github.com/leida1024/bilibili-favs-manage/pull/3"
+    },
+    "4": {
+      "state": "MERGED",
+      "url": "https://github.com/leida1024/bilibili-favs-manage/pull/4"
+    }
+  },
+  "greasyfork_version": "2.2.13",
+  "product_parity_with_master": true,
+  "check_scope": "work-phase validation; archival/journal commit is pushed and parity checked separately at finish"
+}
