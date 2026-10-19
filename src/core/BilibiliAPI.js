@@ -187,13 +187,14 @@ export class BilibiliAPI {
   /**
    * 输入收藏夹名称（完整的事件链）
    * @param {string} name - 收藏夹名称
+   * @param {HTMLInputElement|null} input - 已核对的表单输入框；省略时使用复制弹窗输入框
    * @returns {Promise<boolean>} 是否成功
    */
-  static async inputFavoriteName(name) {
+  static async inputFavoriteName(name, input = null) {
     name = normalizeFavoriteName(name);
     if (!name) return false;
-    const nameInput = Array.from(document.querySelectorAll(SELECTORS.CREATE_FAV_NAME_INPUT)).find(isElementVisible);
-    if (!nameInput) {
+    const nameInput = input || Array.from(document.querySelectorAll(SELECTORS.CREATE_FAV_NAME_INPUT)).find(isElementVisible);
+    if (!nameInput || !isElementVisible(nameInput)) {
       error('找不到名称输入框');
       return false;
     }
@@ -223,13 +224,14 @@ export class BilibiliAPI {
 
   /**
    * 点击创建按钮
+   * @param {Element|null} button - 已核对的表单提交按钮；省略时使用原创建入口
    * @returns {Promise<boolean>} 是否成功
    */
-  static async clickCreateButton() {
-    const createConfirmBtn = (getPageAdapter()?.createConfirm && document.querySelector(getPageAdapter().createConfirm)) ||
+  static async clickCreateButton(button = null) {
+    const createConfirmBtn = button || (getPageAdapter()?.createConfirm && document.querySelector(getPageAdapter().createConfirm)) ||
       findButtonByText(BUTTON_TEXTS.CREATE);
 
-    if (!createConfirmBtn || createConfirmBtn.disabled) {
+    if (!createConfirmBtn || !isElementVisible(createConfirmBtn) || createConfirmBtn.disabled || createConfirmBtn.getAttribute('aria-disabled') === 'true') {
       error('创建按钮不可用');
       return false;
     }
@@ -251,19 +253,26 @@ export class BilibiliAPI {
     favName = normalizeFavoriteName(favName);
     if (!favName) return false;
     if (this.getAllFavorites().some(item => this.getFavoriteName(item) === favName)) return true;
-    const selector = pageAdapter().sidebarCreate;
+    const adapter = pageAdapter(), selector = adapter.sidebarCreate;
     const sidebar = selector && document.querySelector(selector);
     if (!sidebar) return null;
 
     // 文本精确为"新建收藏夹"的叶子元素即入口
     const entry = Array.from(sidebar.querySelectorAll('*')).find(
       el => el.children.length === 0 &&
-            el.textContent.trim() === BUTTON_TEXTS.CREATE_NEW
+            el.textContent.trim() === BUTTON_TEXTS.CREATE_NEW && isElementVisible(el)
     );
     if (!entry) {
       warn('侧边栏未找到"新建收藏夹"入口');
       return null;
     }
+
+    const form = adapter.sidebarCreateForm;
+    if (form && [...document.querySelectorAll(form.dialog)].some(isElementVisible)) {
+      warn('已有收藏夹编辑窗口，请先关闭后重新开始；尚未提交');
+      return false;
+    }
+    if (!guard()) return false;
 
     debug('点击左侧边栏[新建收藏夹]');
     const clickable = entry.closest(
@@ -272,17 +281,25 @@ export class BilibiliAPI {
     clickable.click();
     await delay(CONFIG.DELAY.SHORT);
 
-    // 等待名称输入框（复用与复制对话框一致的创建组件）
-    const input = await waitForElement(SELECTORS.CREATE_FAV_NAME_INPUT, 3000, document, true);
+    // Legacy opens an independent Edit form; its controls differ from the
+    // copy dialog. Scope both controls to that visible form before submitting.
+    const parent = form ? await waitForElement(form.dialog, 3000, document, true) : document;
+    const input = parent && await waitForElement(form?.input || SELECTORS.CREATE_FAV_NAME_INPUT, 3000, parent, true);
     if (!input) {
       warn('点击"新建收藏夹"后未出现名称输入框');
       return false;
     }
 
     // 输入名称并点击创建
-    if (!await this.inputFavoriteName(favName)) return false;
+    if (!await this.inputFavoriteName(favName, input)) return false;
     if (!guard()) return false;
-    if (!await this.clickCreateButton()) return false;
+    let submit = null;
+    if (form) {
+      const controls = [...parent.querySelectorAll(form.confirm)].filter(isElementVisible);
+      if (controls.length !== 1) { error('新建表单的提交按钮未确认，已停止'); return false; }
+      submit = controls[0];
+    }
+    if (!await this.clickCreateButton(submit)) return false;
 
     const confirmed = await this.waitForFavorite(favName);
     if (!confirmed) error(`未确认收藏夹 [${favName}] 创建成功，已停止，请检查页面结果`);

@@ -99,18 +99,18 @@ export class CrossPageFlowManager {
     }
     if (result !== null) return false;
 
-    // 回退：复制对话框内"新建收藏夹"（已验证可用）
-    log('侧边栏入口不可用，回退到复制对话框方式创建');
+    // Only a missing sidebar entry permits the copy-dialog alternative.
+    log('未找到左侧“新建收藏夹”，尝试通过复制弹窗新建（需要可选视频）');
     return await this.createViaCopyDialog(favName);
   }
 
   /**
-   * 通过批量模式复制对话框创建收藏夹（回退方案，已验证可用）
+   * 通过批量模式复制对话框创建收藏夹（需可选视频的备用入口）
    * @param {string} favName - 收藏夹名称
    * @returns {Promise<boolean>}
    */
   async createViaCopyDialog(favName) {
-    // 1. 点击第一个收藏夹（确保有内容可操作）
+    // 1. 打开第一个收藏夹；空收藏夹可能没有可选视频。
     const allFavs = BilibiliAPI.getAllFavorites();
     if (allFavs.length === 0) {
       error('找不到任何收藏夹');
@@ -123,13 +123,13 @@ export class CrossPageFlowManager {
     // 2. 进入批量操作模式
     const batchSuccess = await BilibiliAPI.ensureBatchModeActive();
     if (!batchSuccess) {
-      error('无法进入批量模式');
+      error('当前收藏夹无法进入批量模式。复制弹窗新建需要可选视频；请先在自己的空间手动新建目标收藏夹，再重新开始。');
       return false;
     }
 
     // 3. 全选当前页视频（否则"复制至"按钮不可用，对话框不会弹出）
     if (!BilibiliAPI.clickSelectAll()) {
-      error('无法全选视频，"复制至"将不可用');
+      error('当前页没有可选视频，无法通过复制弹窗新建。请先在自己的空间手动新建目标收藏夹，再重新开始。');
       return false;
     }
     await delay(CONFIG.DELAY.SHORT);

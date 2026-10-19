@@ -62,7 +62,7 @@ export class MutationPanel {
     const busy = this.panel.busy;
     this.selectionTools?.update();
     this.previewButton.disabled = busy || !this.selected().length;
-    this.previewButton.hidden = this.inventoryUI.mode !== 'manage' || busy || !!this.ticket;
+    this.previewButton.hidden = this.inventoryUI.mode !== 'manage' || busy || this.review.childElementCount > 0;
     for (const row of this.rows) row.input.disabled = busy || !!row.reason;
     if (this.confirmButton) this.confirmButton.disabled = busy || !this.agreement?.checked || !this.ticket;
     if (this.agreement) this.agreement.disabled = busy;
@@ -71,15 +71,24 @@ export class MutationPanel {
   preview() {
     if (this.panel.busy) return;
     this.invalidate();
+    this.results.replaceChildren();
     try {
       const description = descriptions[this.action];
-      if (this.panel.manager.modes?.manage === 'web' && this.selected().some(folder => folder.available === false))
-        throw new Error('失效条目在网页不显示可核对 ID。请在设置中将“删除与取消订阅”改为 API，保存后重新加载；尚未提交。');
       this.ticket = this.engine.prepare(this.action, this.selected());
       const mode = this.panel.manager.modes?.manage;
       this.review.append(element('h3', '', `将${description.verb} ${this.ticket.targets.length} 项${mode ? `（${mode === 'api' ? 'API' : '网页'}）` : ''}`));
       this.review.append(element('p', '', description.detail));
       for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ${target.kind === 'season' ? '合集' : '收藏夹'} · ID ${target.id} · 所有者 ${target.ownerId || '未知'} · ${target.count ?? '未知'} 条${target.available === false ? ' · 内容已失效' : ''}`));
+      if (mode === 'web' && this.ticket.targets.some(target => target.available === false)) {
+        this.engine.invalidate(); this.ticket = null;
+        const message = '网页方式无法核对失效条目的 ID。请在设置中将“删除与取消订阅”改为 API，保存后重新加载并选择目标；尚未提交。';
+        const notice = element('p', 'bf-muted', message); notice.setAttribute('role', 'status');
+        const settings = button('前往设置', () => this.panel.showModeSettings());
+        this.review.append(notice, settings, button('返回选择', () => { this.invalidate(); this.previewButton.focus(); }));
+        this.panel.appendLog(message, this.panel.warnCode);
+        this.updateBusy(); this.review.scrollIntoView?.({ block: 'nearest', behavior: 'instant' }); settings.focus();
+        return;
+      }
       this.agreement = element('input'); this.agreement.type = 'checkbox';
       const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', description.agreement));
       this.agreement.addEventListener('change', () => this.updateBusy());

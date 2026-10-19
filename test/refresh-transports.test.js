@@ -64,7 +64,7 @@ test('unavailable subscribed seasons with unknown owner allow confirmed API unsu
   m.agreement.checked=true; await m.execute(); assert.equal(posts.length,1); assert.match(posts[0],/season_id=100/);
   p.showView('statistics'); await ui.load(); assert.equal(ui.rows[0].input.disabled,true);
   manager.modes.manage='web'; p.showView('manage'); m.rows[0].input.checked=true; m.preview();
-  assert.match(m.results.textContent,/设置.*API/); assert.equal(m.ticket,null); assert.equal(posts.length,1);
+  assert.match(m.review.textContent,/设置.*API/); assert.equal(m.ticket,null); assert.equal(posts.length,1);
 });
 
 test('panel geometry/visibility survive recreation; minimized height and invalid preferences are safe', t => {
@@ -80,6 +80,31 @@ test('panel geometry/visibility survive recreation; minimized height and invalid
   third.toggleLogs(); assert.equal(third.floatingPanel.style.width, '620px'); third.destroy();
   window.localStorage.setItem('bili-favs-panel-v1', JSON.stringify({ version: 1, geometry: { width: -1, height: 10, left: 'bad', top: 0 }, modes: { copy: 'arbitrary' } }));
   assert.equal(panelPreferences().geometry, null); assert.deepEqual(panelPreferences().modes, defaultModes);
+});
+
+test('unavailable subscriptions open a target preview in default web mode and explain the explicit API requirement', async t => {
+  realm(t); const manager = new FavoriteManager(); manager.getAllFavoriteNames = () => [];
+  Object.assign(manager.modes, { read: 'api', manage: 'web' }); let reads = 0;
+  manager.http.fetcher = async (_, options) => {
+    assert.notEqual(options.method, 'POST', 'preview must not submit or change transport'); reads++;
+    return { ok: true, json: async () => ({ code: 0, data: { count: 2, has_more: false, list: [100, 101].map((id, i) =>
+      ({ id, type: i ? 11 : 21, mid: 0, title: 'Unavailable', state: 1, fav_state: 0, media_count: 0 })) } }) };
+  };
+  const p = new FloatingPanel(manager); p.init(); t.after(() => p.destroy()); p.showView('manage');
+  const ui = p.inventoryPanel; ui.kind.value = 'subscribed'; await ui.load(); const m = ui.mutations;
+  for (const row of m.rows) { assert.equal(row.input.disabled, false); row.input.click(); }
+  assert.equal(m.previewButton.disabled, false); m.previewButton.click();
+  assert.match(m.review.textContent, /ID 100/); assert.match(m.review.textContent, /ID 101/);
+  assert.match(m.review.textContent, /设置.*API/); assert.equal(m.ticket, null); assert.equal(manager.batchOperations.ticket, null);
+  assert.equal(m.confirmButton, null); assert.equal(reads, 1); assert.equal(manager.modes.manage, 'web');
+  assert.ok(manager.logs.entries.some(entry => /网页.*失效.*ID/.test(entry.message)));
+  [...m.review.querySelectorAll('button')].find(button => button.textContent === '前往设置').click();
+  assert.equal(p.activeView, 'settings'); assert.equal(manager.modes.manage, 'web'); assert.equal(reads, 1);
+  manager.modes.manage = 'api'; p.showView('manage'); await ui.load();
+  assert.equal(m.selected().length, 0, 'explicit mode change/reload cannot restore a destructive selection');
+  m.rows[0].input.click(); m.previewButton.click();
+  assert.deepEqual(m.ticket.targets.map(target => target.id), ['100']);
+  assert.equal(m.confirmButton.disabled, true); assert.equal(reads, 2);
 });
 
 test('resize rejects outside coordinates, header buttons do not drag, title has threshold and keyboard alternative', t => {

@@ -1,8 +1,10 @@
 # Local management build
 
-These capabilities are in local build **2.2.4**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
+These capabilities are in local build **2.2.5**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
 
 ## Copy and diagnostics
+
+Legacy webpage creation uses the left sidebar's **新建收藏夹** and its independent form, so preparing target folders does not require videos in the current folder. The copy-dialog alternative is used only when the sidebar entry is missing; that alternative requires selectable videos. An unconfirmed sidebar submission stops preparation instead of submitting again through another entry.
 
 The panel opens on **复制收藏夹** in a 600×500 desktop window bounded by the viewport. The left workspace is about 326px wide and records occupy the 272px side area. Select sources and edit each destination alongside it. Destinations belong to your own space: existing normalized-name folders are reused and missing folders are created. Copy preserves the source. The fixed bottom bar starts copying; a selected empty destination must be filled first. Keep the page open during cross-space navigation.
 
@@ -59,12 +61,12 @@ Deletion removes a folder and its saved references; it does not delete uploaded 
 
 Choose **取消订阅** in **管理**, then load the list. Folder subscriptions and seasons are supported. Content availability is separate from subscription membership: an unavailable season remains eligible when its exact ID, type and current-account subscription are confirmed. A missing author is displayed as unknown; conflicting identities, unknown types and unconfirmed subscriptions are excluded. API subscription evidence comes from membership in the complete authenticated collected list, not fav_state alone. Seasons use their own unsubscribe endpoint; folder and season IDs are never interchanged. Review and explicitly confirm exact IDs and known owners.
 
-For unavailable entries, choose **设置 → 删除与取消订阅 → API**, save and reload the list. The current webpage exposes a native unsubscribe menu but no stable ID for its many same-name unavailable entries. Webpage management stops before submission and explains this limitation; it never matches these targets by name alone or switches to API automatically. Statistics keeps unavailable content disabled.
+Unavailable entries can open **预览退订目标**. In webpage management mode, the preview displays the selected names/IDs and the limitation, with **前往设置** and **返回选择** actions. To proceed, choose **设置 → 删除与取消订阅 → API**, save, reload the list and select/preview again. The current webpage exposes a native unsubscribe menu but no stable ID for its many same-name unavailable entries. This informational preview has no executable confirmation; management never matches these targets by name alone or switches to API automatically. Statistics keeps unavailable content disabled.
 
 ## Outcomes and limits
 
 Each item is **已确认**, **失败**, **结果未知**, or **未提交**. API confirmation means platform code0; native management confirmation means the exact checked row disappeared with the expected list-count change on the same account/space. Refresh the platform to verify. Failure or uncertainty stops the batch. Network loss after submission is unknown, with no automatic retry. Refresh never restores a destructive queue; every operation needs a new selection and confirmation.
 
-Local 2.2.4 passed two disposable live create/delete cycles on VUI through console injection: one API creation and one webpage creation, both deleted through the management panel using API reads and webpage writes. Independent API reads confirmed both temporary folders absent and the original folder ID set unchanged. Native menu discovery now enters the actual hover trigger for each layout; item results and failure causes are included in ordinary records and the footer.
+Local 2.2.4 passed two disposable live create/delete cycles on VUI through console injection: one API creation and one webpage creation, both deleted through the management panel using API reads and webpage writes. Independent API reads confirmed both temporary folders absent and the original folder ID set unchanged. Native menu discovery now enters the actual hover trigger for each layout; item results and failure causes are included in ordinary records and the footer. Version 2.2.5 adds synthetic regression coverage for empty legacy-page creation and unavailable-subscription preview; no additional real-account mutations were performed for that iteration.
 
 Legacy copy confirmation recognizes the platform's `.be-toast` message `复制成功(ง •̀_•́)ง`. Successful notification ends the wait immediately; the 30-second limit only bounds missing results. Legacy toast and hover/delete-dialog fixtures cover the actual public component structure. Live copy/unsubscribe, Tampermonkey GM sandbox, automatic cross-page recovery and current legacy-page live behavior remain unverified. Earlier read-only checks matched230 subscription names across readers and one available season's66 BVIDs and49,595 known duration seconds. Platform API contracts and permissions can change.
