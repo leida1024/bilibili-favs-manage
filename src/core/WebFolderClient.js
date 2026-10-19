@@ -1,6 +1,7 @@
 import { stableId, folderKey, pause } from './FolderClient.js';
 import { PageDetector } from './PageDetector.js';
 import { BilibiliAPI } from './BilibiliAPI.js';
+import { subscriptionBindings, legacySubscriptionSource } from './adapters/nativeBindings.js';
 import { nativeControls } from './adapters/nativeControls.js';
 import { isElementVisible } from '../utils/dom.js';
 import { normalizeFavoriteName } from '../utils/favoriteNames.js';
@@ -8,7 +9,7 @@ import { normalizeFavoriteName } from '../utils/favoriteNames.js';
 const text = node => node?.textContent.trim() || '';
 const numberFrom = value => /^\d+$/.test(value || '') ? Number(value) : null;
 export class WebFolderClient {
-  constructor() { this.identities = new WeakMap(); this.currentFolder = null; }
+  constructor() { this.identities = new WeakMap(); this.boundRows = new WeakSet(); this.currentFolder = null; }
   get selectors() { return document.querySelector('.favlist-aside') ? nativeControls.vui : nativeControls.legacy; }
   async wait(check, signal, timeout = 8000) {
     const end = Date.now() + timeout;
@@ -19,24 +20,41 @@ export class WebFolderClient {
     } while (Date.now() < end);
     throw new Error('网页未显示预期结果；请检查页面或切换操作方式');
   }
-  group(kind) {
+  group(kind, required = true) {
     const s = this.selectors;
     const group = s.group ? [...document.querySelectorAll(s.group)].find(node =>
       kind === 'created' ? /^(我|TA)创建的收藏夹$/.test(text(node.querySelector(s.heading))) : /^(我|TA)追的合集\/收藏夹$/.test(text(node.querySelector(s.heading)))) : document.querySelector(s[kind]);
-    if (!group) throw new Error('网页没有这个列表范围，请在对应空间加载，或选择 API 读取');
+    if (!group && required) throw new Error('网页没有这个列表范围，请在对应空间加载，或选择 API 读取');
     return group;
   }
   async rows(kind, signal) {
-    const s = this.selectors, group = this.group(kind);
+    const group = await this.wait(() => this.group(kind, false), signal);
+    const s = this.selectors;
+    const header = group.querySelector(s.heading || '.favlist-title') || group.closest('.fav-container')?.querySelector('.favlist-title');
+    const icon = header?.querySelector('.vui_collapse_item_header_icon');
+    const legacyArrow = header?.querySelector('.icon-arrow');
+    const legacyFolded = legacyArrow && !legacyArrow.classList.contains('arrow-transform');
+    if ((icon && !icon.classList.contains('vui_collapse_item_icon_active')) || legacyFolded) {
+      header.click(); await pause(160, signal);
+    }
     for (let i = 0; i < 100; i++) {
+      if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
       const more = [...group.querySelectorAll(s.more)].find(node => /显示剩余\d+个|加载更多|查看更多/.test(text(node)));
-      if (!more) return [...group.querySelectorAll(s.row)];
+      const source = kind === 'subscribed' && !s.group ? legacySubscriptionSource(group) : null;
       const before = group.querySelectorAll(s.row).length;
-      more.click();
-      await this.wait(() => group.querySelectorAll(s.row).length > before || !more.isConnected, signal);
+      if (source && before > source.count) throw new Error('网页订阅数量变化，请重新加载');
+      if (!more && (!source || before === source.count)) return [...group.querySelectorAll(s.row)];
+      if (more) more.click();
+      else {
+        group.scrollTop = group.scrollHeight;
+        group.dispatchEvent(new window.Event('scroll'));
+        group.dispatchEvent(new window.Event('ps-y-reach-end'));
+      }
+      await this.wait(() => group.querySelectorAll(s.row).length > before, signal);
     }
     throw new Error('网页展开超过上限，未将部分列表当作完整结果');
   }
+
   async openMenu(node, signal) {
     const s = this.selectors, menu = node.querySelector(s.menu);
     if (!menu) return [];
@@ -57,11 +75,20 @@ export class WebFolderClient {
     this.activeMenu = null;
     document.body.click();
   }
-  async inspect(node, kind, index, signal) {
+  async inspect(node, kind, index, signal, bindings) {
     const s = this.selectors, name = normalizeFavoriteName(text(node.querySelector(s.title)));
     if (!name) throw new Error('网页条目缺少名称');
-    if (node.querySelector('[class*="--disabled"]')) return Object.freeze({ id: null, ownerId: null, kind: 'unsupported', name,
-      count: null, protectionReason: 'unknown', protected: true, available: false, subscribed: kind === 'subscribed' });
+    if (kind === 'subscribed') {
+      const bound = (bindings || subscriptionBindings([node], this.group(kind), !s.group)).get(node);
+      if (bound) {
+        const folder = Object.freeze({ ...bound, name,
+          available: bound.available && !node.matches('.favInvalid') && !node.querySelector('[class*="--disabled"]') });
+        this.identities.set(node, folder); this.boundRows.add(node); return folder;
+      }
+      if (this.boundRows.has(node)) throw new Error('网页条目绑定已变化，未提交');
+    }
+    if (node.matches('.favInvalid') || node.querySelector('[class*="--disabled"]'))
+      throw new Error('网页无法核对失效条目的 ID；可在设置中选择 API 后重新预览，未提交');
     const old = this.identities.get(node);
     if (old && old.name === name) return Object.freeze({ ...old, available: !node.querySelector('[class*="--disabled"]') });
     const pageOwner = PageDetector.getCurrentPageUID();
@@ -81,26 +108,29 @@ export class WebFolderClient {
       if (items.some(item => text(item) === '删除')) protectionReason = null;
       this.closeMenu();
     }
-    const folder = Object.freeze({ id, ownerId, kind: type, name, count, protectionReason, protected: protectionReason !== null,
+    const folder = Object.freeze({ id, ownerId, kind: type, name, count, identityConflict: false, protectionReason, protected: protectionReason !== null,
       available: !node.querySelector('[class*="--disabled"]'), subscribed: kind === 'subscribed' });
     this.identities.set(node, folder); return folder;
   }
   async folders(owner, kind, signal, pace, revalidateTarget) {
     if (owner !== PageDetector.getCurrentPageUID()) throw new Error('网页方式需要先打开对应账号的收藏夹页面');
     const rows = await this.rows(kind, signal), result = [];
+    const bindings = kind === 'subscribed' ? subscriptionBindings(rows, this.group(kind), !this.selectors.group) : null;
     for (let index = 0; index < rows.length; index++) {
       if (revalidateTarget && folderKey(this.identities.get(rows[index]) || {}) === folderKey(revalidateTarget)) this.identities.delete(rows[index]);
-      result.push(await this.inspect(rows[index], kind, index, signal));
+      result.push(await this.inspect(rows[index], kind, index, signal, bindings));
     }
     const identified = result.filter(row => row.id);
     if (new Set(identified.map(folderKey)).size !== identified.length) throw new Error('网页条目身份重复，请重新加载');
     return result;
   }
   async select(folder, signal) {
-    if (folder.available === false) throw new Error('失效条目的网页不提供可核对 ID；请在设置中选择 API 管理后重新预览，未提交');
     const kind = folder.kind === 'created' ? 'created' : 'subscribed';
     const rows = await this.rows(kind, signal);
-    let node = rows.find(row => folderKey(this.identities.get(row) || {}) === folderKey(folder));
+    const bindings = kind === 'subscribed' ? subscriptionBindings(rows, this.group(kind), !this.selectors.group) : new Map();
+    const keys = [...bindings.values()].map(folderKey);
+    if (new Set(keys).size !== keys.length) throw new Error('网页条目身份重复，未提交');
+    let node = rows.find(row => folderKey(bindings.get(row) || {}) === folderKey(folder)) || rows.find(row => folderKey(this.identities.get(row) || {}) === folderKey(folder));
     if (!node) {
       const matches = rows.filter(row => normalizeFavoriteName(text(row.querySelector(this.selectors.title))) === folder.name);
       for (const candidate of matches) {
@@ -112,10 +142,11 @@ export class WebFolderClient {
       }
       if (!node) throw new Error('网页目标缺失或同名身份不明确，未提交');
     }
-    // Always verify the actual route and freshly rendered details before a native action.
+    // Re-read the exact row binding (or route/details fallback) before acting.
     this.identities.delete(node);
     const fresh = await this.inspect(node, kind, rows.indexOf(node), signal);
-    if (['id', 'kind', 'ownerId', 'name'].some(key => folder[key] !== fresh[key])) throw new Error('网页目标身份变化，未提交');
+    if (['id', 'kind', 'name'].some(key => folder[key] !== fresh[key]) || fresh.identityConflict ||
+      (folder.ownerId && fresh.ownerId && folder.ownerId !== fresh.ownerId)) throw new Error('网页目标身份变化，未提交');
     if (kind === 'created' && fresh.protectionReason === 'unknown') throw new Error('网页未识别目标的删除菜单；请检查页面或切换操作方式，未提交');
     if ((kind === 'created' && !fresh.available) || (folder.count !== null && fresh.count !== null && folder.count !== fresh.count) ||
       (kind === 'created' && fresh.protected !== folder.protected)) throw new Error('网页目标数量或保护状态变化，未提交');
@@ -132,22 +163,34 @@ export class WebFolderClient {
       const sameName = row => normalizeFavoriteName(text(row.querySelector(this.selectors.title))) === folder.name;
       const originalMatches = originalRows.filter(sameName).length;
       if (action === 'delete' && (actor !== folder.ownerId || pageOwner !== actor || folder.kind !== 'created' || folder.protected)) throw new Error('删除归属或保护状态未确认');
-      if (action === 'unsubscribe' && (!['subscribed', 'season'].includes(folder.kind) || actor === folder.ownerId || !folder.subscribed)) throw new Error('订阅身份未确认');
+      if (action === 'unsubscribe' && (!actor || pageOwner !== actor || !['subscribed', 'season'].includes(folder.kind) || actor === folder.ownerId || !folder.subscribed)) throw new Error('订阅身份未确认');
       const items = await this.openMenu(node, signal), label = action === 'delete' ? '删除' : '取消订阅';
       const choices = items.filter(item => text(item) === label);
       if (choices.length !== 1 || PageDetector.getLoginUserUID() !== actor || PageDetector.getCurrentPageUID() !== pageOwner) throw new Error('网页操作入口或账号变化');
       if (signal?.aborted) return { status: 'not_started', detail: '已取消，未提交' };
+      const boundIdentity = this.identities.get(node);
+      const verifyBinding = () => {
+        const bound = subscriptionBindings([node], group, !this.selectors.group).get(node);
+        return node.isConnected && (bound ? ['id', 'kind', 'ownerId'].every(key => bound[key] === boundIdentity[key]) &&
+          normalizeFavoriteName(bound.name) === boundIdentity.name && !bound.identityConflict : !this.boundRows.has(node));
+      };
+      if (!verifyBinding()) throw new Error('网页目标身份变化，未提交');
       submitted = true; // Menu entries can submit immediately; never click twice.
       choices[0].click();
-      if (action === 'delete') {
-        const dialog = await this.wait(() => [...document.querySelectorAll(this.selectors.dialog)].find(node => isElementVisible(node) && /删除/.test(text(node))), signal);
+      if (action === 'delete' || this.selectors.group) {
+        const dialog = await this.wait(() => [...document.querySelectorAll(this.selectors.dialog)].find(node => isElementVisible(node) && (action === 'delete' ? /删除/.test(text(node)) : /取消订阅/.test(text(node)))), signal);
         const controls = [...dialog.querySelectorAll('button, .btn')].filter(node => isElementVisible(node) && /^(确定|确认|删除|确认删除)$/.test(text(node)));
-        if (controls.length !== 1 || PageDetector.getLoginUserUID() !== actor || PageDetector.getCurrentPageUID() !== pageOwner || new URL(window.location.href).searchParams.get('fid') !== folder.id) throw new Error('删除确认未识别，请检查页面');
+        if (controls.length !== 1 || PageDetector.getLoginUserUID() !== actor || PageDetector.getCurrentPageUID() !== pageOwner || !verifyBinding() ||
+          (action === 'delete' && new URL(window.location.href).searchParams.get('fid') !== folder.id)) throw new Error('网页确认或目标身份变化，请检查页面');
         if (signal?.aborted) throw new Error('已停止，请检查网页中的待确认操作');
         controls[0].click();
       }
       await this.wait(() => {
-        if (PageDetector.getLoginUserUID() !== actor || PageDetector.getCurrentPageUID() !== pageOwner || !group.isConnected) return false;
+        if (PageDetector.getLoginUserUID() !== actor || PageDetector.getCurrentPageUID() !== pageOwner) return false;
+        if (!group.isConnected) {
+          const source = legacySubscriptionSource(group);
+          return action === 'unsubscribe' && originalRows.length === 1 && source?.count === 0 && source.list.length === 0;
+        }
         const rows = [...group.querySelectorAll(this.selectors.row)];
         return !node.isConnected && rows.length === originalRows.length - 1 && rows.filter(sameName).length === originalMatches - 1;
       }, signal);
@@ -166,7 +209,16 @@ export class WebFolderClient {
   async videos(id, pn, signal, folder) {
     if (!folder || folder.id !== id) throw new Error('网页统计缺少目标身份');
     const s = this.selectors;
-    if (pn === 1) { await this.select(folder, signal); this.currentFolder = folderKey(folder); }
+    if (pn === 1) {
+      const node = await this.select(folder, signal);
+      if (this.boundRows.has(node)) {
+        node.querySelector(s.click)?.click();
+        await this.wait(() => new URL(window.location.href).searchParams.get('fid') === folder.id &&
+          normalizeFavoriteName(text(document.querySelector(s.detailTitle))) === folder.name, signal);
+        await pause(160, signal);
+      }
+      this.currentFolder = folderKey(folder);
+    }
     if (this.currentFolder !== folderKey(folder)) throw new Error('网页统计目标变化');
     const pager = document.querySelector(s.pagination);
     const current = Number(text(pager?.querySelector(s.activePage))) || 1;

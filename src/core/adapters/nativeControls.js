@@ -11,7 +11,7 @@ export const nativeControls = {
     next: 'button[aria-label="下一页"]'
   },
   legacy: {
-    created: '#fav-createdList-container', subscribed: '#fav-collectedList-container', row: '.fav-item',
+    created: '#fav-createdList-container', subscribed: '#fav-list-container', row: '.fav-item',
     title: 'a.text', click: 'a.text', more: '.more', menu: '.be-dropdown', menuItem: '.be-dropdown-item',
     detailTitle: '.favInfo-details .fav-name', data: '.favInfo-details', owner: '.favInfo-details a[href*="space.bilibili.com"]',
     cards: '.fav-video-list .small-item', duration: '.length', dialog: '.modal', confirm: '.modal-footer .btn',

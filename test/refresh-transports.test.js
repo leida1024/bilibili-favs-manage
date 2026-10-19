@@ -64,7 +64,7 @@ test('unavailable subscribed seasons with unknown owner allow confirmed API unsu
   m.agreement.checked=true; await m.execute(); assert.equal(posts.length,1); assert.match(posts[0],/season_id=100/);
   p.showView('statistics'); await ui.load(); assert.equal(ui.rows[0].input.disabled,true);
   manager.modes.manage='web'; p.showView('manage'); m.rows[0].input.checked=true; m.preview();
-  assert.match(m.review.textContent,/设置.*API/); assert.equal(m.ticket,null); assert.equal(posts.length,1);
+  assert.match(m.review.textContent,/自动展开.*ID/); assert.ok(m.ticket); assert.equal(posts.length,1);
 });
 
 test('panel geometry/visibility survive recreation; minimized height and invalid preferences are safe', t => {
@@ -82,7 +82,7 @@ test('panel geometry/visibility survive recreation; minimized height and invalid
   assert.equal(panelPreferences().geometry, null); assert.deepEqual(panelPreferences().modes, defaultModes);
 });
 
-test('unavailable subscriptions open a target preview in default web mode and explain the explicit API requirement', async t => {
+test('unavailable subscriptions open a normal one-use web preview without writes or automatic transport switches', async t => {
   realm(t); const manager = new FavoriteManager(); manager.getAllFavoriteNames = () => [];
   Object.assign(manager.modes, { read: 'api', manage: 'web' }); let reads = 0;
   manager.http.fetcher = async (_, options) => {
@@ -95,11 +95,9 @@ test('unavailable subscriptions open a target preview in default web mode and ex
   for (const row of m.rows) { assert.equal(row.input.disabled, false); row.input.click(); }
   assert.equal(m.previewButton.disabled, false); m.previewButton.click();
   assert.match(m.review.textContent, /ID 100/); assert.match(m.review.textContent, /ID 101/);
-  assert.match(m.review.textContent, /设置.*API/); assert.equal(m.ticket, null); assert.equal(manager.batchOperations.ticket, null);
-  assert.equal(m.confirmButton, null); assert.equal(reads, 1); assert.equal(manager.modes.manage, 'web');
-  assert.ok(manager.logs.entries.some(entry => /网页.*失效.*ID/.test(entry.message)));
-  [...m.review.querySelectorAll('button')].find(button => button.textContent === '前往设置').click();
-  assert.equal(p.activeView, 'settings'); assert.equal(manager.modes.manage, 'web'); assert.equal(reads, 1);
+  assert.match(m.review.textContent, /自动展开.*ID/); assert.ok(m.ticket); assert.ok(manager.batchOperations.ticket);
+  assert.equal(m.confirmButton.disabled, true); assert.equal(reads, 1); assert.equal(manager.modes.manage, 'web');
+  p.showModeSettings();
   p.modeChoices.get('manage').value = 'api'; p.saveModesButton.click(); p.showView('manage');
   assert.equal(m.selected().length, 2, 'saving mode preserves the explicit selection without reloading');
   assert.equal(m.ticket, null); m.previewButton.click();
@@ -201,7 +199,12 @@ function nativeFixture(t) {
       document.querySelector('.menu-popover__panel')?.remove();
       const menu = document.createElement('div'); menu.className = 'menu-popover__panel';
       menu.innerHTML = '<div class="menu-popover__panel-item">取消订阅</div>';
-      menu.firstChild.addEventListener('click', () => { submissions++; row.remove(); menu.remove(); }); document.body.append(menu);
+      menu.firstChild.addEventListener('click', () => {
+        submissions++; menu.remove();
+        const dialog = document.createElement('div'); dialog.className = 'vui_dialog--content';
+        dialog.innerHTML = '<p>确定取消订阅吗？</p><button>确定</button>';
+        dialog.querySelector('button').onclick = () => { row.remove(); dialog.remove(); }; document.body.append(dialog);
+      }); document.body.append(menu);
     }); list.append(row); return row;
   };
   append('100'); group.querySelector('.fav-collapse-more').addEventListener('click', event => { append('101'); event.target.remove(); });
