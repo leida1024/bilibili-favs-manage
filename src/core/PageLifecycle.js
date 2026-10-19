@@ -6,6 +6,7 @@ export class PageLifecycle {
   constructor({ mount, unmount, refresh, notify, now = Date.now }) {
     Object.assign(this, { mount, unmount, refresh, notify, now });
     this.uid = null;
+    this.actor = null;
     this.sidebar = null;
     this.names = '';
     this.startedAt = now();
@@ -15,9 +16,11 @@ export class PageLifecycle {
 
   tick() {
     const uid = PageDetector.getCurrentPageUID();
-    if (uid !== this.uid) {
+    const actor = PageDetector.getLoginUserUID();
+    if (uid !== this.uid || actor !== this.actor) {
       this.unmount();
       this.uid = uid;
+      this.actor = actor;
       this.sidebar = null;
       this.names = '';
       this.startedAt = this.now();

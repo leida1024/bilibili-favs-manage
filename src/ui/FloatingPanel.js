@@ -1,489 +1,531 @@
-/**
- * 浮动面板
- * 管理浮动面板的生命周期和交互
- */
-
-import { UIComponents, CheckboxItem } from './UIComponents.js';
+import { CheckboxItem } from './UIComponents.js';
 import { EventHandlers } from './EventHandlers.js';
+import { copyBlockReason, currentCopyContext } from '../core/copyContext.js';
 import { PageDetector } from '../core/PageDetector.js';
+import { OperationState } from '../core/OperationState.js';
+import { LogStore } from '../utils/logStore.js';
+import { normalizeCopyTasks, duplicateFavoriteNames, normalizeFavoriteName } from '../utils/favoriteNames.js';
+import { panelStyles } from './panelStyles.js';
+import { element, button } from './elements.js';
+import { InventoryPanel } from './InventoryPanel.js';
+import { SelectionToolbar } from './SelectionToolbar.js';
+import { CONFIG } from '../config/config.js';
+import { panelPreferences } from '../utils/preferences.js';
+import { PanelLayout } from './PanelLayout.js';
+import { helpPanel } from './HelpPanel.js';
+export { element, button } from './elements.js';
+
+const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止', interrupted: '已中断', unknown: '待核对', waiting: '等待跳转' };
+const logLevels = { info: '信息', warn: '警告', error: '错误', debug: '调试' };
 
 export class FloatingPanel {
   constructor(manager) {
-    this.manager = manager; // FavoriteManager 实例
-
-    // 延迟时间
-    this.delayTimeShort = 500;
-    this.delayTimeMiddle = 1000;
-    this.delayTimeLong = 2000;
-
-    // 消息类型
+    this.manager = manager;
+    this.operations = { copy: manager.operation || new OperationState(), statistics: new OperationState(), manage: new OperationState() };
+    this.logs = manager.logs || new LogStore();
+    this.operationTransitions = new Map();
     this.errorCode = 0;
     this.normalCode = 1;
-    this.startBatchCode = 2;
-    this.startSingleCode = 3;
-    this.endSingleCode = 4;
-    this.endBatchCode = 5;
-    this.onePageCode = 6;
     this.warnCode = 7;
-
-    // 面板宽度比例
-    this.leftWidth = '35%';
-    this.rightWidth = '63%';
-
-    // 状态变量
-    this.isDragging = false;
-    this.resizeable = false;
-    this.scrollTopEnabled = true;
-
-    // UI 元素
-    this.panel = null;
-    this.floatingPanel = null;
-    this.leftPanel = null;
-    this.rightPanel = null;
-    this.outputTextBox = null;
-    // 已移除 sourceSelect 和 targetSelect（改用复选框列表）
-    this.favCheckboxItemList = [];  // 新增：复选框项列表
-
-    // 按钮
-    this.selectAllButton = null;
-    this.minimizeButton = null;
-    this.startBatchTransferButton = null;
-
-    // 收藏夹列表
-    this.favorites = [];
+    this.debugCode = 8;
+    this.favCheckboxItemList = [];
     this.busy = false;
+    this.scrollTopEnabled = true;
+    this.minW = 280;
+    this.minH = 64;
+    this.activeView = 'copy';
+    this.viewScroll = new Map();
+    this.preferences = panelPreferences();
+    this.logsOpen = this.preferences.logsOpen;
+    this.layout = new PanelLayout(this, this.preferences);
   }
 
-  /**
-   * 初始化并显示面板
-   */
+  get operation() { return this.operations[this.activeView] || this.operations.copy; }
+
   init() {
-    // 先获取收藏夹数据（不触发 log）
     this.favorites = this.manager.getAllFavoriteNames();
-
-    // 创建面板（此时 outputTextBox 被初始化）
-    this.floatingPanel = this.createFloatingPanel();
-    document.body.appendChild(this.floatingPanel);
-    this.recordPanelSize();
-
-    // 现在可以安全地使用 log
-    this.appendLog('浮动面板已创建', this.normalCode);
+    const root = element('section', 'bili-favs-manage-panel floating-panel');
+    root.setAttribute('aria-label', '收藏夹管理');
+    const style = element('style');
+    style.textContent = panelStyles;
+    this.floatingPanel = root;
+    this.header = element('header', 'bf-header');
+    this.header.setAttribute('role', 'group');
+    this.header.tabIndex = 0;
+    this.header.title = '拖动标题移动；聚焦标题后方向键移动，Shift + 方向键调整大小';
+    this.header.setAttribute('aria-label', this.header.title);
+    this.header.addEventListener('keydown', event => {
+      if (event.target !== this.header || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+      event.preventDefault(); const r = this.layout.rect();
+      const dx = event.key === 'ArrowLeft' ? -10 : event.key === 'ArrowRight' ? 10 : 0;
+      const dy = event.key === 'ArrowUp' ? -10 : event.key === 'ArrowDown' ? 10 : 0;
+      if (event.shiftKey && !this.minimized) EventHandlers.judgePanelSizeAndUpdate(this, r.left, r.top, r.width + dx, r.height + dy);
+      else EventHandlers.judgePanelPosAndUpdate(this, r.left + dx, r.top + dy);
+      this.layout.save();
+    });
+    this.header.append(element('strong', '', '收藏夹管理'));
+    this.versionLabel = element('span', 'bf-version', `v${CONFIG.SCRIPT.VERSION}`);
+    this.header.append(this.versionLabel);
+    this.logsButton = button('记录', () => this.toggleLogs(), 'bf-quiet');
+    this.logsButton.setAttribute('aria-expanded', String(this.logsOpen));
+    this.logsButton.setAttribute('aria-label', this.logsOpen ? '收起操作记录' : '查看操作记录');
+    this.minimizeButton = button('−', () => this.toggleMinimize());
+    this.minimizeButton.setAttribute('aria-label', '最小化'); this.minimizeButton.title = '最小化';
+    this.dismissButton = button('×', () => { this.onDismiss?.(); this.destroy(); });
+    this.dismissButton.setAttribute('aria-label', '关闭'); this.dismissButton.title = '关闭';
+    this.header.append(this.logsButton, this.minimizeButton, this.dismissButton);
+    this.notice = element('aside', 'bf-notice');
+    this.notice.setAttribute('aria-label', '交流与帮助');
+    const noticeWindow = element('div', 'bf-notice-window');
+    const noticeText = button('QQ 群 524764959 · 使用帮助与问题反馈 → 帮助', () => this.showView('help'), 'bf-notice-text');
+    noticeWindow.append(noticeText);
+    this.pauseNoticeButton = button('停止滚动', () => {
+      const paused = this.notice.dataset.paused !== 'true';
+      this.notice.dataset.paused = String(paused);
+      this.pauseNoticeButton.textContent = paused ? '继续滚动' : '停止滚动';
+      this.pauseNoticeButton.setAttribute('aria-label', paused ? '继续滚动顶部提示' : '停止滚动顶部提示');
+      this.pauseNoticeButton.setAttribute('aria-pressed', String(paused));
+    });
+    this.pauseNoticeButton.setAttribute('aria-label', '停止滚动顶部提示');
+    this.pauseNoticeButton.setAttribute('aria-pressed', 'false');
+    this.notice.append(noticeWindow, this.pauseNoticeButton);
+    this.header.insertBefore(this.notice, this.logsButton);
+    this.navigation = element('nav', 'bf-navigation');
+    this.navigation.setAttribute('aria-label', '管理功能');
+    this.viewButtons = new Map();
+    for (const [view, label] of [['copy', '复制收藏夹'], ['statistics', '统计'], ['manage', '管理']]) {
+      if (view !== 'copy' && !this.manager.inventory) continue;
+      const control = button(label, () => this.showView(view));
+      this.viewButtons.set(view, control); this.navigation.append(control);
+    }
+    if (this.manager.modes) {
+      this.modeButton = button('设置', () => this.showView('settings'));
+      this.modeButton.dataset.settings = 'true';
+      this.viewButtons.set('settings', this.modeButton);
+      this.navigation.append(this.modeButton);
+    }
+    const helpButton = button('帮助', () => this.showView('help'));
+    this.viewButtons.set('help', helpButton); this.navigation.append(helpButton);
+    this.content = element('div', 'bf-content');
+    this.scope = element('p', 'bf-sr-only');
+    this.workspace = element('section', 'bf-workspace');
+    const heading = element('div', 'bf-task-heading');
+    heading.append(this.scope);
+    const help = element('p', 'bf-help', '同名则复用，否则新建；来源保留。');
+    this.copyHelp = help;
+    heading.append(help);
+    this.workspace.append(heading);
+    this.leftPanel = element('section', 'bf-sources');
+    this.selectionTools = new SelectionToolbar({
+      rows: () => this.favCheckboxItemList.map(item => ({ input: item.checkbox, node: item.checkboxContainer, name: item.getLabelValue(), eligible: !item.ambiguous && !copyBlockReason(currentCopyContext()) })),
+      busy: () => this.busy, change: () => this.updateSelectionReview()
+    });
+    this.selectionTools.search.addEventListener('input', () => this.updateSelectionReview());
+    this.selectAllButton = this.selectionTools.allButton;
+    const columns = element('div', 'bf-copy-columns');
+    this.sourceColumn = element('span', '', '来源收藏夹');
+    columns.append(element('span'), this.sourceColumn, element('span', 'bf-direction', ''), element('span', '', '目标（我的收藏夹）'));
+    this.leftPanel.append(this.selectionTools.root, columns, this.createFavPanel());
+    this.selectionReview = this.selectionTools.count;
+    this.startBatchTransferButton = button('开始批量复制', () => this.startBatchTransfer(), 'bf-primary');
+    this.copyActions = element('div', 'bf-action-bar');
+    this.copyActions.append(this.startBatchTransferButton);
+    this.workspace.append(this.leftPanel);
+    this.content.append(this.workspace);
+    this.statusBox = element('section', 'bf-status');
+    this.statusBox.setAttribute('role', 'status');
+    this.statusBox.setAttribute('aria-live', 'polite');
+    this.statusTitle = element('strong');
+    this.statusCount = element('span');
+    this.progressDetails = element('section', 'bf-progress-detail');
+    this.progressDetails.hidden = true;
+    this.progressLast = element('p'); this.progressMessage = element('p');
+    this.progressDetails.append(this.progressMessage, this.progressLast);
+    this.statusBox.append(this.statusTitle, this.statusCount);
+    if (this.manager.inventory) {
+      this.inventoryPanel = new InventoryPanel(this, this.manager.inventory);
+      this.content.append(this.inventoryPanel.root);
+    }
+    if (this.manager.modes) { this.createSettingsPanel(); this.content.append(this.settingsRoot); }
+    this.helpRoot = helpPanel(); this.content.append(this.helpRoot);
+    this.createDiagnostics();
+    this.footer = element('footer', 'bf-footer');
+    this.statusBox.append(this.progressDetails);
+    this.footer.append(this.statusBox, this.copyActions);
+    if (this.inventoryPanel) this.footer.append(this.inventoryPanel.actions);
+    this.body = element('div', 'bf-body');
+    this.body.append(this.content, this.footer, this.diagnostics);
+    this.resizeGrip = element('span', 'bf-resize-grip');
+    this.resizeGrip.setAttribute('aria-hidden', 'true');
+    this.resizeGrip.title = '拖动调整大小';
+    root.append(style, this.header, this.navigation, this.body, this.resizeGrip);
+    document.body.append(root);
+    root.dataset.logsOpen = String(this.logsOpen);
+    this.unsubscribes = Object.entries(this.operations).map(([view, operation]) =>
+      operation.subscribe(state => this.onOperation(view, state)));
+    this.onBodyMove = event => {
+      EventHandlers.mouseMove(this, event);
+      EventHandlers.dragOnPanel(this, event);
+    };
+    this.onBodyUp = () => { this.resizeable = false; this.isDragging = false; this.dragStart = null; this.layout.save(); };
+    root.addEventListener('mousedown', event => EventHandlers.mouseDown(this, event));
+    document.addEventListener('mousemove', this.onBodyMove);
+    document.addEventListener('mouseup', this.onBodyUp);
+    window.addEventListener('blur', this.onBodyUp);
+    this.onViewportResize = () => { this.clampToViewport(); this.layout.save(); };
+    window.addEventListener('resize', this.onViewportResize);
+    this.layout.restore();
+    this.updateSelectionReview();
     this.showPageTypeIndicator();
+    this.renderView();
   }
 
-  /**
-   * 加载收藏夹列表
-   */
-  loadFavorites() {
-    this.favorites = this.manager.getAllFavoriteNames();
+  showView(view) {
+    if (!['copy', 'statistics', 'manage', 'settings', 'help'].includes(view) || this.busy || view === this.activeView) return;
+    if ((view === 'statistics' || view === 'manage') && !this.inventoryPanel) return;
+    if (view === 'settings' && !this.settingsRoot) return;
+    this.viewScroll.set(this.activeView, this.content.scrollTop);
+    this.inventoryPanel?.mutations?.invalidate();
+    this.activeView = view;
+    this.renderView();
+    this.content.scrollTop = this.viewScroll.get(view) || 0;
+  }
+
+  renderView() {
+    const view = this.activeView;
+    this.updateModeSummary();
+    this.workspace.hidden = view !== 'copy';
+    if (this.settingsRoot) this.settingsRoot.hidden = view !== 'settings';
+    this.helpRoot.hidden = view !== 'help';
+    if (this.inventoryPanel) {
+      this.inventoryPanel.root.hidden = !['statistics', 'manage'].includes(view);
+      if (view === 'statistics' || view === 'manage') this.inventoryPanel.setMode(view);
+      this.inventoryPanel.actions.hidden = !['statistics', 'manage'].includes(view);
+    }
+    this.copyActions.hidden = view !== 'copy';
+    this.renderOperation(this.operation.state);
+    if (this.outputTextBox && this.logsOpen && !this.minimized) this.renderLogs();
+    this.footer.hidden = !!this.minimized || ['settings', 'help'].includes(view);
+    for (const [name, control] of this.viewButtons) control.setAttribute('aria-pressed', String(name === view));
+  }
+
+  toggleLogs() {
+    if (this.minimized) this.toggleMinimize();
+    this.layout.toggle(!this.logsOpen);
+    this.logsOpen = !this.logsOpen;
+    // Opening diagnostics from a minimized window restores the working context.
+    if (this.logsOpen && this.minimized) this.toggleMinimize();
+    this.diagnostics.hidden = !this.logsOpen;
+    this.floatingPanel.dataset.logsOpen = String(this.logsOpen);
+    this.logsButton.setAttribute('aria-expanded', String(this.logsOpen));
+    this.logsButton.setAttribute('aria-label', this.logsOpen ? '收起操作记录' : '查看操作记录');
+    if (this.logsOpen) this.renderLogs();
+    else if (this.diagnostics.contains(document.activeElement)) this.logsButton.focus();
+    this.clampToViewport(); this.layout.save();
+  }
+
+  showPageTypeIndicator() {
+    const pageUID = PageDetector.getCurrentPageUID();
+    const loginUID = PageDetector.getLoginUserUID();
+    this.scope.textContent = !pageUID ? '当前空间 → 我的收藏夹' :
+      `${pageUID === loginUID ? '我的空间' : '当前空间'} → ${loginUID ? '我的空间' : '请先登录'}`;
+    this.sourceColumn.textContent = pageUID && pageUID === loginUID ? '来源（我的空间）' : '来源（当前空间）';
+  }
+
+  createFavPanel() {
+    const list = element('div', 'fav-panel');
+    const duplicates = duplicateFavoriteNames(this.favorites);
+    this.favCheckboxItemList = this.favorites.map(name => {
+      const item = new CheckboxItem(name);
+      item.ambiguous = duplicates.has(normalizeFavoriteName(name));
+      if (item.ambiguous) {
+        item.checkbox.disabled = true; item.inputText.disabled = true;
+        const reason = '同名来源：当前复制按名称匹配，请先改为不同名称；API 也不能代替你决定具体对象。';
+        item.checkboxContainer.append(element('span', 'bf-folder-reason', reason));
+        item.checkbox.setAttribute('aria-label', `${name} · 不可选：${reason}`);
+      }
+      item.checkboxContainer.addEventListener('input', () => this.updateSelectionReview());
+      list.append(item.checkboxContainer);
+      return item;
+    });
+    if (!this.favorites.length) list.append(element('div', 'bf-empty', '还没有读到来源收藏夹。请等待页面侧栏加载；列表出现后会自动更新。'));
+    return list;
   }
 
   refreshFavorites() {
-    const selections = new Map(this.favCheckboxItemList.map(item => [item.getLabelValue(), {
-      checked: item.getCheckboxValue(), target: item.getInputTextValue()
-    }]));
-    this.loadFavorites();
-    this.leftPanel.querySelector('.fav-panel')?.remove();
-    this.leftPanel.appendChild(this.createFavPanel());
+    if (this.busy) return;
+    const previous = new Map(this.favCheckboxItemList.map(item => [item.getLabelValue(), { checked: item.checkbox.checked, target: item.inputText.value }]));
+    this.favorites = this.manager.getAllFavoriteNames();
+    this.leftPanel.querySelector('.fav-panel').replaceWith(this.createFavPanel());
     for (const item of this.favCheckboxItemList) {
-      const previous = selections.get(item.getLabelValue());
-      if (previous) {
-        item.checkbox.checked = previous.checked;
-        item.inputText.value = previous.target;
-      }
+      const old = previous.get(item.getLabelValue());
+      if (old && !item.ambiguous) { item.checkbox.checked = old.checked; item.inputText.value = old.target; }
     }
-    this.selectAllButton.textContent = '点我全选';
+    this.updateSelectionReview();
+    this.showPageTypeIndicator();
   }
 
-  /**
-   * 显示页面类型指示器
-   */
-  showPageTypeIndicator() {
-    const isOwnPage = PageDetector.isOwnPage();
-    const pageType = isOwnPage ? '我的收藏夹' : '他人的收藏夹';
-    const color = isOwnPage ? '#00a000' : '#ff8800';
-    this.appendLog(`当前页面: ${pageType}`, this.normalCode);
-
-    // 更新标题颜色
-    const titleElements = this.floatingPanel.querySelectorAll('h3');
-    for (const title of titleElements) {
-      if (title.textContent === '输出信息') {
-        title.style.color = color;
-      }
-    }
-  }
-
-  /**
-   * 创建左侧面板
-   */
-  createLeftPanel() {
-    const leftPanel = UIComponents.createSubDiv('left-panel', 'left');
-    leftPanel.style.flexGrow = '0';
-    leftPanel.style.backgroundColor = '#f5f5f5';
-    leftPanel.style.flexDirection = 'column';
-
-    // 创建按钮面板
-    const btnPanel = this.createButtonPanel();
-    leftPanel.appendChild(btnPanel);
-
-    // 创建收藏夹面板（复选框列表）
-    const favPanel = this.createFavPanel();
-    leftPanel.appendChild(favPanel);
-
-    return leftPanel;
-  }
-
-  /**
-   * 创建右侧面板
-   */
-  createRightPanel() {
-    const textContainer = document.createElement('div');
-    const textDiv = UIComponents.createSubDiv('div');
-
-    const hintText = document.createElement('h3');
-    hintText.style.fontWeight = 'bold';
-    hintText.textContent = '输出信息';
-
-    textDiv.appendChild(hintText);
-    textContainer.appendChild(textDiv);
-
-    this.outputTextBox = UIComponents.createOutputTextBox();
-    this.outputTextBox.style.backgroundColor = '#fff';
-
-    const rightPanel = UIComponents.createSubDiv('right-panel', 'right');
-    rightPanel.style.backgroundColor = '#fafafa';
-    rightPanel.style.overflowX = 'hidden';
-    rightPanel.style.flexDirection = 'column';
-    rightPanel.appendChild(textContainer);
-    rightPanel.appendChild(this.outputTextBox);
-
-    return rightPanel;
-  }
-
-  /**
-   * 创建按钮面板
-   */
-  createButtonPanel() {
-    const btnPanel = document.createElement('div');
-    btnPanel.className = 'btn-panel';
-    btnPanel.style.display = 'flex';
-    btnPanel.style.border = '1px solid #ccc';
-    btnPanel.style.backgroundColor = '#e8e8e8';
-    btnPanel.style.flexDirection = 'column';
-
-    // 全选按钮
-    this.selectAllButton = UIComponents.createButton('点我全选', () => {
-      this.toggleSelectAll();
-    });
-
-    const startBatchTransferButton = UIComponents.createButton('开始批量复制', () => {
-      this.startBatchTransfer();
-    });
-
-    this.minimizeButton = UIComponents.createButton('点我最小化', () => {
-      EventHandlers.toggleMinimize(this);
-    });
-
-    const destroyButton = UIComponents.createButton('点我销毁', () => {
-      this.onDismiss?.();
-      this.destroy();
-    });
-
-    btnPanel.appendChild(this.selectAllButton);
-    btnPanel.appendChild(startBatchTransferButton);
-    btnPanel.appendChild(this.minimizeButton);
-    btnPanel.appendChild(destroyButton);
-
-    this.startBatchTransferButton = startBatchTransferButton;
-
-    return btnPanel;
-  }
-
-  /**
-   * 切换全选状态
-   */
   toggleSelectAll() {
-    if (this.selectAllButton.textContent === '点我全选') {
-      for (const item of this.favCheckboxItemList) {
-        item.checkbox.checked = true;
-      }
-      this.selectAllButton.textContent = '点我全部取消';
-    } else {
-      for (const item of this.favCheckboxItemList) {
-        item.checkbox.checked = false;
-      }
-      this.selectAllButton.textContent = '点我全选';
-    }
+    this.selectionTools.toggle();
   }
 
-  /**
-   * 创建收藏夹面板（复选框列表）
-   */
-  createFavPanel() {
-    const favPanel = document.createElement('div');
-    favPanel.className = 'fav-panel';
-    favPanel.style.display = 'flex';
-    favPanel.style.flexDirection = 'column';
-    favPanel.style.padding = '10px';
-    favPanel.style.border = '1px solid #ccc';
-    favPanel.style.backgroundColor = '#fff';
-    favPanel.style.flexGrow = '1';
-    favPanel.style.overflow = 'auto';
-
-    // 标题行
-    const titleRow = document.createElement('div');
-    titleRow.style.display = 'flex';
-    titleRow.style.justifyContent = 'space-between';
-    titleRow.style.marginBottom = '10px';
-
-    const srcTitle = document.createElement('h4');
-    srcTitle.textContent = '源收藏夹';
-    srcTitle.style.margin = '0';
-    srcTitle.style.fontWeight = 'bold';
-
-    const dstTitle = document.createElement('h4');
-    dstTitle.textContent = '目标收藏夹';
-    dstTitle.style.margin = '0';
-    dstTitle.style.fontWeight = 'bold';
-
-    titleRow.appendChild(srcTitle);
-    titleRow.appendChild(dstTitle);
-    favPanel.appendChild(titleRow);
-
-    // 创建复选框项列表
-    this.favCheckboxItemList = this.createFavCheckboxItems();
-    for (const item of this.favCheckboxItemList) {
-      favPanel.appendChild(item.checkboxContainer);
-    }
-
-    return favPanel;
-  }
-
-  /**
-   * 创建复选框项列表
-   */
-  createFavCheckboxItems() {
-    const items = [];
-    for (const favName of this.favorites) {
-      const checkboxItem = new CheckboxItem(favName);
-      items.push(checkboxItem);
-    }
-    return items;
-  }
-
-  /**
-   * 获取选中的复制任务列表
-   * @returns {Array<{source: string, target: string}>}
-   */
   getSelectedTasks() {
-    const tasks = [];
+    return this.favCheckboxItemList.filter(item => item.checkbox.checked && !item.ambiguous).map(item => ({ source: item.getLabelValue(), target: item.inputText.value }));
+  }
+
+  updateSelectionReview() {
+    const blocked = !!copyBlockReason(currentCopyContext());
+    const tasks = this.getSelectedTasks();
+    const missing = tasks.some(task => !task.target.trim());
+    this.selectionTools.update();
+    if (missing) this.selectionReview.textContent = '请填好已选来源的目标名称';
     for (const item of this.favCheckboxItemList) {
-      if (item.getCheckboxValue()) {
-        tasks.push({
-          source: item.getLabelValue(),
-          target: item.getInputTextValue()
-        });
+      item.checkbox.disabled = this.busy || blocked || item.ambiguous;
+      item.inputText.disabled = this.busy || blocked || item.ambiguous;
+      item.checkboxContainer.dataset.selected = String(item.checkbox.checked);
+      item.inputText.setAttribute('aria-invalid', String(item.checkbox.checked && !item.inputText.value.trim()));
+    }
+    this.startBatchTransferButton.textContent = this.busy ? '操作中…' : tasks.length ? `复制 ${tasks.length} 个收藏夹` : '开始复制';
+    this.startBatchTransferButton.disabled = this.busy || blocked || !tasks.length || missing;
+    this.updateModeSummary();
+  }
+
+  setBusy(busy) {
+    this.busy = busy;
+    this.floatingPanel?.setAttribute('aria-busy', String(busy));
+    this.selectAllButton.disabled = busy || !this.favorites.length;
+    this.dismissButton.disabled = busy;
+    if (this.modeButton) this.modeButton.disabled = busy;
+    for (const control of this.viewButtons.values()) control.disabled = busy;
+    for (const item of this.favCheckboxItemList) { item.checkbox.disabled = busy || item.ambiguous; item.inputText.disabled = busy || item.ambiguous; }
+    this.startBatchTransferButton.textContent = busy ? '操作中…' : '开始批量复制';
+    this.updateSelectionReview();
+    this.inventoryPanel?.updateBusy();
+    this.onBusyChange?.(busy);
+  }
+
+  onOperation(view, state) {
+    const transition = `${state.operationId}:${state.phase}:${state.status}`;
+    if (state.status !== 'idle') {
+      this.logs.setContext({ view, operationId: state.operationId, phase: state.phase });
+      if (transition !== this.operationTransitions.get(view)) {
+        this.appendLog(`${statusNames[state.status]}：${state.action || '操作'}。${state.detail}`,
+          state.status === 'failed' ? this.errorCode : ['interrupted', 'unknown'].includes(state.status) ? this.warnCode : this.normalCode);
       }
     }
-    return tasks;
+    this.operationTransitions.set(view, transition);
+    if (view === this.activeView) this.renderOperation(state);
   }
 
-  /**
-   * 创建浮动面板
-   */
-  createFloatingPanel() {
-    const floP = document.createElement('div');
-    floP.classList.add('floating-panel');
-    floP.classList.add('bili-favs-manage-panel');
-    floP.style.position = 'fixed';
-    floP.style.top = '50px';
-    floP.style.left = '50px';
-    floP.style.width = '600px';
-    floP.style.height = '500px';
-    floP.style.backgroundColor = '#ffffff';
-    floP.style.border = '2px solid #ccc';
-    floP.style.borderRadius = '5px';
-    floP.style.padding = '0px';
-    floP.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.2)';
-    floP.style.zIndex = '99999';
-    floP.style.display = 'flex';
-
-    // 创建左右面板
-    this.leftPanel = this.createLeftPanel();
-    this.rightPanel = this.createRightPanel();
-
-    floP.appendChild(this.leftPanel);
-    floP.appendChild(this.rightPanel);
-
-    // 绑定事件
-    floP.addEventListener('mousedown', (e) => EventHandlers.mouseDown(this, e));
-    floP.addEventListener('mouseup', () => EventHandlers.stopDragOnPanel(this));
-    floP.addEventListener('mousemove', (e) => EventHandlers.dragOnPanel(this, e));
-
-    this.onBodyMove = (e) => EventHandlers.mouseMove(this, e);
-    this.onBodyUp = () => {
-      EventHandlers.stopResizeOnBody(this);
-      EventHandlers.stopDragOnPanel(this);
-    };
-    document.body.addEventListener('mousemove', this.onBodyMove);
-    document.body.addEventListener('mouseup', this.onBodyUp);
-
-    return floP;
+  renderOperation(state) {
+    this.statusBox.hidden = state.status === 'idle';
+    this.statusBox.dataset.status = state.status;
+    this.progressDetails.hidden = state.status === 'idle';
+    this.statusTitle.textContent = `${statusNames[state.status]}${state.action ? ` · ${state.action}` : ''}`;
+    this.statusCount.textContent = `已确认 ${state.confirmed}${state.total === null ? ' 项，总数未知' : ` / ${state.total} 项`}`;
+    this.statusCount.hidden = state.confirmed === 0 && state.total === null;
+    this.progressLast.textContent = `最后确认：${state.lastConfirmed || '尚无已确认步骤'}`;
+    this.progressLast.hidden = !state.lastConfirmed;
+    this.progressMessage.textContent = state.detail;
+    if (this.footer) this.footer.hidden = !!this.minimized || ['settings', 'help'].includes(this.activeView);
   }
 
-  /**
-   * 记录面板大小
-   */
-  recordPanelSize() {
-    const fPW = this.floatingPanel.offsetWidth;
-    const fPH = this.floatingPanel.offsetHeight;
-
-    if (this.originFPW === undefined) {
-      this.originRPW = this.rightPanel.offsetWidth;
-      this.originRPH = this.rightPanel.offsetHeight;
-
-      this.originFPW = fPW;
-      this.originFPH = fPH;
-
-      this.minW = this.leftPanel.offsetWidth;
-      this.minH = this.floatingPanel.querySelector('.btn-panel').offsetHeight;
-    }
-
-    this.floatingPanel.style.width = fPW + 'px';
-    this.floatingPanel.style.height = fPH + 'px';
-  }
-
-  /**
-   * 记录隐藏前的面板大小
-   */
-  recordHiddenPanelSize() {
-    this.hiddenWidth = this.floatingPanel.offsetWidth;
-    this.hiddenHeight = this.floatingPanel.offsetHeight;
-  }
-
-  /**
-   * 开始批量复制
-   */
   async startBatchTransfer() {
     if (this.busy) return;
-    // 获取选中的复制任务
-    const tasks = this.getSelectedTasks();
-
-    if (tasks.length === 0) {
-      this.appendLog('错误: 请至少勾选一个源收藏夹', this.errorCode);
-      return;
-    }
-
-    this.appendLog(`开始批量复制，共 ${tasks.length} 个任务`, this.startBatchCode);
-
-    // 禁用按钮
-    this.busy = true;
-    this.startBatchTransferButton.disabled = true;
-    this.selectAllButton.disabled = true;
-    this.startBatchTransferButton.textContent = '复制中...';
-
     try {
-      // 调用 FavoriteManager 的批量复制方法
+      const reason = copyBlockReason(currentCopyContext());
+      if (reason) throw new Error(reason);
+      const tasks = normalizeCopyTasks(this.getSelectedTasks());
+      if (!tasks.length) throw new Error('请至少选择一个源收藏夹。');
+      this.setBusy(true);
       await this.manager.batchCopy(tasks);
-      this.appendLog('✓ 批量复制完成!', this.endBatchCode);
     } catch (err) {
-      this.appendLog(`✗ 批量复制出错: ${err.message}`, this.errorCode);
-      console.error(err);
-    } finally {
-      this.busy = false;
-      // 恢复按钮
-      this.startBatchTransferButton.disabled = false;
-      this.selectAllButton.disabled = false;
-      this.startBatchTransferButton.textContent = '开始批量复制';
-    }
+      if (!['failed', 'unknown'].includes(this.operation.state.status))
+        this.operation.finish(err.outcome === 'unknown' ? 'unknown' : 'failed', err.message);
+    } finally { this.setBusy(false); }
   }
 
-  /**
-   * 输出日志到面板
-   */
-  appendLog(info, type = this.normalCode) {
-    // 如果 outputTextBox 还未初始化，使用控制台输出
-    if (!this.outputTextBox) {
-      console.log(`[BiliBili Favs] ${info}`);
-      return;
+  createDiagnostics() {
+    const details = element('section', 'bf-diagnostics');
+    this.diagnostics = details;
+    details.hidden = !this.logsOpen;
+    details.id = 'bili-favs-records';
+    details.setAttribute('aria-label', '操作记录');
+    this.logsButton.setAttribute('aria-controls', details.id);
+    const title = element('div', 'bf-log-heading');
+    this.logCount = element('span', 'bf-muted');
+    title.append(element('h2', '', '操作记录'), this.logCount);
+    const recordTools = element('div', 'bf-record-tools');
+    recordTools.append(title);
+    const tools = element('div', 'bf-tools');
+    this.logScope = element('select'); this.logScope.setAttribute('aria-label', '记录范围');
+    for (const [value, text] of [['current', '复制功能'], ['all', '全部功能']]) {
+      const option = element('option', '', text); option.value = value; this.logScope.append(option);
     }
-
-    this.appendInfoToTextarea(this.outputTextBox, info, type);
+    this.logScope.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
+    this.logFilter = element('select');
+    this.logFilter.setAttribute('aria-label', '记录内容');
+    for (const [value, text] of [['normal', '日常记录'], ['all', '排查详情']]) {
+      const option = element('option', '', text); option.value = value; this.logFilter.append(option);
+    }
+    this.logFilter.addEventListener('change', () => { this.logScrollTop = 0; this.renderLogs(); });
+    this.logHelp = element('p', 'bf-log-help bf-muted');
+    this.logHelp.id = 'bili-favs-record-help';
+    this.logFilter.title = '日常记录显示进度、结果和异常；排查详情包含按钮点击。筛选不删除记录，导出包含全部记录。';
+    this.logFilter.setAttribute('aria-describedby', this.logHelp.id);
+    this.followCheckbox = element('input'); this.followCheckbox.type = 'checkbox'; this.followCheckbox.checked = true;
+    const followLabel = element('label', '', '跟随最新'); followLabel.prepend(this.followCheckbox);
+    this.followCheckbox.addEventListener('change', () => { this.scrollTopEnabled = this.followCheckbox.checked; this.renderLogs(); });
+    const scopeLabel = element('label', 'bf-log-filter', '范围'); scopeLabel.append(this.logScope);
+    const contentLabel = element('label', 'bf-log-filter', '内容'); contentLabel.append(this.logFilter);
+    tools.append(scopeLabel, contentLabel);
+    const actions = element('div', 'bf-log-actions');
+    actions.append(button('清空', () => { this.logs.clear(); this.renderLogs(); }), button('导出记录', () => this.reviewExport(this.logs.export(), 'bili-favs-log.json')), followLabel);
+    this.outputTextBox = element('div', 'output-text-box');
+    this.outputTextBox.tabIndex = 0;
+    this.outputTextBox.setAttribute('role', 'region');
+    this.outputTextBox.setAttribute('aria-label', '诊断记录内容');
+    this.outputTextBox.addEventListener('scroll', () => {
+      if (this.outputTextBox.scrollHeight - this.outputTextBox.clientHeight - this.outputTextBox.scrollTop > 24) {
+        this.scrollTopEnabled = false; this.followCheckbox.checked = false;
+      }
+      this.logScrollTop = this.outputTextBox.scrollTop;
+    });
+    recordTools.append(tools);
+    details.append(recordTools, this.outputTextBox, actions);
   }
 
-  /**
-   * 将信息追加到文本区域
-   */
-  appendInfoToTextarea(textarea, info, type = this.normalCode) {
-    // 防御性检查
-    if (!textarea) {
-      console.log(`[BiliBili Favs] ${info}`);
-      return;
-    }
-
-    let currentDate = new Date();
-    let timezoneOffset = currentDate.getTimezoneOffset();
-    let timezoneOffsetMilliseconds = timezoneOffset * 60 * 1000;
-    let userCurrentDate = new Date(currentDate.getTime() - timezoneOffsetMilliseconds);
-    let formattedDate = userCurrentDate.toISOString().replace(/T/, ' ').replace(/\..+/, '');
-
-    let textColor;
-    let brCnt = 1;
-
-    switch (type) {
-      case this.errorCode:
-        textColor = 'red';
-        break;
-      case this.normalCode:
-        textColor = 'black';
-        break;
-      case this.endBatchCode:
-        brCnt++;
-      case this.startBatchCode:
-        brCnt++;
-        textColor = 'blue';
-        break;
-      case this.endSingleCode:
-        brCnt++;
-      case this.startSingleCode:
-        textColor = 'green';
-        break;
-      case this.onePageCode:
-        textColor = 'purple';
-        info += '--------------';
-        break;
-      case this.warnCode:
-        textColor = 'orange';
-        break;
-      default:
-        textColor = 'black';
-        break;
-    }
-
-    const span = document.createElement('span');
-    span.style.color = textColor;
-    span.textContent = formattedDate + ': ' + info;
-
-    textarea.appendChild(span);
-    for (let i = 0; i < brCnt; i++) {
-      textarea.appendChild(document.createElement('br'));
-    }
-
-    // 自动滚动到底部
-    if (this.scrollTopEnabled) {
-      textarea.scrollTop = textarea.scrollHeight;
-    }
+  appendLog(message, type = this.normalCode) {
+    this.logs.add(message, type === this.errorCode ? 'error' : type === this.warnCode ? 'warn' : type === this.debugCode ? 'debug' : 'info');
+    if (this.outputTextBox && this.logsOpen && !this.minimized) this.renderLogs();
   }
 
-  /**
-   * 销毁面板
-   */
+  renderLogs() {
+    const top = this.logScrollTop || 0;
+    const detailed = this.logFilter.value === 'all';
+    const entries = this.logs.filter(this.logFilter.value, this.logScope.value === 'all' ? 'all' : this.activeView);
+    this.outputTextBox.replaceChildren(...entries.map(entry => {
+      const row = element('div', `bf-log-row bf-log-${entry.level}`);
+      const time = element('time', '', new Date(entry.time).toLocaleTimeString('zh-CN', { hour12: false }));
+      time.dateTime = entry.time; time.title = new Date(entry.time).toLocaleString('zh-CN');
+      const phaseNames = { creating: '准备目标', copying: '复制', loading: '读取列表', scanning: '统计', delete: '删除', unsubscribe: '退订' };
+      const viewNames = { copy: '复制', statistics: '统计', manage: '管理', system: '系统' };
+      const context = element('span', 'bf-log-context', entry.operationId ? `${viewNames[entry.view]} #${entry.operationId.slice(-6)} ${phaseNames[entry.phase] || entry.phase}` : viewNames[entry.view]);
+      row.append(time, element('span', 'bf-log-level', logLevels[entry.level]));
+      if (detailed) row.append(context);
+      row.append(element('span', 'bf-log-message', entry.message));
+      return row;
+    }));
+    this.outputTextBox.prepend(this.logHelp);
+    if (!entries.length) this.outputTextBox.append(element('p', 'bf-empty', this.logs.entries.length ? '当前筛选下暂无记录。可查看全部功能或排查详情。' : '暂无记录。后续操作会显示在这里。'));
+    const hidden = this.logs.entries.length - entries.length;
+    this.logCount.textContent = `${entries.length} 条${hidden ? ` · 筛选隐藏 ${hidden} 条` : ''}`;
+    this.logCount.title = `筛选不删除记录。导出包含全部 ${this.logs.entries.length} 条记录。`;
+    this.logHelp.textContent = `${detailed ? '含按钮点击等技术细节。' : '按钮细节见“排查详情”。'}导出包含全部记录。${this.logs.dropped ? `仅保留最近 ${this.logs.limit} 条，已移除更早的 ${this.logs.dropped} 条。` : ''}`;
+    this.outputTextBox.scrollTop = this.scrollTopEnabled ? this.outputTextBox.scrollHeight : top;
+  }
+
+  reviewExport(text, filename) {
+    this.exportReview?.remove();
+    const section = element('section', 'bf-export');
+    section.setAttribute('role', 'dialog'); section.setAttribute('aria-label', '导出前检查'); section.setAttribute('aria-modal', 'true');
+    section.append(element('h3', '', '导出前检查'), element('p', '', '仅下载到本机，不会上传。内容可能含收藏夹名称、ID 和作者信息；分享前请自行删去。'));
+    const area = element('textarea'); area.value = text; area.setAttribute('aria-label', '可编辑的导出内容');
+    const previousFocus = document.activeElement;
+    const close = () => {
+      section.remove(); this.exportReview = null;
+      this.notice.inert = false; this.content.inert = false; this.navigation.inert = false; this.footer.inert = false; this.header.inert = false; this.diagnostics.inert = false;
+      previousFocus?.focus();
+    };
+    section.append(area, button('下载此内容', () => {
+      const url = URL.createObjectURL(new Blob([area.value], { type: 'application/json' }));
+      const link = element('a'); link.href = url; link.download = filename; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }), button('关闭预览', close));
+    section.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { event.preventDefault(); close(); }
+      if (event.key === 'Tab') {
+        const focusable = [...section.querySelectorAll('textarea,button')];
+        if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1).focus(); }
+        else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0].focus(); }
+      }
+    });
+    this.floatingPanel.append(section); this.exportReview = section;
+    this.notice.inert = true; this.content.inert = true; this.navigation.inert = true; this.footer.inert = true; this.header.inert = true; this.diagnostics.inert = true;
+    area.focus();
+  }
+
+  updateModeSummary() {
+    const reason = copyBlockReason(currentCopyContext());
+    this.copyHelp.textContent = reason || '同名则复用，否则新建；来源保留。';
+    if (!this.manager.modes) return;
+    const name = value => value === 'api' ? 'API' : '网页';
+    const modes = this.manager.modes;
+    this.copyHelp.textContent = reason || `${name(modes.copy)}复制 · ${name(modes.create)}创建 · 来源保留`;
+    this.modeButton.title = `读取/统计：${name(modes.read)}；复制：${name(modes.copy)}；创建：${name(modes.create)}；删除/退订：${name(modes.manage)}`;
+    this.modeButton.setAttribute('aria-label', `设置。${this.modeButton.title}`);
+    if (this.logScope) this.logScope.options[0].textContent = ({ copy: '复制功能', statistics: '统计功能', manage: '管理功能', settings: '设置', help: '帮助' })[this.activeView];
+  }
+
+  showModeSettings() { this.showView('settings'); }
+
+  createSettingsPanel() {
+    const root = element('section', 'bf-settings'); this.settingsRoot = root; root.hidden = true;
+    root.setAttribute('aria-label', '设置');
+    root.append(element('h2', '', '操作方式'),
+      element('p', 'bf-muted', '网页方式操作页面按钮，较慢且依赖页面结构；API 直接请求 B 站网页接口，接口和权限可能变化。两种方式均使用当前登录账号。'),
+      element('p', 'bf-muted', '结果不明时停止，不自动切换或重试。API 复制也会读取来源；API 新建目标默认为私密。网页读取会依次查看条目，请勿同时操作页面。'));
+    this.modeChoices = new Map();
+    for (const [key, title] of [['read', '列表读取与统计'], ['copy', '复制内容'], ['create', '创建目标收藏夹'], ['manage', '删除与取消订阅']]) {
+      const label = element('label', 'bf-setting-row', title), select = element('select');
+      select.setAttribute('aria-label', title);
+      for (const [value, title] of [['web', '网页操作'], ['api', 'API']]) { const option = element('option', '', title); option.value = value; select.append(option); }
+      select.value = this.manager.modes[key]; label.append(select); root.append(label); this.modeChoices.set(key, select);
+    }
+    this.settingsStatus = element('p', 'bf-muted'); this.settingsStatus.setAttribute('role', 'status');
+    const controls = element('div', 'bf-tools');
+    this.saveModesButton = button('保存设置', () => {
+      if (this.busy) return;
+      for (const [key, control] of this.modeChoices) this.manager.modes[key] = control.value;
+      this.inventoryPanel?.mutations?.invalidate();
+      this.updateModeSummary(); this.layout.save(); this.settingsStatus.textContent = '已保存。已加载的列表和统计结果保留；新任务使用以上设置，管理操作需重新预览。';
+      this.logs.add(this.modeButton.title, 'info', { view: 'system', phase: 'settings' }); this.renderLogs();
+    }, 'bf-primary');
+    controls.append(this.saveModesButton, button('恢复默认位置和大小', () => this.layout.reset()));
+    root.append(controls, this.settingsStatus);
+  }
+
+  toggleMinimize() {
+    this.minimized = !this.minimized;
+    this.floatingPanel.dataset.minimized = String(this.minimized);
+    this.content.hidden = this.minimized;
+    this.navigation.hidden = this.minimized; this.notice.hidden = this.minimized; this.footer.hidden = this.minimized || ['settings', 'help'].includes(this.activeView);
+    this.diagnostics.hidden = this.minimized || !this.logsOpen;
+    this.minimizeButton.textContent = this.minimized ? '□' : '−';
+    this.minimizeButton.setAttribute('aria-label', this.minimized ? '恢复面板' : '最小化');
+    this.minimizeButton.title = this.minimized ? '恢复面板' : '最小化';
+    this.minimizeButton.setAttribute('aria-expanded', String(!this.minimized));
+    if (this.minimized) { this.hiddenHeight = this.floatingPanel.style.height; this.floatingPanel.style.height = '64px'; }
+    else { this.floatingPanel.style.height = this.hiddenHeight || ''; if (this.logsOpen) this.renderLogs(); this.clampToViewport(); }
+    this.layout.save();
+  }
+
+  recordPanelSize() { this.clampToViewport(); this.layout.save(); }
+
+  clampToViewport() {
+    if (this.floatingPanel) this.layout.clamp();
+  }
+
   destroy() {
-    document.body.removeEventListener('mousemove', this.onBodyMove);
-    document.body.removeEventListener('mouseup', this.onBodyUp);
-    if (this.floatingPanel) {
-      this.floatingPanel.remove();
-      this.floatingPanel = null;
-    }
+    if (this.floatingPanel) this.layout.save();
+    this.inventoryPanel?.destroy();
+    if (this.operation.state.status === 'running') this.operation.finish('interrupted', '面板已离开当前页面；请检查页面结果，不要直接重复提交。');
+    this.unsubscribes?.forEach(unsubscribe => unsubscribe());
+    document.removeEventListener('mousemove', this.onBodyMove);
+    document.removeEventListener('mouseup', this.onBodyUp);
+    window.removeEventListener('blur', this.onBodyUp);
+    window.removeEventListener('resize', this.onViewportResize);
+    this.floatingPanel?.remove();
+    this.floatingPanel = null;
   }
 }

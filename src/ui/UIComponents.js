@@ -96,6 +96,8 @@ export class UIComponents {
 /**
  * 复选框项组件
  */
+let checkboxSequence = 0;
+
 export class CheckboxItem {
   constructor(favName) {
     this.checkboxContainer = this.createCheckboxContainer(favName);
@@ -106,24 +108,29 @@ export class CheckboxItem {
 
   createCheckboxContainer(favName) {
     const checkboxContainer = document.createElement('div');
-    const checkboxDiv = UIComponents.createSubDiv('signal-panel');
-    checkboxDiv.style.justifyContent = 'space-between';
+    const checkboxDiv = document.createElement('div');
+    checkboxDiv.className = 'signal-panel';
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.id = `checkbox-${favName}`;
+    checkbox.id = `bili-fav-source-${++checkboxSequence}`;
 
     const label = document.createElement('label');
     label.textContent = favName;
-    label.setAttribute('for', `checkbox-${favName}`);
+    label.setAttribute('for', checkbox.id);
 
     const inputText = document.createElement('input');
     inputText.type = 'text';
     inputText.value = favName;
-    inputText.style.textAlign = 'center';
+    inputText.setAttribute('aria-label', `目标收藏夹：${favName}`);
 
     checkboxDiv.appendChild(checkbox);
     checkboxDiv.appendChild(label);
+    const direction = document.createElement('span');
+    direction.className = 'bf-direction';
+    direction.textContent = '→';
+    direction.setAttribute('aria-hidden', 'true');
+    checkboxDiv.appendChild(direction);
     checkboxDiv.appendChild(inputText);
 
     checkboxContainer.appendChild(checkboxDiv);

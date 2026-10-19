@@ -1,8 +1,15 @@
+import { nativeControls } from './nativeControls.js';
+
 /** 旧版个人空间（带“体验新版”入口）。 */
 export const LegacyPageAdapter = {
   name: '旧版个人空间',
+  nativeControls: nativeControls.legacy,
+  notification: '.be-toast, .vui_toast, .bili-message, .bili-toast, .be-message, .toast-text',
   sidebar: '#fav-createdList-container',
-  sidebarCreate: null,
+  sidebarCreate: '#fav-createdList-container',
+  sidebarCreateForm: {
+    dialog: '.edit-media-list .edit-mask', input: '#media-list-name', confirm: '.submit-btn'
+  },
   item: '.fav-item',
   title: 'a.text',
   itemLink: 'a.text',

@@ -8,7 +8,7 @@ import { PageDetector } from '../src/core/PageDetector.js';
 import { CONFIG } from '../src/config/config.js';
 
 function page(t, html) {
-  const dom = new JSDOM(html, { url: 'https://space.bilibili.com/123/favlist' });
+  const dom = new JSDOM(html, { url: 'https://space.bilibili.com/123/favlist?fid=100&ftype=create' });
   for (const key of ['window', 'document', 'Node', 'Event', 'KeyboardEvent']) {
     globalThis[key] = key === 'window' ? dom.window : dom.window[key];
   }
@@ -20,6 +20,36 @@ function page(t, html) {
 
 const legacy = '<div id="fav-createdList-container"></div>';
 const row = name => `<div class="target-favitem"><span class="fav-name">${name}</span><input class="fav-select" type="radio"></div>`;
+
+for (const vui of [false, true]) {
+  test(`${vui ? 'VUI' : 'legacy'} copy never clicks the first same-name source or destination`, async t => {
+    const sourceRow = name => vui ? `<div class="vui_sidebar-item"><div class="vui_sidebar-item-title"><span class="vui_ellipsis">${name}</span></div></div>` : `<div class="fav-item"><a class="text">${name}</a></div>`;
+    const targetRow = name => vui ? `<div class="modify-fav-item"><span class="modify-fav-item__title">${name}</span><input type="radio" class="vui_radio--input-original"></div>` : row(name);
+    page(t, vui ? `<div class="favlist-aside">${sourceRow('Same')}${sourceRow(' Same ')}</div><div class="vui_dialog--content fav-modify-modal-content">${targetRow('Target')}${targetRow(' Target ')}</div>` : `<div id="fav-createdList-container">${sourceRow('Same')}${sourceRow(' Same ')}</div><div class="edit-video-modal">${targetRow('Target')}${targetRow(' Target ')}</div>`);
+    let clicks = 0; document.body.addEventListener('click', () => clicks++);
+    await assert.rejects(BilibiliAPI.clickFavorite('Same'), /同名.*不同名称/);
+    assert.throws(() => BilibiliAPI.selectFavoriteInDialog(document.querySelector(vui ? '.vui_dialog--content' : '.edit-video-modal'), 'Target'), /同名.*不同名称/);
+    assert.equal(clicks, 0); assert.equal(document.querySelector('input').checked, false);
+  });
+}
+
+test('cross-page target preparation consumes state and rejects ambiguous existing names before creating another target', async t => {
+  page(t, legacy); document.cookie = 'DedeUserID=123';
+  const manager = new FavoriteManager(); t.mock.method(manager, 'getAllFavoriteNames', () => ['Same', ' Same ']);
+  let pending = { phase: 'creating', actorId: '123', returnURL: 'https://space.bilibili.com/456/favlist', tasks: [{ source: 'Source', target: 'Same' }, { source: 'Other', target: 'New' }] };
+  t.mock.method(StateManager, 'loadState', () => pending); t.mock.method(StateManager, 'clearState', () => { pending = null; });
+  t.mock.method(StateManager, 'saveState', () => assert.fail('ambiguous preparation must not return to source'));
+  t.mock.method(manager.crossPageFlow, 'batchCreateFavorites', () => assert.fail('preflight must run before any creation'));
+  await assert.rejects(manager.crossPageFlow.resumeFlow(), /同名.*不同名称/); assert.equal(pending, null);
+});
+
+test('a later ambiguous source stops the whole resumed native batch before its first copy', async t => {
+  page(t, legacy); document.cookie = 'DedeUserID=456';
+  const manager = new FavoriteManager(); t.mock.method(manager, 'getAllFavoriteNames', () => ['Unique', 'Same', ' Same ']);
+  t.mock.method(manager, 'copyFavorite', () => assert.fail('preflight must precede the first copy'));
+  await assert.rejects(manager.batchCopy([{ source: 'Unique', target: 'Target' }, { source: 'Same', target: 'Other' }], { skipCrossPage: true }), /同名.*不同名称/);
+  assert.equal(manager.operation.state.status, 'failed'); assert.equal(manager.operation.state.confirmed, 0);
+});
 
 for (const vui of [false, true]) {
   test(`${vui ? '新版' : '旧版'}：目标名首尾空白不触发重建，内部连续空格仍区分`, t => {
@@ -65,13 +95,17 @@ test('新建只提交一次，等待异步更新后的真实列表再返回成�
 
 test('实际复制复用含空格的目标，不打开新建表单', async t => {
   page(t, `${legacy}<div class="edit-video-modal">${row('学习 资料')}<button class="fake-fav-input"></button><div class="modal-footer"><button class="btn">确定</button></div></div>`);
+  document.cookie = 'DedeUserID=456';
   const manager = new FavoriteManager();
   t.mock.method(BilibiliAPI, 'ensureBatchModeActive', async () => true);
   t.mock.method(BilibiliAPI, 'clickSelectAll', () => true);
   t.mock.method(BilibiliAPI, 'clickCopyButton', async () => true);
   let creates = 0, copies = 0;
   document.querySelector('.fake-fav-input').onclick = () => creates++;
-  document.querySelector('.btn').onclick = () => copies++;
+  document.querySelector('.btn').onclick = () => {
+    copies++;
+    const toast = document.createElement('div'); toast.className = 'vui_toast'; toast.textContent = '操作成功'; document.body.append(toast);
+  };
   assert.equal(await manager.copyOnePage(' 学习 资料 '), true);
   assert.equal(creates, 0);
   assert.equal(copies, 1);
@@ -136,7 +170,7 @@ test('侧栏已尝试但未确认成功时停止，不换入口再次提交', as
 });
 
 test('批量任务预先拒绝空名称，失败后停止后续任务', async t => {
-  page(t, legacy);
+  page(t, legacy); document.cookie = 'DedeUserID=456';
   const manager = new FavoriteManager();
   let calls = 0;
   t.mock.method(manager, 'copyFavorite', async (source, target) => {

@@ -5,11 +5,13 @@
 
 import { SELECTORS, BUTTON_TEXTS } from '../config/selectors.js';
 import { delay, waitForElement, findButtonByText, getElementText, isElementVisible } from '../utils/dom.js';
-import { log, error, warn } from '../utils/logger.js';
+import { log, error, warn, debug } from '../utils/logger.js';
 import { CONFIG } from '../config/config.js';
 import { getPageAdapter } from './adapters/index.js';
 import { VuiPageAdapter } from './adapters/VuiPageAdapter.js';
-import { normalizeFavoriteName } from '../utils/favoriteNames.js';
+import { normalizeFavoriteName, assertUnambiguousFavoriteName } from '../utils/favoriteNames.js';
+import { watchCopyConfirmation } from './adapters/copyConfirmation.js';
+import { currentNativePage, nativePageCount, nativePageSnapshot, nativeControlEnabled, goNativePage } from './adapters/nativePagination.js';
 
 const pageAdapter = () => getPageAdapter() || VuiPageAdapter;
 
@@ -60,9 +62,14 @@ export class BilibiliAPI {
    * @returns {number} 总页数
    */
   static getTotalPages() {
-    const pageInfoText = document.querySelector(pageAdapter().pagination)?.textContent || '';
-    const match = pageInfoText.match(/共\s*(\d+)\s*页/);
-    return match ? parseInt(match[1]) : 1;
+    return nativePageCount(pageAdapter().nativeControls);
+  }
+
+  static getCopyPageSnapshot() { return nativePageSnapshot(pageAdapter().nativeControls); }
+
+  static async prepareCopyPages(guard, before) {
+    await goNativePage(pageAdapter().nativeControls, 1, { guard, before });
+    return this.getTotalPages();
   }
 
   /**
@@ -76,7 +83,7 @@ export class BilibiliAPI {
       return false;
     }
 
-    log('点击批量操作按钮');
+    debug('点击批量操作按钮');
     button.click();
     await delay(CONFIG.DELAY.SHORT);
     return true;
@@ -93,7 +100,7 @@ export class BilibiliAPI {
       return false;
     }
 
-    log('全选当前页');
+    debug('全选当前页');
     const selected = checkbox.matches(pageAdapter().selectedAll) ||
       checkbox.querySelector(pageAdapter().selectedAll);
     if (!selected) checkbox.click();
@@ -112,7 +119,7 @@ export class BilibiliAPI {
       return false;
     }
 
-    log('点击复制至按钮');
+    debug('点击复制至按钮');
     copyBtn.click();
     await delay(CONFIG.DELAY.SHORT);
     return true;
@@ -149,10 +156,11 @@ export class BilibiliAPI {
     favName = normalizeFavoriteName(favName);
     if (!favName) return false;
     const favList = this.getFavoriteListInDialog(dialog);
+    assertUnambiguousFavoriteName(favList.map(fav => fav.name), favName);
 
     for (const fav of favList) {
       if (fav.name === favName) {
-        log(`找到目标收藏夹：[${favName}]`);
+        debug(`找到目标收藏夹：[${favName}]`);
         const radio = fav.element.querySelector(pageAdapter().radio);
         if (radio) {
           radio.click();
@@ -177,7 +185,7 @@ export class BilibiliAPI {
       return false;
     }
 
-    log('点击新建收藏夹按钮');
+    debug('点击新建收藏夹按钮');
     createBtn.click();
     await delay(CONFIG.DELAY.MIDDLE);
     return true;
@@ -186,18 +194,19 @@ export class BilibiliAPI {
   /**
    * 输入收藏夹名称（完整的事件链）
    * @param {string} name - 收藏夹名称
+   * @param {HTMLInputElement|null} input - 已核对的表单输入框；省略时使用复制弹窗输入框
    * @returns {Promise<boolean>} 是否成功
    */
-  static async inputFavoriteName(name) {
+  static async inputFavoriteName(name, input = null) {
     name = normalizeFavoriteName(name);
     if (!name) return false;
-    const nameInput = Array.from(document.querySelectorAll(SELECTORS.CREATE_FAV_NAME_INPUT)).find(isElementVisible);
-    if (!nameInput) {
+    const nameInput = input || Array.from(document.querySelectorAll(SELECTORS.CREATE_FAV_NAME_INPUT)).find(isElementVisible);
+    if (!nameInput || !isElementVisible(nameInput)) {
       error('找不到名称输入框');
       return false;
     }
 
-    log('输入新收藏夹名称:', name);
+    debug('输入新收藏夹名称:', name);
 
     // 模拟真实输入
     nameInput.focus();
@@ -222,18 +231,19 @@ export class BilibiliAPI {
 
   /**
    * 点击创建按钮
+   * @param {Element|null} button - 已核对的表单提交按钮；省略时使用原创建入口
    * @returns {Promise<boolean>} 是否成功
    */
-  static async clickCreateButton() {
-    const createConfirmBtn = (getPageAdapter()?.createConfirm && document.querySelector(getPageAdapter().createConfirm)) ||
+  static async clickCreateButton(button = null) {
+    const createConfirmBtn = button || (getPageAdapter()?.createConfirm && document.querySelector(getPageAdapter().createConfirm)) ||
       findButtonByText(BUTTON_TEXTS.CREATE);
 
-    if (!createConfirmBtn || createConfirmBtn.disabled) {
+    if (!createConfirmBtn || !isElementVisible(createConfirmBtn) || createConfirmBtn.disabled || createConfirmBtn.getAttribute('aria-disabled') === 'true') {
       error('创建按钮不可用');
       return false;
     }
 
-    log('点击创建按钮');
+    debug('点击创建按钮');
     createConfirmBtn.click();
     await delay(CONFIG.DELAY.MIDDLE);
     return true;
@@ -246,41 +256,58 @@ export class BilibiliAPI {
    * @param {string} favName - 收藏夹名称
    * @returns {Promise<boolean|null>}
    */
-  static async createFavoriteViaSidebar(favName) {
+  static async createFavoriteViaSidebar(favName, guard = () => true) {
     favName = normalizeFavoriteName(favName);
     if (!favName) return false;
+    assertUnambiguousFavoriteName(this.getAllFavorites().map(item => this.getFavoriteName(item)), favName);
     if (this.getAllFavorites().some(item => this.getFavoriteName(item) === favName)) return true;
-    const selector = pageAdapter().sidebarCreate;
+    const adapter = pageAdapter(), selector = adapter.sidebarCreate;
     const sidebar = selector && document.querySelector(selector);
     if (!sidebar) return null;
 
     // 文本精确为"新建收藏夹"的叶子元素即入口
     const entry = Array.from(sidebar.querySelectorAll('*')).find(
       el => el.children.length === 0 &&
-            el.textContent.trim() === BUTTON_TEXTS.CREATE_NEW
+            el.textContent.trim() === BUTTON_TEXTS.CREATE_NEW && isElementVisible(el)
     );
     if (!entry) {
       warn('侧边栏未找到"新建收藏夹"入口');
       return null;
     }
 
-    log('点击左侧边栏[新建收藏夹]');
+    const form = adapter.sidebarCreateForm;
+    if (form && [...document.querySelectorAll(form.dialog)].some(isElementVisible)) {
+      warn('已有收藏夹编辑窗口，请先关闭后重新开始；尚未提交');
+      return false;
+    }
+    if (!guard()) return false;
+
+    debug('点击左侧边栏[新建收藏夹]');
     const clickable = entry.closest(
       'button, [role="button"], [class*="add"], [class*="create"], [class*="btn"]'
     ) || entry;
     clickable.click();
     await delay(CONFIG.DELAY.SHORT);
 
-    // 等待名称输入框（复用与复制对话框一致的创建组件）
-    const input = await waitForElement(SELECTORS.CREATE_FAV_NAME_INPUT, 3000, document, true);
+    // Legacy opens an independent Edit form; its controls differ from the
+    // copy dialog. Scope both controls to that visible form before submitting.
+    const parent = form ? await waitForElement(form.dialog, 3000, document, true) : document;
+    const input = parent && await waitForElement(form?.input || SELECTORS.CREATE_FAV_NAME_INPUT, 3000, parent, true);
     if (!input) {
       warn('点击"新建收藏夹"后未出现名称输入框');
       return false;
     }
 
     // 输入名称并点击创建
-    if (!await this.inputFavoriteName(favName)) return false;
-    if (!await this.clickCreateButton()) return false;
+    if (!await this.inputFavoriteName(favName, input)) return false;
+    if (!guard()) return false;
+    let submit = null;
+    if (form) {
+      const controls = [...parent.querySelectorAll(form.confirm)].filter(isElementVisible);
+      if (controls.length !== 1) { error('新建表单的提交按钮未确认，已停止'); return false; }
+      submit = controls[0];
+    }
+    if (!await this.clickCreateButton(submit)) return false;
 
     const confirmed = await this.waitForFavorite(favName);
     if (!confirmed) error(`未确认收藏夹 [${favName}] 创建成功，已停止，请检查页面结果`);
@@ -314,58 +341,46 @@ export class BilibiliAPI {
    * @returns {Promise<boolean>} 是否成功
    */
   static async clickConfirmButton(dialog) {
+    this.copySubmission = { status: 'not_started', detail: '尚未提交复制' };
     const confirmBtn = dialog.querySelector(pageAdapter().confirm);
-    if (!confirmBtn) {
+    if (!confirmBtn || confirmBtn.disabled) {
       error('找不到确定按钮');
       return false;
     }
 
-    log('点击确定');
-    confirmBtn.click();
-    await delay(CONFIG.DELAY.LONG);
-
-    // 检查是否有成功提示
-    const toast = document.querySelector(SELECTORS.TOAST);
-    if (toast && toast.textContent.includes(BUTTON_TEXTS.SUCCESS)) {
+    debug('点击确定');
+    const watcher = watchCopyConfirmation(pageAdapter().notification, CONFIG.COPY_CONFIRMATION.TIMEOUT,
+      () => log('已提交复制，平台响应较慢，仍在等待确认，请勿重复点击。'), CONFIG.COPY_CONFIRMATION.SLOW_NOTICE);
+    this.copySubmission = { status: 'unknown', detail: '复制已提交，正在等待平台确认。' };
+    try {
+      confirmBtn.click();
+      this.copySubmission = await watcher.result;
+    } catch (err) {
+      err.outcome = 'unknown'; throw err;
+    } finally { watcher.cancel(); }
+    if (this.copySubmission.status === 'confirmed') {
       log('✓ 复制成功');
+      return true;
+    } else if (this.copySubmission.status === 'failed') {
+      error(this.copySubmission.detail);
     } else {
-      log('复制请求已发送，请检查结果');
+      warn(this.copySubmission.detail);
     }
 
-    return true;
+    return false;
   }
 
   /**
    * 点击下一页按钮
    * @returns {Promise<boolean>} 是否成功
    */
-  static async clickNextPage() {
-    const paginationEl = document.querySelector(pageAdapter().pagination);
-    if (!paginationEl) {
-      log('判断为单页收藏夹');
-      return false;
-    }
-
-    const allButtons = paginationEl.querySelectorAll(pageAdapter().next);
-    let nextBtn = null;
-
-    for (const btn of allButtons) {
-      const text = btn.textContent.trim();
-      if (SELECTORS.NEXT_PAGE_TEXT.some(t => text === t || text.includes(t))) {
-        nextBtn = btn;
-        break;
-      }
-    }
-
-    if (nextBtn && !nextBtn.disabled && !nextBtn.classList.contains('be-pager-disabled')) {
-      log('点击下一页');
-      nextBtn.click();
-      await delay(CONFIG.DELAY.MIDDLE);
-      return true;
-    } else {
-      log('已到最后一页或找不到下一页按钮');
-      return false;
-    }
+  static async clickNextPage(guard = () => {}) {
+    const controls = pageAdapter().nativeControls;
+    const next = document.querySelector(controls.pagination)?.querySelector(controls.next);
+    if (!nativeControlEnabled(next)) { log('已到最后一页或找不到下一页按钮'); return false; }
+    log('点击下一页');
+    await goNativePage(controls, currentNativePage(controls) + 1, { guard });
+    return true;
   }
 
   /**
@@ -377,11 +392,12 @@ export class BilibiliAPI {
     favName = normalizeFavoriteName(favName);
     if (!favName) return false;
     const allFavs = this.getAllFavorites();
+    assertUnambiguousFavoriteName(allFavs.map(fav => this.getFavoriteName(fav)), favName);
 
     for (const favItem of allFavs) {
       const name = this.getFavoriteName(favItem);
       if (name === favName) {
-        log(`点击收藏夹：[${favName}]`);
+        debug(`点击收藏夹：[${favName}]`);
         const link = pageAdapter().itemLink;
         (link ? favItem.querySelector(link) || favItem : favItem).click();
         await delay(CONFIG.DELAY.SHORT);
@@ -407,11 +423,11 @@ export class BilibiliAPI {
    */
   static async ensureBatchModeActive() {
     if (this.isBatchModeActive()) {
-      log('批量模式已激活');
+      debug('批量模式已激活');
       return true;
     }
 
-    log('批量模式已退出，重新进入');
+    debug('批量模式已退出，重新进入');
     return await this.clickBatchOperationButton();
   }
 

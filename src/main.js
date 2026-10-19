@@ -1,7 +1,7 @@
 import { FavoriteManager } from './core/FavoriteManager.js';
 import { PageLifecycle } from './core/PageLifecycle.js';
 import { FloatingPanel } from './ui/FloatingPanel.js';
-import { log, setLoggerPanel } from './utils/logger.js';
+import { log, setLoggerPanel, setLoggerStore } from './utils/logger.js';
 import { CONFIG } from './config/config.js';
 
 // SPA 重复注入时只保留一个生命周期。
@@ -15,6 +15,7 @@ if (!window.__biliFavsLifecycle) {
     notice?.remove();
     notice = null;
     setLoggerPanel(null);
+    setLoggerStore(null);
     // Tampermonkey 的 Window 代理可能拒绝 delete；赋空值同样能释放引用。
     window.BiliFavPanel = null;
     window.BiliFavManager = null;
@@ -26,6 +27,7 @@ if (!window.__biliFavsLifecycle) {
       notice?.remove();
       notice = null;
       const manager = new FavoriteManager();
+      setLoggerStore(manager.logs);
       if (!manager.initialize()) return;
       panel = new FloatingPanel(manager);
       panel.onDismiss = () => { lifecycle.dismissed = true; };
@@ -36,10 +38,11 @@ if (!window.__biliFavsLifecycle) {
       log(`脚本已就绪 v${CONFIG.SCRIPT.VERSION}`);
 
       const mountedPanel = panel;
-      mountedPanel.busy = true;
+      mountedPanel.setBusy(true);
       manager.crossPageFlow.resumeFlow().catch(err => {
-        log('恢复跨页面流程失败:', err.message);
-      }).finally(() => { mountedPanel.busy = false; });
+        if (!['failed', 'unknown'].includes(manager.operation.state.status))
+          manager.operation.finish('failed', err.message);
+      }).finally(() => { if (mountedPanel.floatingPanel) mountedPanel.setBusy(false); });
     },
     refresh() {
       if (panel?.busy) return false;

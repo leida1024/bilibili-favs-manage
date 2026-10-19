@@ -3,6 +3,7 @@
  */
 
 export const CONFIG = {
+  COPY_CONFIRMATION: { TIMEOUT: 30000, SLOW_NOTICE: 6000 },
   // 延迟时间（毫秒）
   DELAY: {
     SHORT: 500,
@@ -32,13 +33,13 @@ export const CONFIG = {
     LEFT_WIDTH_PERCENT: '35%',
     RIGHT_WIDTH_PERCENT: '63%',
     MIN_OUTPUT_WIDTH: 300,
-    RESIZE_BORDER_SIZE: 15,
+    RESIZE_BORDER_SIZE: 4,
     Z_INDEX: 99999
   },
 
   // 脚本信息
   SCRIPT: {
-    VERSION: '2.1.2',
+    VERSION: '2.2.13',
     NAME: 'BiliBili 收藏夹批量管理',
     DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
   }

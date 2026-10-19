@@ -1,8 +1,11 @@
 import { warn } from '../../utils/logger.js';
+import { nativeControls } from './nativeControls.js';
 
 /** 新版 VUI 收藏夹页。 */
 export const VuiPageAdapter = {
   name: '新版 (VUI)',
+  nativeControls: nativeControls.vui,
+  notification: '.vui_toast',
   sidebar: '.favlist-aside',
   sidebarCreate: '.favlist-aside',
   item: '.vui_sidebar-item',
