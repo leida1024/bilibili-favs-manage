@@ -17,7 +17,7 @@ Read the [development handbook](DEVELOPMENT.md), [workflow](workflow.md), [front
 | 4 | [Unsubscribe](tasks/archive/2026-10/10-18-batch-unsubscribe/) | Folder subscriptions with identity safeguards, synthetic acceptance |
 | Follow-up | [Panel usability](tasks/archive/2026-10/10-18-panel-usability/) | Adjacent copy pairs, separate task views and one task scroller |
 
-The latest local build 2.2.2 passed82 tests and build. These changes are not released. No real-account mutations or remote pushes were performed. The latest user instruction prohibits pushing until user review. Remaining live/GM/navigation limits are in the handbook and task verification files.
+The latest local build 2.2.3 passed89 tests and build. Native copy has an independent30s confirmation window; records have two content modes and complete bounded history in navigation handoffs. See the copy-confirmation-records task for evidence and limits. These changes are not released. No real-account mutations or remote pushes were performed. The latest user instruction prohibits pushing until user review. Remaining live/GM/navigation limits are in the handbook and task verification files.
 
 ## Records
 

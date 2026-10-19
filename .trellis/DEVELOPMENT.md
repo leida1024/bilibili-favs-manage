@@ -1,5 +1,7 @@
 # Development handbook and session handoff
 
+Latest local follow-up:2.2.3, copy-confirmation-records task. Native confirmation waits30s independently of UI delays, with a6s waiting notice, localized/new/reused notification handling and explicit failure versus unknown. Records content is 日常记录/排查详情, hidden counts are explicit, export stays complete, and both navigation handoffs capture full bounded diagnostics immediately before leaving. New handoffs reject account changes.89 tests/build and desktop/narrow fictional checks passed; real startup was read-only. Historical exact missing-sidebar/confirmation cause is not proven; see task verification. No real writes, push or release.
+
 ## Current UI contract (supersedes historical layout notes below)
 
 The user requested autonomous scenario questions/answers, documented system design and execution. [Scenario workspace task](tasks/archive/2026-10/10-19-scenario-workspace/) owns current evidence, glossary and wireframes. Product commit `1861bbf`, numeric version `2.2.1`:600×500, about326px left workspace, default side records, direct scope/action buttons, common search/all/count toolbar, function-owned status and current-function logs. Cross-page handoffs retain task ID and bounded diagnostics; unknown submissions are 待核对. 67 tests/build,75 fictional browser scenarios and visual checks passed. Own-space read-only28 folders→27 eligible/1 protected; foreign-space deletion stays disabled. No real writes, push or publication.

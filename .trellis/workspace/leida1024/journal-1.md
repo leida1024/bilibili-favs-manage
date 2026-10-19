@@ -367,3 +367,36 @@ Product commit944884f; design, research and detailed evidence: `.trellis/tasks/a
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: Fix native copy confirmation and record continuity 2.2.3
+
+**Date**: 2026-10-19
+**Task**: Fix native copy confirmation and record continuity 2.2.3
+**Branch**: `develop`
+
+### Summary
+
+89 tests/build passed; 30s native confirmation and 6s waiting notice; daily/details records and full bounded handoff snapshots; desktop/narrow fictional browser checks and read-only VUI injection. Historical exact cause and real writes/GM navigation remain unverified. No push or release. Evidence: .trellis/tasks/archive/2026-10/10-19-copy-confirmation-records/verification.md
+
+### Main Changes
+
+Native copy confirmation, two record modes, complete diagnostic handoffs and account guard. Detailed evidence is in the archived task.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8cdcba3` | (see git log) |
+
+### Testing
+
+- [OK] 89/89 tests, build and diff checks; desktop/narrow fictional browser checks and read-only VUI startup. No real writes or GM navigation verification.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

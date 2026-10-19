@@ -1,0 +1,34 @@
+(async () => {
+  if (location.origin !== 'http://127.0.0.1:8766') throw Error('Fictional preview only');
+  const p = window.previewPanel, failures = [];
+  const assert = (ok, text) => { if (!ok) failures.push(text); };
+  const box = node => node.getBoundingClientRect();
+  p.setBusy(false); p.showView('copy'); p.logs.clear();
+  p.logs.add('虚构：侧边栏入口不可用，改用复制窗口创建', 'info', { view: 'copy', operationId: 'fictional-copy', phase: 'creating' });
+  p.logs.add('虚构：点击确定', 'debug', { view: 'copy', operationId: 'fictional-copy', phase: 'copying' });
+  p.logs.add('虚构：统计记录', 'info', { view: 'statistics', operationId: 'fictional-scan' });
+  p.logScope.value = 'current'; p.logFilter.value = 'normal'; p.renderLogs();
+  assert(p.logFilter.options.length === 2, 'two content choices');
+  assert(p.outputTextBox.textContent.includes('侧边栏入口不可用'), 'daily fallback visible');
+  assert(!p.outputTextBox.textContent.includes('虚构：点击确定'), 'technical hidden');
+  assert(p.logCount.textContent.includes('筛选隐藏 2 条'), 'hidden count visible');
+  assert(getComputedStyle(p.logCount).display !== 'none', 'narrow hidden count retained');
+  assert(!p.outputTextBox.querySelector('.bf-log-context'), 'daily omits IDs');
+  p.logFilter.value = 'all'; p.logFilter.dispatchEvent(new Event('change'));
+  assert(p.outputTextBox.textContent.includes('虚构：点击确定'), 'details includes technical record');
+  const context = p.outputTextBox.querySelector('.bf-log-context');
+  assert(context && getComputedStyle(context).display !== 'none', 'details context readable');
+  p.logScope.value = 'all'; p.logScope.dispatchEvent(new Event('change'));
+  assert(p.outputTextBox.querySelectorAll('.bf-log-row').length === 3, 'all records retained');
+  p.reviewExport(p.logs.export(), 'fictional.json');
+  assert(JSON.parse(p.exportReview.querySelector('textarea').value).entries.length === 3, 'export all records');
+  p.exportReview.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  p.logFilter.value = 'normal'; p.renderLogs();
+  const root = box(p.floatingPanel), tools = box(p.diagnostics.querySelector('.bf-tools')), actions = box(p.diagnostics.querySelector('.bf-log-actions'));
+  assert(root.right <= innerWidth + 1 && root.bottom <= innerHeight + 1, 'viewport bounds');
+  assert(p.diagnostics.scrollWidth <= p.diagnostics.clientWidth + 1, 'records no horizontal overflow');
+  assert(tools.left >= root.left && tools.right <= root.right + 1, 'filters in bounds');
+  assert(actions.bottom <= root.bottom + 1, 'actions in bounds');
+  assert(box(p.outputTextBox).height >= 24, 'records scroll area usable');
+  return { viewport: [innerWidth, innerHeight], failures, modes: [...p.logFilter.options].map(x => x.textContent), records: p.logs.entries.length };
+})()
