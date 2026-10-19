@@ -1,6 +1,6 @@
 # Local management build
 
-These capabilities are in local build **2.2.3**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
+These capabilities are in local build **2.2.4**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
 
 ## Copy and diagnostics
 
@@ -65,4 +65,6 @@ For unavailable entries, choose **设置 → 删除与取消订阅 → API**, sa
 
 Each item is **已确认**, **失败**, **结果未知**, or **未提交**. API confirmation means platform code0; native management confirmation means the exact checked row disappeared with the expected list-count change on the same account/space. Refresh the platform to verify. Failure or uncertainty stops the batch. Network loss after submission is unknown, with no automatic retry. Refresh never restores a destructive queue; every operation needs a new selection and confirmation.
 
-Live copy/create/delete/unsubscribe acceptance for the new transports has not run: only synthetic targets were used. Live read-only checks found230 subscriptions in both the expanded webpage and API catalog with matching name multisets; this does not prove every ID matches. One available season matched across both readers:66 BVIDs and49,595 known duration seconds. Tampermonkey GM sandbox, automatic cross-page recovery and current legacy-page live behavior remain unverified. Platform API contracts and permissions can change.
+Local 2.2.4 passed two disposable live create/delete cycles on VUI through console injection: one API creation and one webpage creation, both deleted through the management panel using API reads and webpage writes. Independent API reads confirmed both temporary folders absent and the original folder ID set unchanged. Native menu discovery now enters the actual hover trigger for each layout; item results and failure causes are included in ordinary records and the footer.
+
+Legacy copy confirmation recognizes the platform's `.be-toast` message `复制成功(ง •̀_•́)ง`. Successful notification ends the wait immediately; the 30-second limit only bounds missing results. Legacy toast and hover/delete-dialog fixtures cover the actual public component structure. Live copy/unsubscribe, Tampermonkey GM sandbox, automatic cross-page recovery and current legacy-page live behavior remain unverified. Earlier read-only checks matched230 subscription names across readers and one available season's66 BVIDs and49,595 known duration seconds. Platform API contracts and permissions can change.

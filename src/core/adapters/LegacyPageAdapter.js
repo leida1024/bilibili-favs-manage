@@ -1,7 +1,7 @@
 /** 旧版个人空间（带“体验新版”入口）。 */
 export const LegacyPageAdapter = {
   name: '旧版个人空间',
-  notification: '.vui_toast, .bili-message, .bili-toast, .be-message, .toast-text',
+  notification: '.be-toast, .vui_toast, .bili-message, .bili-toast, .be-message, .toast-text',
   sidebar: '#fav-createdList-container',
   sidebarCreate: null,
   item: '.fav-item',

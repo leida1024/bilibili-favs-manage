@@ -167,12 +167,12 @@ function nativeFixture(t) {
   const group = document.querySelector('.vui_collapse_item'), list = group.querySelector('.list'); let submissions = 0;
   const append = id => {
     const row = document.createElement('div'); row.className = 'fav-sidebar-item';
-    row.innerHTML = '<div class="vui_sidebar-item"><div class="vui_ellipsis">Same</div><div class="menu-popover">⋮</div></div>';
+    row.innerHTML = '<div class="vui_sidebar-item"><div class="vui_ellipsis">Same</div><div class="menu-popover"><i class="more-vertical">⋮</i></div></div>';
     row.querySelector('.vui_sidebar-item').addEventListener('click', () => {
       window.history.replaceState(null, '', `/50/favlist?fid=${id}&ftype=collect&ctype=21`);
       document.querySelector('.favlist-info-detail__title-row').textContent = 'Same';
     });
-    row.querySelector('.menu-popover').addEventListener('click', () => {
+    row.querySelector('.more-vertical').addEventListener('mouseenter', () => {
       document.querySelector('.menu-popover__panel')?.remove();
       const menu = document.createElement('div'); menu.className = 'menu-popover__panel';
       menu.innerHTML = '<div class="menu-popover__panel-item">取消订阅</div>';
@@ -180,6 +180,7 @@ function nativeFixture(t) {
     }); list.append(row); return row;
   };
   append('100'); group.querySelector('.fav-collapse-more').addEventListener('click', event => { append('101'); event.target.remove(); });
+  document.body.addEventListener('click', () => document.querySelector('.menu-popover__panel')?.remove());
   const client = new WebFolderClient();
   return { client, submissions: () => submissions, append };
 }
@@ -209,17 +210,18 @@ test('native cancellation never submits, missing success is unknown and never re
 });
 
 test('native delete checks final confirmation and account again; unknown actions never click', async t => {
-  realm(t, '<div class="favlist-aside"><div class="vui_collapse_item"><div class="vui_collapse_item_header">我创建的收藏夹</div><div class="fav-sidebar-item">Default</div><div class="fav-sidebar-item" id="target"><div class="vui_sidebar-item"><div class="vui_ellipsis">Source</div><div class="menu-popover">Menu</div></div></div></div></div><div class="favlist-info-detail__title-row">Source</div><div class="favlist-info-detail__data">视频数: 21</div>');
+  realm(t, '<div class="favlist-aside"><div class="vui_collapse_item"><div class="vui_collapse_item_header">我创建的收藏夹</div><div class="fav-sidebar-item">Default</div><div class="fav-sidebar-item" id="target"><div class="vui_sidebar-item"><div class="vui_ellipsis">Source</div><div class="menu-popover"><i class="more-vertical">Menu</i></div></div></div></div></div><div class="favlist-info-detail__title-row">Source</div><div class="favlist-info-detail__data">视频数: 21</div>');
   let submitted=0, switchActor=false;
   const row=document.querySelector('#target');
   row.querySelector('.vui_sidebar-item').onclick=()=>window.history.replaceState(null,'','/50/favlist?fid=100&ftype=create');
-  row.querySelector('.menu-popover').onclick=()=>{
+  row.querySelector('.more-vertical').onmouseenter=()=>{
     document.querySelector('.menu-popover__panel-item')?.remove();
     const item=document.createElement('div'); item.className='menu-popover__panel-item'; item.textContent='删除';
     item.onclick=()=>{const dialog=document.createElement('div');dialog.className='vui_dialog--content';dialog.innerHTML='<p>删除收藏夹</p><button>确认删除</button>';
       dialog.querySelector('button').onclick=()=>{submitted++;row.remove();dialog.remove();};document.body.append(dialog);if(switchActor)document.cookie='DedeUserID=60';};
     document.body.append(item);
   };
+  document.body.addEventListener('click', () => document.querySelector('.menu-popover__panel-item')?.remove());
   const client=new WebFolderClient();
   assert.equal((await client.mutate('invalid',folder())).status,'failed'); assert.equal(submitted,0);
   switchActor=true; assert.equal((await client.mutate('delete',folder())).status,'unknown'); assert.equal(submitted,0);

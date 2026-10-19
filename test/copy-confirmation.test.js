@@ -74,6 +74,32 @@ test('stale, hidden, unrelated, negative success text and dialog disappearance n
   await new Promise(resolve => setTimeout(resolve, 10)); assert.equal(slow, 0);
 });
 
+test('actual legacy Vue toast appears hidden then shows decorated success and continues both copy tasks', async t => {
+  realm(t, '50', '<div id="fav-createdList-container"></div><div class="edit-video-modal"><div class="modal-footer"><button class="btn">确定</button></div></div>');
+  const delays = { ...CONFIG.DELAY }, confirmation = { ...CONFIG.COPY_CONFIRMATION };
+  Object.keys(CONFIG.DELAY).forEach(key => { CONFIG.DELAY[key] = 0; });
+  Object.assign(CONFIG.COPY_CONFIRMATION, { TIMEOUT: 100, SLOW_NOTICE: 80 });
+  t.after(() => { Object.assign(CONFIG.DELAY, delays); Object.assign(CONFIG.COPY_CONFIRMATION, confirmation); });
+  let clicks = 0, source;
+  const dialog = document.querySelector('.edit-video-modal');
+  dialog.querySelector('button').onclick = () => {
+    clicks++;
+    // Legacy $toast mounts with v-show=false, appends, then sets show=true.
+    const node = document.createElement('div'); node.className = 'be-toast';
+    node.style.display = 'none'; node.textContent = '复制成功(ง •̀_•́)ง'; document.body.append(node);
+    setTimeout(() => { node.style.display = ''; }, 5);
+  };
+  const manager = new FavoriteManager();
+  manager.api = { clickFavorite: async name => { source = name; return true; }, getCurrentFavoriteName: () => source,
+    getTotalPages: () => 1, ensureBatchModeActive: async () => true, clickSelectAll: () => true,
+    clickCopyButton: async () => true, waitForDialog: async () => dialog, isFavoriteExistInDialog: () => true,
+    selectFavoriteInDialog: () => true, clickConfirmButton: value => BilibiliAPI.clickConfirmButton(value),
+    get copySubmission() { return BilibiliAPI.copySubmission; } };
+  await manager.batchCopy([{ source: 'A', target: 'Target A' }, { source: 'B', target: 'Target B' }], { skipCrossPage: true });
+  assert.equal(clicks, 2); assert.equal(manager.operation.state.confirmed, 2);
+  assert.equal(manager.operation.state.status, 'completed');
+});
+
 test('reused notification text mutation and explicit platform rejection are observed', async t => {
   realm(t); const reused = toast('处理中'); document.body.append(reused);
   const changed = watchCopyConfirmation('.vui_toast', 100, () => {}, 200);

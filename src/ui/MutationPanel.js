@@ -98,13 +98,17 @@ export class MutationPanel {
     return this.inventoryUI.run(`${descriptions[ticket.action].verb}收藏夹`, async signal => {
       const report = await this.engine.execute(ticket, { confirmed: true, signal, onResult: result => {
         if (result.status === 'confirmed') this.inventoryUI.operation.confirm(`ID ${result.id}：平台已确认`);
+        this.panel.appendLog(`${descriptions[ticket.action].verb} [${result.name}] · ID ${result.id} · ${statuses[result.status]}：${result.detail}`,
+          result.status === 'confirmed' ? this.panel.normalCode : result.status === 'failed' ? this.panel.errorCode : this.panel.warnCode);
       } });
       this.inventoryUI.resetCatalog('本次操作后列表需要更新，请重新加载。');
       this.results.replaceChildren(element('p', '', report.complete ? '本次目标均已确认。请刷新平台列表核对。' : report.cancelled ? '已取消后续操作。请核对已提交项目。' : '已停止；请检查下列结果后再决定后续操作。'));
       for (const result of report.results) this.results.append(element('p', '', `${result.name} · ID ${result.id} · ${statuses[result.status]}：${result.detail}`));
       this.results.append(button('检查并导出操作结果', () => this.panel.reviewExport(JSON.stringify(report, null, 2), 'bili-operation.json')));
+      const stopped = report.results.find(result => ['failed', 'unknown'].includes(result.status));
       this.inventoryUI.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : report.results.some(result => result.status === 'unknown') ? 'unknown' : 'failed',
-        report.complete ? '已完成；再次操作请重新加载、选择并确认。' : '本次确认已用完。请核对结果，再重新加载和确认。');
+        report.complete ? '已完成；再次操作请重新加载、选择并确认。' :
+          `${stopped ? `${stopped.name}：${stopped.detail}` : '已取消后续操作。'} 请核对结果，再重新加载和确认。`);
     }, ticket.action, ticket.targets.length);
   }
 

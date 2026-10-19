@@ -40,15 +40,23 @@ export class WebFolderClient {
   async openMenu(node, signal) {
     const s = this.selectors, menu = node.querySelector(s.menu);
     if (!menu) return [];
+    this.closeMenu();
+    // Both layouts use non-bubbling mouseenter on their actual trigger. A
+    // click on the wrapper neither opens a hover popover nor proves ownership.
+    await this.wait(() => ![...document.querySelectorAll(s.menuItem)].some(isElementVisible), signal, 2000);
+    this.activeMenu = menu;
     node.dispatchEvent(new window.MouseEvent('mouseenter'));
     node.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
     menu.dispatchEvent(new window.MouseEvent('mouseenter'));
     menu.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
-    menu.click();
     await this.wait(() => [...document.querySelectorAll(s.menuItem)].some(isElementVisible), signal, 2000);
     return [...document.querySelectorAll(s.menuItem)].filter(isElementVisible);
   }
-  closeMenu() { document.body.click(); }
+  closeMenu() {
+    this.activeMenu?.dispatchEvent(new window.MouseEvent('mouseleave'));
+    this.activeMenu = null;
+    document.body.click();
+  }
   async inspect(node, kind, index, signal) {
     const s = this.selectors, name = normalizeFavoriteName(text(node.querySelector(s.title)));
     if (!name) throw new Error('网页条目缺少名称');
@@ -108,6 +116,7 @@ export class WebFolderClient {
     this.identities.delete(node);
     const fresh = await this.inspect(node, kind, rows.indexOf(node), signal);
     if (['id', 'kind', 'ownerId', 'name'].some(key => folder[key] !== fresh[key])) throw new Error('网页目标身份变化，未提交');
+    if (kind === 'created' && fresh.protectionReason === 'unknown') throw new Error('网页未识别目标的删除菜单；请检查页面或切换操作方式，未提交');
     if ((kind === 'created' && !fresh.available) || (folder.count !== null && fresh.count !== null && folder.count !== fresh.count) ||
       (kind === 'created' && fresh.protected !== folder.protected)) throw new Error('网页目标数量或保护状态变化，未提交');
     return node;
