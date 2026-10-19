@@ -12,6 +12,8 @@ No lint/typecheck script is currently configured; do not claim otherwise. Add fo
 
 Preserve legacy/VUI layout support, asynchronous readiness, SPA entry, dismissal, sandbox compatibility, normalized names, target reuse, and no uncertain automatic replay. Tests must observe outcomes, not simply call the same helper twice. Use temporary/synthetic data. Do not mutate real collections as part of the default test suite.
 
+Native regression fixtures must reproduce the specific layout's public component markup, exact messages and real event target/bubbling behavior. A VUI success translation does not establish legacy compatibility. A click-only mock cannot establish hover-menu compatibility. For hybrid transport bugs, cover panel→captured API reader→native writer as well as isolated adapters. If a timeout persists, establish the real result signal before increasing the deadline. Keep per-item failure causes visible in records/footer so production evidence can identify the failing layer.
+
 Use `examples/panel-preview.html` for visual acceptance with fictional data. Record exactly which live checks ran, which realm was used, and what remains unverified. Avoid screenshots of the user's favorites. Never log credentials, full storage, request authorization, or webhook secrets.
 
 Product changes and dev records are separate commits. Follow the branch policy before touching master or Greasy Fork. Documentation-only Trellis setup does not require rewriting build outputs or bumping the script version.

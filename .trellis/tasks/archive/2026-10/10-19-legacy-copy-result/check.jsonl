@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Realistic layout fixtures, build/version and regression acceptance"}
+{"file":".trellis/tasks/archive/2026-10/10-19-legacy-copy-result/verification.md","reason":"93 tests, independent disposable cleanup evidence and remaining live limitations"}

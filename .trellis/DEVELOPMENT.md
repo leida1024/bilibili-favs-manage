@@ -1,12 +1,12 @@
 # Development handbook and session handoff
 
-Latest local follow-up:2.2.3, copy-confirmation-records task. Native confirmation waits30s independently of UI delays, with a6s waiting notice, localized/new/reused notification handling and explicit failure versus unknown. Records content is 日常记录/排查详情, hidden counts are explicit, export stays complete, and both navigation handoffs capture full bounded diagnostics immediately before leaving. New handoffs reject account changes.89 tests/build and desktop/narrow fictional checks passed; real startup was read-only. Historical exact missing-sidebar/confirmation cause is not proven; see task verification. No real writes, push or release.
+Latest local follow-up:2.2.4, [legacy-copy-result task](tasks/archive/2026-10/10-19-legacy-copy-result/). Legacy copy's actual `.be-toast`/decorated success message was missing, so longer waits could not help. Native deletion opened the wrong hover element in both layouts; API ordinary-folder metadata then conflicted with native unknown protection. Fixed those adapters without weakening identity/protection checks. Per-item reasons now reach ordinary records/export/footer.93 tests/build passed. Two explicitly authorized disposable create/delete cycles passed on VUI console injection; independent API catalogs confirmed temporary absence and original ID sets unchanged. No push/release. Legacy live copy/deletion, live unsubscribe, GM sandbox and automatic navigation remain unverified.
 
 ## Current UI contract (supersedes historical layout notes below)
 
 The user requested autonomous scenario questions/answers, documented system design and execution. [Scenario workspace task](tasks/archive/2026-10/10-19-scenario-workspace/) owns current evidence, glossary and wireframes. Product commit `1861bbf`, numeric version `2.2.1`:600×500, about326px left workspace, default side records, direct scope/action buttons, common search/all/count toolbar, function-owned status and current-function logs. Cross-page handoffs retain task ID and bounded diagnostics; unknown submissions are 待核对. 67 tests/build,75 fictional browser scenarios and visual checks passed. Own-space read-only28 folders→27 eligible/1 protected; foreign-space deletion stays disabled. No real writes, push or publication.
 
-This replaces earlier dimensions and shared-footer feedback. Preserve selection/ticket/reset and consume-before-execute contracts. Use ordinary numeric versions for each reviewable product iteration; the user rejects dev.N. Keep package/lock/runtime/build/header equal. Online stays2.1.2 until explicit release. Existing no-push and real-mutation boundaries remain; GM sandbox, real mutations and automatic full navigation are unverified.
+This replaces earlier dimensions and shared-footer feedback. Preserve selection/ticket/reset and consume-before-execute contracts. Use ordinary numeric versions for each reviewable product iteration; the user rejects dev.N. Keep package/lock/runtime/build/header equal. Online stays2.1.2 until explicit release. Existing no-push and scoped real-mutation boundaries remain; see the latest evidence above for the limited VUI create/delete acceptance.
 
 ## Goal and authorization
 
@@ -49,7 +49,7 @@ Use only the existing dedicated bili-favs-dev session through .trellis/scripts/b
 
 Before local injection, check pending cross-page state by presence only. Stop for unexpected pending state; never print, delete or resume it blindly. Refresh before changed builds, then inject dist/BilibiliFavsManage.user.js through the helper. Repeated injection reuses the existing lifecycle. Close only the named session cleanly when finished.
 
-Real mutations still require explicitly designated disposable folders/subscriptions. Until then use synthetic fixtures. Never commit browser state, tokens, private names or real-account screenshots. Live mutation behavior, Tampermonkey GM sandbox, current legacy-page live behavior and automatic full-navigation recovery remain unverified. Console injection cannot establish those guarantees.
+Real mutations require explicitly designated disposable folders/subscriptions. The 2026-10-19 user request authorized new temporary folders followed by their deletion; two such VUI cycles were verified and cleaned up. This does not authorize deleting existing folders or testing unrelated subscriptions/copy writes. Never commit browser state, tokens, private names or real-account screenshots. Live copy/unsubscribe, Tampermonkey GM sandbox, current legacy-page live behavior and automatic full-navigation recovery remain unverified. Console injection cannot establish those guarantees.
 
 ## Completion and release boundary
 

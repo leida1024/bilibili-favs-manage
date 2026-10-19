@@ -400,3 +400,36 @@ Native copy confirmation, two record modes, complete diagnostic handoffs and acc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: Fix legacy copy and native delete 2.2.4
+
+**Date**: 2026-10-19
+**Task**: Fix legacy copy and native delete 2.2.4
+**Branch**: `develop`
+
+### Summary
+
+Recognized actual legacy toast; repaired both native hover triggers and management failure records. Build and 93 tests passed. Two explicitly authorized disposable VUI create/delete cycles completed and cleaned up; original folder ID sets unchanged. Legacy live, copy/unsubscribe live, GM and automatic navigation remain unverified. No push/release.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bf13d1e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
