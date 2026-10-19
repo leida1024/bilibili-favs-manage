@@ -36,7 +36,7 @@
       inventory: new InventoryService({
         async folders(owner, kind) { return Array.from({ length: scenario === 'empty' ? 0 : ['dense', 'many'].includes(scenario) ? 40 : 5 }, (_, i) => ({ id: String(100 + i), ownerId: kind === 'subscribed' && i === 3 ? null : kind === 'created' ? '50' : '90', kind: kind === 'subscribed' && i === 4 ? 'unsupported' : kind, name: kind === 'subscribed' && i === 4 ? '虚构合集（暂不支持）' : `虚构收藏夹 ${i + 1}`, count: 2, protected: i === 0, available: true, subscribed: true })).filter(item => !deleted.has(item.id)); },
         async mutate(action, folder) { deleted.add(folder.id); return { status: 'confirmed', detail: '虚构操作，未发送网络请求' }; },
-        async videos(id) { return { info: { id: Number(id), media_count: 2 }, has_more: false, medias: [{ id: 1, type: 2, duration: 60, upper: { mid: 90 } }, { id: 2, type: 2, duration: null }] }; }
+        async videos(id) { return { info: { id: Number(id), media_count: 2 }, has_more: false, medias: [{ id: 1, type: 2, title: '虚构摄影入门', duration: 60, upper: { mid: 90, name: '虚构作者' } }, { id: 2, type: 2, title: '虚构音乐现场', duration: null }] }; }
       }, 400),
       operation: new OperationState(),
       getAllFavoriteNames: () => scenario === 'empty' ? [] : scenario === 'many'

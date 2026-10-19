@@ -1,6 +1,6 @@
 # Local management build
 
-These capabilities are in local build **2.2.10**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
+These capabilities are in local build **2.2.11**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
 
 ## Copy and diagnostics
 
@@ -86,3 +86,7 @@ Local2.2.8 fixes duplicate legacy pagination: the script now sends one native re
 Copy is available only on a logged-in visitor’s view of another account’s favorites. Own space remains available for statistics and management. Missing login, ambiguous names, duplicate tasks, overlapping copies, or changed actor/source folder stop before further submission. Native unsubscribe preview requires the own-space subscription page. Cross-page destination preparation still runs in own space.
 
 The top notice links to Help and shows QQ group524764959. Pause it with the adjacent control; hovering/focusing stops motion and reduced-motion displays static text. Help preserves task lists/edits and includes copy scope, statistics coverage, transport choices, confirmations and uncertain results.
+
+Statistics now includes searchable video details: title, safe video link, uploader, duration, availability, occurrence count and source folders. JSON also keeps known publication/collection timestamps in seconds. Unknown identity resources are retained separately and are excluded from unique counts. Details render50 items per page; export contains all retained results.
+
+In Settings choose webpage for list/statistics reads to navigate native folders/pages without HTTP fallback. Avoid manual route/folder/search changes during scanning. Page/entry limits are500/10000. One failed folder no longer prevents other selected folders being read. A platform total mismatch is shown as an incomplete result with explicit advertised and loaded counts; it is not proof that the reader skipped a page. Already fetched details remain reviewable/exportable.

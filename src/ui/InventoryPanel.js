@@ -3,6 +3,7 @@ import { PageDetector } from '../core/PageDetector.js';
 import { MutationPanel } from './MutationPanel.js';
 import { folderRow } from './folderRow.js';
 import { SelectionToolbar } from './SelectionToolbar.js';
+import { videoDetails } from './VideoDetails.js';
 import { duplicateFavoriteNames, normalizeFavoriteName } from '../utils/favoriteNames.js';
 
 export class InventoryPanel {
@@ -156,8 +157,11 @@ export class InventoryPanel {
       this.result.replaceChildren(element('p', '', `${report.complete ? '完整扫描' : report.cancelled ? '已取消 · 部分结果' : '扫描不完整'}：覆盖 ${report.folders.length}/${report.scope.length} 个收藏夹，读取 ${report.entries} 条。`),
         element('p', '', `唯一视频 ${report.uniqueVideos} · 重复出现 ${report.duplicateOccurrences} · 无法识别 ${report.unknownIdentity} · 失效标记 ${report.unavailable}`),
         element('p', '', `已知时长合计 ${report.knownDurationSeconds} 秒（唯一视频；${report.unknownDurations} 个时长未知）· ${report.unknownUploaders} 个作者未知`));
-      for (const f of report.folders) this.result.append(element('p', 'bf-muted', `ID ${f.id}：${f.pages} 页 / ${f.loaded} 条 / 预期 ${f.expected ?? '未知'}${f.issue ? ` · ${f.issue}` : ''}`));
-      this.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : 'failed', report.complete ? '所选范围统计完成，缺失信息记为未知。' : '仅保留已读取数据；未完成范围不可当作总数。');
+      for (const f of report.folders) this.result.append(element('p', 'bf-muted', `${f.name}：${f.pages} 页 / 读取 ${f.loaded} 条 / 平台标称 ${f.expected ?? '未知'}${f.issue ? ` · ${f.issue}` : ''}`));
+      this.result.append(videoDetails(report));
+      const issues = report.folders.filter(f => f.issue).map(f => `${f.name}：${f.issue}`);
+      this.operation.finish(report.complete ? 'completed' : 'interrupted', report.complete ? '所选范围统计完成，缺失信息记为未知。' :
+        `${report.cancelled ? '已停止。' : '统计不完整。'}已保留视频明细，可检查并导出。${issues.join('；')}`);
     }, 'scanning');
   }
 

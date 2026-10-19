@@ -2,6 +2,7 @@ import { stableId, folderKey, pause } from './FolderClient.js';
 import { PageDetector } from './PageDetector.js';
 import { BilibiliAPI } from './BilibiliAPI.js';
 import { subscriptionBindings, legacySubscriptionSource } from './adapters/nativeBindings.js';
+import { NativeVideoReader } from './adapters/NativeVideoReader.js';
 import { nativeControls } from './adapters/nativeControls.js';
 import { isElementVisible } from '../utils/dom.js';
 import { normalizeFavoriteName } from '../utils/favoriteNames.js';
@@ -9,7 +10,7 @@ import { normalizeFavoriteName } from '../utils/favoriteNames.js';
 const text = node => node?.textContent.trim() || '';
 const numberFrom = value => /^\d+$/.test(value || '') ? Number(value) : null;
 export class WebFolderClient {
-  constructor() { this.identities = new WeakMap(); this.boundRows = new WeakSet(); this.currentFolder = null; }
+  constructor() { this.identities = new WeakMap(); this.boundRows = new WeakSet(); this.videoReader = new NativeVideoReader(this); }
   get selectors() { return document.querySelector('.favlist-aside') ? nativeControls.vui : nativeControls.legacy; }
   async wait(check, signal, timeout = 8000) {
     const end = Date.now() + timeout;
@@ -215,40 +216,5 @@ export class WebFolderClient {
     const result = await BilibiliAPI.createFavoriteViaSidebar(name, () => !signal?.aborted && PageDetector.getLoginUserUID() === actor && PageDetector.isOwnPage());
     return result === true ? { status: 'confirmed', detail: '网页已显示目标收藏夹' } : { status: result === null ? 'failed' : 'unknown', detail: '网页创建未确认，请检查页面；没有切换方式重试' };
   }
-  async videos(id, pn, signal, folder) {
-    if (!folder || folder.id !== id) throw new Error('网页统计缺少目标身份');
-    const s = this.selectors;
-    if (pn === 1) {
-      const node = await this.select(folder, signal);
-      if (this.boundRows.has(node)) {
-        node.querySelector(s.click)?.click();
-        await this.wait(() => new URL(window.location.href).searchParams.get('fid') === folder.id &&
-          normalizeFavoriteName(text(document.querySelector(s.detailTitle))) === folder.name, signal);
-        await pause(160, signal);
-      }
-      this.currentFolder = folderKey(folder);
-    }
-    if (this.currentFolder !== folderKey(folder)) throw new Error('网页统计目标变化');
-    const pager = document.querySelector(s.pagination);
-    const current = Number(text(pager?.querySelector(s.activePage))) || 1;
-    if (pn !== current) {
-      const signature = () => [...document.querySelectorAll(s.cards)].map(card => card.querySelector('a[href*="/video/"]')?.getAttribute('href')).join('|');
-      const before = signature();
-      const button = [...(pager?.querySelectorAll(s.page) || [])].find(node => text(node) === String(pn));
-      if (!button) throw new Error('网页页码入口未识别，统计不完整');
-      button.click();
-      await this.wait(() => Number(text(document.querySelector(s.pagination)?.querySelector(s.activePage))) === pn && signature() !== before, signal);
-    }
-    const medias = [...document.querySelectorAll(s.cards)].map(card => {
-      const href = card.querySelector('a[href*="/video/"]')?.getAttribute('href') || '';
-      const durationText = [...card.querySelectorAll(s.duration)].map(text).find(t => /^\d{1,3}:\d{2}(?::\d{2})?$/.test(t));
-      const duration = durationText ? durationText.split(':').reduce((a, n) => a * 60 + Number(n), 0) : null;
-      const author = card.querySelector('a[href*="space.bilibili.com"]')?.getAttribute('href')?.match(/space\.bilibili\.com\/(\d+)/)?.[1];
-      return { type: 2, id: stableId(href.match(/\/av(\d+)/)?.[1]), bvid: href.match(/BV[0-9A-Za-z]{10}/)?.[0] || null, duration, upper: { mid: author } };
-    });
-    const next = pager?.querySelector(s.next);
-    if (!medias.length && folder.count !== 0) throw new Error('网页视频条目未识别，不能将空页当成统计结果');
-    return { info: { id, media_count: folder.count }, medias,
-      has_more: !!next && !next.disabled && !/disabled/.test(next.className) };
-  }
+  videos(id, pn, signal, folder) { return this.videoReader.read(id, pn, signal, folder); }
 }

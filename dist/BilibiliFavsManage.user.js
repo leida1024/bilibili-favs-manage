@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.2.10
+// @version      2.2.11
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       leida1024
 // @match        https://space.bilibili.com/*
@@ -208,7 +208,7 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.2.10',
+      VERSION: '2.2.11',
       NAME: 'BiliBili 收藏夹批量管理',
       DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
     }
@@ -1479,21 +1479,31 @@
     }
   }
 
+  const label = value => typeof value === 'string' && value.trim() ? value.trim() : null;
+  function videoMetadata(raw) {
+    const id = raw.type === 2 ? stableId(raw.id) : null;
+    const bvid = raw.type === 2 && /^BV[0-9A-Za-z]{10}$/.test(raw.bvid) ? raw.bvid : null;
+    const unavailable = Number.isInteger(raw.attr) ? !!(raw.attr & 1) : null;
+    return { id, bvid, title: label(raw.title), url: bvid ? `https://www.bilibili.com/video/${bvid}` : id ? `https://www.bilibili.com/video/av${id}` : null,
+      duration: unavailable ? null : knownCount(raw.duration), uploaderId: stableId(raw.upper?.mid), uploaderName: label(raw.upper?.name),
+      unavailable, publishedAt: knownCount(raw.pubtime), occurrences: 0, folders: [] };
+  }
+
   class InventoryService {
     constructor(client = new FolderClient(), pace = 400) { this.client = client; this.pace = pace; this.running = false; }
 
-    async scan(folders, { signal, onPage = () => {}, maxPages = 100, maxEntries = 10000 } = {}) {
+    async scan(folders, { signal, onPage = () => {}, maxPages = 500, maxEntries = 10000 } = {}) {
       if (this.running) throw new Error('已有扫描正在进行');
       if (!folders.length || folders.some(f => !stableId(f.id) || f.kind === 'unsupported') || new Set(folders.map(folderKey)).size !== folders.length) throw new Error('请选择有效的收藏夹');
       this.running = true;
       const report = { scope: folders.map(f => ({ id: f.id, ownerId: f.ownerId, name: f.name })), complete: false, cancelled: false, folders: [], entries: 0,
-        occurrences: 0, uniqueVideos: 0, duplicateOccurrences: 0, unknownIdentity: 0, unavailable: 0, knownDurationSeconds: 0, unknownDurations: 0, unknownUploaders: 0, videos: [] };
-      const videos = new Map();
+        occurrences: 0, uniqueVideos: 0, duplicateOccurrences: 0, unknownIdentity: 0, unavailable: 0, knownDurationSeconds: 0, unknownDurations: 0, unknownUploaders: 0, videos: [], unidentified: [] };
+      const videos = new Set(), aliases = new Map();
       let requests = 0;
       const client = this.client.capture?.() || this.client;
       try {
         for (const folder of folders) {
-          const coverage = { id: folder.id, pages: 0, loaded: 0, expected: null, complete: false, issue: null };
+          const coverage = { id: folder.id, kind: folder.kind, name: folder.name, pages: 0, loaded: 0, expected: null, complete: false, issue: null };
           report.folders.push(coverage);
           const pageSignatures = new Set();
           try {
@@ -1512,24 +1522,36 @@
               coverage.expected = expected;
               coverage.pages++; coverage.loaded += data.medias.length; report.entries += data.medias.length;
               for (const raw of data.medias) {
-                const unavailable = Number.isInteger(raw.attr) && !!(raw.attr & 1);
-                if (unavailable) report.unavailable++;
-                const id = raw.type === 2 ? stableId(raw.id) : null;
-                const bvid = raw.type === 2 && /^BV[0-9A-Za-z]{10}$/.test(raw.bvid) ? raw.bvid : null;
-                const identity = id || bvid;
-                if (!identity) { report.unknownIdentity++; continue; }
+                const metadata = videoMetadata(raw);
+                if (metadata.unavailable) report.unavailable++;
+                const membership = { id: folder.id, kind: folder.kind, ownerId: folder.ownerId, name: folder.name, occurrences: 1, collectedAt: knownCount(raw.fav_time) };
+                if (!metadata.id && !metadata.bvid) { report.unknownIdentity++; metadata.folders.push(membership); report.unidentified.push(metadata); continue; }
                 report.occurrences++;
-                if (videos.has(identity)) continue;
-                const duration = unavailable ? null : knownCount(raw.duration);
-                const uploaderId = stableId(raw.upper?.mid);
-                videos.set(identity, { id, bvid, duration, uploaderId });
-                if (duration === null) report.unknownDurations++; else report.knownDurationSeconds += duration;
-                if (!uploaderId) report.unknownUploaders++;
+                const byId = metadata.id && aliases.get(`av:${metadata.id}`), byBV = metadata.bvid && aliases.get(metadata.bvid);
+                if (byId && byBV && byId !== byBV) {
+                  byId.occurrences += byBV.occurrences;
+                  for (const entry of byBV.folders) {
+                    const old = byId.folders.find(f => folderKey(f) === folderKey(entry));
+                    if (old) old.occurrences += entry.occurrences; else byId.folders.push(entry);
+                  }
+                  for (const [key, value] of aliases) if (value === byBV) aliases.set(key, byId);
+                  videos.delete(byBV);
+                }
+                const video = byId || byBV || metadata;
+                for (const key of ['id', 'bvid', 'title', 'url', 'duration', 'uploaderId', 'uploaderName', 'publishedAt', 'unavailable'])
+                  if (video[key] === null && metadata[key] !== null) video[key] = metadata[key];
+                if (metadata.bvid) video.url = metadata.url;
+                if (metadata.id) aliases.set(`av:${metadata.id}`, video);
+                if (metadata.bvid) aliases.set(metadata.bvid, video);
+                video.occurrences++;
+                const existing = video.folders.find(f => folderKey(f) === folderKey(folder));
+                if (existing) existing.occurrences++; else video.folders.push(membership);
+                videos.add(video);
               }
               onPage({ folder, page: pn, loaded: coverage.loaded });
               if (!data.has_more) {
                 coverage.complete = expected !== null && coverage.loaded === expected;
-                if (!coverage.complete) coverage.issue = '总数未知或数量不符';
+                if (!coverage.complete) coverage.issue = expected === null ? `平台总数未知；已读取 ${coverage.loaded} 条` : `平台标称 ${expected} 条，实际读取 ${coverage.loaded} 条；可能含隐藏或暂不可获取内容`;
                 break;
               }
               if (!data.medias.length) throw new Error('分页为空但仍有后续');
@@ -1539,11 +1561,15 @@
             coverage.issue = signal?.aborted ? '已取消' : err.message;
             if (signal?.aborted) report.cancelled = true;
           }
-          if (!coverage.complete || signal?.aborted) { if (signal?.aborted) report.cancelled = true; break; }
+          if (signal?.aborted || report.entries >= maxEntries) { if (signal?.aborted) report.cancelled = true; break; }
         }
         report.uniqueVideos = videos.size;
         report.duplicateOccurrences = report.occurrences - videos.size;
-        report.videos = [...videos.values()];
+        report.videos = [...videos];
+        for (const video of videos) {
+          if (video.duration === null) report.unknownDurations++; else report.knownDurationSeconds += video.duration;
+          if (!video.uploaderId) report.unknownUploaders++;
+        }
         report.complete = !report.cancelled && report.folders.length === folders.length && report.folders.every(f => f.complete);
         return report;
       } finally { this.running = false; }
@@ -1706,6 +1732,87 @@
     return bindings;
   }
 
+  const text$1 = node => node?.textContent.trim() || '';
+  const enabled = node => node && !node.disabled && node.getAttribute('aria-disabled') !== 'true' && !/disabled/.test(node.className);
+
+  /** Reads only the page's native cards and pagination; never requests HTTP. */
+  class NativeVideoReader {
+    constructor(client) { this.client = client; }
+    page() {
+      return Number(text$1(document.querySelector(this.client.selectors.pagination)?.querySelector(this.client.selectors.activePage))) || 1;
+    }
+    cards() { return [...document.querySelectorAll(this.client.selectors.cards)]; }
+    signature() { return this.cards().map(card => card.querySelector('a[href*="/video/"]')?.getAttribute('href') || text$1(card)).join('|'); }
+    check(folder) {
+      const url = new URL(window.location.href);
+      if (!this.context || this.context.key !== folderKey(folder) || PageDetector.getLoginUserUID() !== this.context.actor ||
+        PageDetector.getCurrentPageUID() !== this.context.pageOwner || url.searchParams.get('fid') !== folder.id ||
+        url.searchParams.get('ftype') !== (folder.kind === 'created' ? 'create' : 'collect') ||
+        (folder.kind !== 'created' && url.searchParams.get('ctype') !== (folder.kind === 'season' ? '21' : '11')))
+        throw new Error('账号、空间或网页统计目标已变化，请重新选择后统计');
+      const search = document.querySelector(this.client.selectors.search);
+      if (search?.value.trim()) throw new Error('网页正在筛选视频，请清空页面搜索后重新统计');
+    }
+    async settle(folder, pn, signal, before = null) {
+      let signature = null, stableSince = Date.now();
+      await this.client.wait(() => {
+        this.check(folder);
+        const s = this.client.selectors;
+        if (this.page() !== pn || normalizeFavoriteName(text$1(document.querySelector(s.detailTitle))) !== normalizeFavoriteName(folder.name)) return false;
+        if (s.loading && document.querySelector(s.loading)) return false;
+        const current = this.signature();
+        if (before && current === before.signature && before.first?.isConnected) return false;
+        if (current !== signature) { signature = current; stableSince = Date.now(); return false; }
+        return Date.now() - stableSince >= 240;
+      }, signal);
+    }
+    async read(id, pn, signal, folder) {
+      if (!folder || folder.id !== id || !Number.isSafeInteger(pn) || pn < 1) throw new Error('网页统计缺少目标身份或页码无效');
+      if (pn === 1) {
+        this.context = { actor: PageDetector.getLoginUserUID(), pageOwner: PageDetector.getCurrentPageUID(), key: folderKey(folder) };
+        const oldId = new URL(window.location.href).searchParams.get('fid');
+        const before = { first: this.cards()[0], signature: this.signature() };
+        const node = await this.client.select(folder, signal);
+        if (this.client.boundRows.has(node)) node.querySelector(this.client.selectors.click)?.click();
+        await this.client.wait(() => new URL(window.location.href).searchParams.get('fid') === id, signal);
+        this.check(folder);
+        await this.settle(folder, oldId !== id ? 1 : this.page(), signal, oldId !== id ? before : null);
+      } else this.check(folder);
+      let current = this.page();
+      if (pn !== current) {
+        if (pn !== 1 && pn !== current + 1) throw new Error('网页统计页码未连续推进，请重新开始统计');
+        const s = this.client.selectors, pager = document.querySelector(s.pagination);
+        const button = [...(pager?.querySelectorAll(s.page) || [])].find(node => text$1(node) === String(pn)) || (pn === current + 1 ? pager?.querySelector(s.next) : null);
+        if (!enabled(button)) throw new Error('网页页码入口不可用，统计不完整');
+        const before = { first: this.cards()[0], signature: this.signature() };
+        button.click(); await this.settle(folder, pn, signal, before);
+        current = this.page();
+      }
+      this.check(folder);
+      if (current !== pn) throw new Error('网页当前页与统计页不一致');
+      // Re-check after a microtask boundary before reading the final card set.
+      await pause(0, signal); this.check(folder);
+      const s = this.client.selectors;
+      const medias = this.cards().map(card => {
+        const link = card.querySelector('a[href*="/video/"]'), href = link?.getAttribute('href') || '';
+        const titleNode = card.querySelector(s.videoTitle);
+        const title = titleNode?.getAttribute('title') || text$1(titleNode) || null;
+        const unavailable = /^(已失效视频|失效视频|视频已失效)$/.test(title || '') || !!card.querySelector(s.unavailable);
+        const durationText = [...card.querySelectorAll(s.duration)].map(text$1).find(t => /^\d{1,3}:\d{2}(?::\d{2})?$/.test(t));
+        const duration = unavailable || !durationText ? null : durationText.split(':').reduce((a, n) => a * 60 + Number(n), 0);
+        const author = card.querySelector(s.videoAuthor);
+        const authorName = (text$1(author?.querySelector('[title]')) || text$1(author)).replace(/\s*·\s*收藏于.*$/, '').trim() || null;
+        return { type: 2, id: stableId(href.match(/\/av(\d+)/)?.[1]), bvid: href.match(/BV[0-9A-Za-z]{10}/)?.[0] || null,
+          title, duration, attr: unavailable ? 1 : undefined, upper: { mid: stableId(author?.getAttribute('href')?.match(/space\.bilibili\.com\/(\d+)/)?.[1]), name: authorName } };
+      });
+      const countText = text$1(document.querySelector(s.data)).match(/视频数\s*[:：]\s*(\d+)/)?.[1];
+      const count = countText === undefined ? knownCount(folder.count) : knownCount(Number(countText));
+      const next = document.querySelector(s.pagination)?.querySelector(s.next);
+      if (!medias.length && count !== 0) throw new Error('网页未展示视频条目，请检查空页或权限；已读取结果保留');
+      return { info: { id, media_count: count }, medias, has_more: !!enabled(next) };
+    }
+  }
+
   /** Native page controls, separate from HTTP transport and panel UI. */
   const nativeControls = {
     vui: {
@@ -1714,8 +1821,10 @@
       menu: '.menu-popover .more-vertical', menuItem: '.menu-popover__panel-item',
       detailTitle: '.favlist-info-detail__title-row', data: '.favlist-info-detail__data', owner: '.favlist-info-detail__data a.link',
       cards: '.favlist-main .bili-video-card', duration: '.bili-cover-card__stat',
+      videoTitle: '.bili-video-card__title', videoAuthor: 'a.bili-video-card__author', unavailable: '.bili-video-card__title--disabled',
+      search: '.fav-list-header-filter__search input, input.fav-list-header-filter__search', loading: '.favlist-main .vui_loading',
       dialog: '.vui_dialog--content', confirm: 'button.vui_button--blue',
-      pagination: '.vui_pagenation', page: '.vui_pagenation--btn-num', activePage: '[aria-current="page"]',
+      pagination: '.vui_pagenation', page: '.vui_pagenation--btn-num', activePage: '[aria-current="page"], .vui_button--active',
       next: 'button[aria-label="下一页"]'
     },
     legacy: {
@@ -1723,6 +1832,8 @@
       title: 'a.text', click: 'a.text', more: '.more', menu: '.be-dropdown', menuItem: '.be-dropdown-item',
       detailTitle: '.favInfo-details .fav-name', data: '.favInfo-details', owner: '.favInfo-details a[href*="space.bilibili.com"]',
       cards: '.fav-video-list .small-item', duration: '.length', dialog: '.modal', confirm: '.modal-footer .btn',
+      videoTitle: 'a.title', videoAuthor: 'a.up-name, a[href*="space.bilibili.com"]', unavailable: '.disabled, .invalid',
+      search: '.fav-search input', loading: '.fav-video-list .loading',
       pagination: '.be-pager', page: '.be-pager-item', activePage: '.be-pager-item-active', next: '.be-pager-next'
     }
   };
@@ -1730,7 +1841,7 @@
   const text = node => node?.textContent.trim() || '';
   const numberFrom = value => /^\d+$/.test(value || '') ? Number(value) : null;
   class WebFolderClient {
-    constructor() { this.identities = new WeakMap(); this.boundRows = new WeakSet(); this.currentFolder = null; }
+    constructor() { this.identities = new WeakMap(); this.boundRows = new WeakSet(); this.videoReader = new NativeVideoReader(this); }
     get selectors() { return document.querySelector('.favlist-aside') ? nativeControls.vui : nativeControls.legacy; }
     async wait(check, signal, timeout = 8000) {
       const end = Date.now() + timeout;
@@ -1936,42 +2047,7 @@
       const result = await BilibiliAPI.createFavoriteViaSidebar(name, () => !signal?.aborted && PageDetector.getLoginUserUID() === actor && PageDetector.isOwnPage());
       return result === true ? { status: 'confirmed', detail: '网页已显示目标收藏夹' } : { status: result === null ? 'failed' : 'unknown', detail: '网页创建未确认，请检查页面；没有切换方式重试' };
     }
-    async videos(id, pn, signal, folder) {
-      if (!folder || folder.id !== id) throw new Error('网页统计缺少目标身份');
-      const s = this.selectors;
-      if (pn === 1) {
-        const node = await this.select(folder, signal);
-        if (this.boundRows.has(node)) {
-          node.querySelector(s.click)?.click();
-          await this.wait(() => new URL(window.location.href).searchParams.get('fid') === folder.id &&
-            normalizeFavoriteName(text(document.querySelector(s.detailTitle))) === folder.name, signal);
-          await pause(160, signal);
-        }
-        this.currentFolder = folderKey(folder);
-      }
-      if (this.currentFolder !== folderKey(folder)) throw new Error('网页统计目标变化');
-      const pager = document.querySelector(s.pagination);
-      const current = Number(text(pager?.querySelector(s.activePage))) || 1;
-      if (pn !== current) {
-        const signature = () => [...document.querySelectorAll(s.cards)].map(card => card.querySelector('a[href*="/video/"]')?.getAttribute('href')).join('|');
-        const before = signature();
-        const button = [...(pager?.querySelectorAll(s.page) || [])].find(node => text(node) === String(pn));
-        if (!button) throw new Error('网页页码入口未识别，统计不完整');
-        button.click();
-        await this.wait(() => Number(text(document.querySelector(s.pagination)?.querySelector(s.activePage))) === pn && signature() !== before, signal);
-      }
-      const medias = [...document.querySelectorAll(s.cards)].map(card => {
-        const href = card.querySelector('a[href*="/video/"]')?.getAttribute('href') || '';
-        const durationText = [...card.querySelectorAll(s.duration)].map(text).find(t => /^\d{1,3}:\d{2}(?::\d{2})?$/.test(t));
-        const duration = durationText ? durationText.split(':').reduce((a, n) => a * 60 + Number(n), 0) : null;
-        const author = card.querySelector('a[href*="space.bilibili.com"]')?.getAttribute('href')?.match(/space\.bilibili\.com\/(\d+)/)?.[1];
-        return { type: 2, id: stableId(href.match(/\/av(\d+)/)?.[1]), bvid: href.match(/BV[0-9A-Za-z]{10}/)?.[0] || null, duration, upper: { mid: author } };
-      });
-      const next = pager?.querySelector(s.next);
-      if (!medias.length && folder.count !== 0) throw new Error('网页视频条目未识别，不能将空页当成统计结果');
-      return { info: { id, media_count: folder.count }, medias,
-        has_more: !!next && !next.disabled && !/disabled/.test(next.className) };
-    }
+    videos(id, pn, signal, folder) { return this.videoReader.read(id, pn, signal, folder); }
   }
 
   /** Capture choices once; no retry/fallback between HTTP and native actions. */
@@ -2629,6 +2705,10 @@
 .bili-favs-manage-panel .bf-help-panel details { border-bottom:1px solid var(--bf-line); padding:8px 0; }
 .bili-favs-manage-panel .bf-help-panel summary { cursor:pointer; font-weight:600; }
 .bili-favs-manage-panel .bf-help-panel h3 { margin-top:12px; }
+.bili-favs-manage-panel .bf-video-details { margin-top:12px; border-top:1px solid var(--bf-line); padding-top:8px; }
+.bili-favs-manage-panel .bf-video-details summary { cursor:pointer; font-weight:600; }
+.bili-favs-manage-panel .bf-video-list { padding-left:24px; margin:8px 0; }
+.bili-favs-manage-panel .bf-video-list li { padding:6px 0; overflow-wrap:anywhere; border-bottom:1px solid var(--bf-line); }
 .bili-favs-manage-panel a { color:var(--bf-blue); text-decoration:underline; }
 @keyframes bf-notice-scroll { 0%,20% { transform:translateX(0); } 75% { transform:translateX(-40%); } 100% { transform:translateX(0); } }
 @container (max-width:420px) { .bili-favs-manage-panel .bf-notice { display:none; } .bili-favs-manage-panel .bf-navigation { gap:12px; padding:0 8px; } }
@@ -2951,6 +3031,40 @@
     destroy() { this.invalidate(); }
   }
 
+  /** Paged local view: exports keep every retained item; DOM stays bounded. */
+  function videoDetails(report) {
+    const root = element('details', 'bf-video-details');
+    const videos = [...report.videos, ...(report.unidentified || [])];
+    root.append(element('summary', '', `视频明细（${videos.length} 项）`));
+    const label = element('label', 'bf-search', '搜索视频或作者');
+    const search = element('input'); search.type = 'search'; label.append(search);
+    const list = element('ol', 'bf-video-list'), count = element('span', 'bf-muted');
+    let page = 0;
+    const previous = button('上一页', () => { page--; render(); });
+    const next = button('下一页', () => { page++; render(); });
+    const tools = element('div', 'bf-tools'); tools.append(previous, count, next);
+    const render = () => {
+      const query = search.value.trim().toLocaleLowerCase();
+      const matches = videos.filter(v => [v.title, v.uploaderName, v.id, v.bvid, ...v.folders.map(f => f.name)].some(value => String(value || '').toLocaleLowerCase().includes(query)));
+      const pages = Math.max(1, Math.ceil(matches.length / 50)); page = Math.max(0, Math.min(page, pages - 1));
+      count.textContent = `${matches.length} 项 · ${page + 1}/${pages} 页`; previous.disabled = page === 0; next.disabled = page + 1 === pages;
+      list.replaceChildren(); list.start = page * 50 + 1;
+      for (const video of matches.slice(page * 50, (page + 1) * 50)) {
+        const row = element('li');
+        const title = element(video.url ? 'a' : 'span', '', video.title || '（视频名称未知）');
+        if (video.url) { title.href = video.url; title.target = '_blank'; title.rel = 'noopener noreferrer'; }
+        row.append(title, element('p', 'bf-muted', `${video.uploaderName || '作者未知'} · ${video.duration === null ? '时长未知' : `${video.duration} 秒`}${video.unavailable ? ' · 已失效' : ''} · 出现 ${video.occurrences || 1} 次`),
+          element('p', 'bf-muted', `所在收藏夹：${video.folders.map(f => f.name).join('、')}`));
+        list.append(row);
+      }
+      if (!matches.length) list.append(element('li', 'bf-muted', '没有匹配的视频。'));
+    };
+    search.addEventListener('input', () => { page = 0; render(); });
+    root.addEventListener('toggle', () => { if (root.open && !list.children.length) render(); });
+    root.append(label, list, tools);
+    return root;
+  }
+
   class InventoryPanel {
     constructor(panel, service) {
       this.panel = panel; this.service = service; this.folders = []; this.rows = [];
@@ -3102,8 +3216,11 @@
         this.result.replaceChildren(element('p', '', `${report.complete ? '完整扫描' : report.cancelled ? '已取消 · 部分结果' : '扫描不完整'}：覆盖 ${report.folders.length}/${report.scope.length} 个收藏夹，读取 ${report.entries} 条。`),
           element('p', '', `唯一视频 ${report.uniqueVideos} · 重复出现 ${report.duplicateOccurrences} · 无法识别 ${report.unknownIdentity} · 失效标记 ${report.unavailable}`),
           element('p', '', `已知时长合计 ${report.knownDurationSeconds} 秒（唯一视频；${report.unknownDurations} 个时长未知）· ${report.unknownUploaders} 个作者未知`));
-        for (const f of report.folders) this.result.append(element('p', 'bf-muted', `ID ${f.id}：${f.pages} 页 / ${f.loaded} 条 / 预期 ${f.expected ?? '未知'}${f.issue ? ` · ${f.issue}` : ''}`));
-        this.operation.finish(report.complete ? 'completed' : report.cancelled ? 'interrupted' : 'failed', report.complete ? '所选范围统计完成，缺失信息记为未知。' : '仅保留已读取数据；未完成范围不可当作总数。');
+        for (const f of report.folders) this.result.append(element('p', 'bf-muted', `${f.name}：${f.pages} 页 / 读取 ${f.loaded} 条 / 平台标称 ${f.expected ?? '未知'}${f.issue ? ` · ${f.issue}` : ''}`));
+        this.result.append(videoDetails(report));
+        const issues = report.folders.filter(f => f.issue).map(f => `${f.name}：${f.issue}`);
+        this.operation.finish(report.complete ? 'completed' : 'interrupted', report.complete ? '所选范围统计完成，缺失信息记为未知。' :
+          `${report.cancelled ? '已停止。' : '统计不完整。'}已保留视频明细，可检查并导出。${issues.join('；')}`);
       }, 'scanning');
     }
 

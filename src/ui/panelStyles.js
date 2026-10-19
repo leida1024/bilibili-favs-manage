@@ -48,6 +48,10 @@ export const panelStyles = `
 .bili-favs-manage-panel .bf-help-panel details { border-bottom:1px solid var(--bf-line); padding:8px 0; }
 .bili-favs-manage-panel .bf-help-panel summary { cursor:pointer; font-weight:600; }
 .bili-favs-manage-panel .bf-help-panel h3 { margin-top:12px; }
+.bili-favs-manage-panel .bf-video-details { margin-top:12px; border-top:1px solid var(--bf-line); padding-top:8px; }
+.bili-favs-manage-panel .bf-video-details summary { cursor:pointer; font-weight:600; }
+.bili-favs-manage-panel .bf-video-list { padding-left:24px; margin:8px 0; }
+.bili-favs-manage-panel .bf-video-list li { padding:6px 0; overflow-wrap:anywhere; border-bottom:1px solid var(--bf-line); }
 .bili-favs-manage-panel a { color:var(--bf-blue); text-decoration:underline; }
 @keyframes bf-notice-scroll { 0%,20% { transform:translateX(0); } 75% { transform:translateX(-40%); } 100% { transform:translateX(0); } }
 @container (max-width:420px) { .bili-favs-manage-panel .bf-notice { display:none; } .bili-favs-manage-panel .bf-navigation { gap:12px; padding:0 8px; } }
