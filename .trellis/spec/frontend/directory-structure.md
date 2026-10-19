@@ -15,3 +15,5 @@ Classes use PascalCase filenames; shared helpers use camelCase. Keep the current
 
 - FolderClient owns HTTP only; WebFolderClient/nativeControls own DOM discovery and operations; neither falls back to the other. TransportClient captures reader/writer choices. ApiCopyFlow owns HTTP copy orchestration independently of the legacy DOM flow.
 - PanelLayout owns geometry/collapse persistence. utils/preferences.js validates inert UI preferences; LogStore owns bounded account/tab diagnostics. Never store executable tickets in these stores.
+
+- adapters/nativePagination owns current/total page parsing, first/next navigation and card readiness for BOTH copy and statistics. Layout adapters point to nativeControls; NativeVideoReader owns native metadata/context, not HTTP or mutation orchestration. videoMetadata joins safe known fields; VideoDetails bounds local rendering.

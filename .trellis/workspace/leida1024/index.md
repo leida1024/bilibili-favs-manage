@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 17
+- **Total Sessions**: 18
 - **Last Active**: 2026-10-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~567 | Active |
+| `journal-1.md` | ~603 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 18 | 2026-10-19 | Guard operations, add help and verify detailed statistics | `172051a`, `260b1ae`, `594be17`, `41ea877`, `b692cd3` | `develop` |
 | 17 | 2026-10-19 | Fix duplicate legacy scrollbar pagination requests | `1550101` | `develop` |
 | 16 | 2026-10-19 | Native list preparation and unavailable subscription identities | `da7eb50` | `develop` |
 | 15 | 2026-10-19 | Settings continuity and duplicate identity handling | `4670c41` | `develop` |

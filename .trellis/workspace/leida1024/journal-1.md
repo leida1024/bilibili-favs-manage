@@ -565,3 +565,40 @@ One native pagination trigger; await Vue source/DOM alignment; concrete corrupte
 ### Next Steps
 
 - After updating refresh the whole webpage to clear any2.2.7 duplicated native cache. Legacy live unsubscribe and GM sandbox remain unverified; no push/release authorized.
+
+
+## Session 18: Guard operations, add help and verify detailed statistics
+
+**Date**: 2026-10-19
+**Task**: Guard operations, add help and verify detailed statistics
+**Branch**: `develop`
+
+### Summary
+
+Completed all four authorized tasks inline. Local2.2.12:149 tests/build/diff pass; own-copy defenses, QQ/Help, bounded video details and shared native paging. Logged-in VUI read-only21-folder catalog,178-video multi-page API/native parity and8-video complete subscription; no real writes/push/release. See archived verification/review for limits.
+
+### Main Changes
+
+Shared copy actor/route guards, same-route account lifecycle; fifth Help and pausable QQ notice; safe video metadata/aliases and50-row details; shared native pagination fixes numeric VUI copy totals and first-page reset. Full review and live limits are in the four archived task verification files.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `172051a` | fix: guard copy context and stale operation entry points |
+| `260b1ae` | feat: add community notice and contextual help panel |
+| `594be17` | feat: expose video details and harden native statistics paging |
+| `41ea877` | fix: close review gaps in native paging and operation context |
+| `b692cd3` | docs: describe local guarded copy and detailed statistics |
+
+### Testing
+
+- [OK]149 tests, Rollup build and diff checks. Native/API read-only178-video and8-video parity; own copy disabled; fictional600/280px views and scoped axe0 violations,1 manually reviewed contrast incomplete.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- All authorized tasks complete. Local only; live legacy, real mutations and GM sandbox remain unverified. No push/release authorized.

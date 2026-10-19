@@ -1,0 +1,7 @@
+# Design
+
+Shared copyContext helper accepts {actor,pageOwner}, returns a concise block reason, and snapshots/revalidates actual PageDetector identity for native manager paths. ApiCopyFlow uses the same policy with its injected context. PageDetector requires numeric stable DedeUserID; visited-profile mid is not authentication. PageLifecycle observes actor as well as page uid so stale user-facing state cannot cross account changes.
+
+FloatingPanel retains lists/edits but derives native copy control eligibility from current context on init/selection updates/refresh/settings/busy transitions. Use the existing help line for own/no-login reason and no extra modal. Manager entry wraps the batch in a single in-memory running lock and context; each native copy checks context and selected source fid before confirmation. Existing own-page destination creation is separate and stays supported. Protect delayed cross-page handoff against source/actor drift. No persistent execution guard bypasses or new queues.
+
+Validate native unsubscribe own-page constraint in preview when mode=web; existing execution checks remain authoritative. Improve task normalization only for malformed/exact repeated pairs, retaining many sources to one target. Tests with formerly own-space copy fixtures move to genuine foreign context rather than introducing test-only execution exemptions. Fictional preview explicitly mocks PageDetector's context, keeping simulation usable without weakening production checks.
