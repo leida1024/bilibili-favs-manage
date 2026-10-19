@@ -1,6 +1,6 @@
 # Local management build
 
-These capabilities are in local build **2.2.7**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
+These capabilities are in local build **2.2.8**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
 
 ## Copy and diagnostics
 
@@ -80,3 +80,5 @@ Local 2.2.4 passed two disposable live create/delete cycles on VUI through conso
 Legacy copy confirmation recognizes the platform's `.be-toast` message `复制成功(ง •̀_•́)ง`. Successful notification ends the wait immediately; the 30-second limit only bounds missing results. Legacy toast and hover/delete-dialog fixtures cover the actual public component structure. Live copy/unsubscribe, Tampermonkey GM sandbox, automatic cross-page recovery and current legacy-page live behavior remain unverified. Earlier read-only checks matched230 subscription names across readers and one available season's66 BVIDs and49,595 known duration seconds. Platform API contracts and permissions can change.
 
 Local2.2.7 passed121 tests/build and adds realistic legacy pagination/disabled-link and VUI component-binding/native-confirmation regressions. Live read-only inspection found matching native/API type-and-ID order, including unavailable entries; execution uses exact bound identities rather than relying on that order. Native loading50→229 and unavailable-entry confirmation-open/cancel also passed live; no final confirmation was clicked and no real subscription was cancelled during development.
+
+Local2.2.8 fixes duplicate legacy pagination: the script now sends one native reach-end event per page, without also scrolling/dispatching scroll. It waits for source-to-DOM rendering before counting. Mixed available/unavailable unsubscribe batches have panel regression coverage for both readers with native writes. If2.2.7 already duplicated native pages, refresh the entire webpage after updating; reloading the panel catalog alone cannot clear the website's duplicate cache. Existing duplicated native identities stop before submission with that specific guidance.
