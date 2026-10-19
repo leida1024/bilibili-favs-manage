@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.2.4
+// @version      2.2.5
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       leida1024
 // @match        https://space.bilibili.com/*
@@ -207,7 +207,7 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.2.4',
+      VERSION: '2.2.5',
       NAME: 'BiliBili 收藏夹批量管理',
       DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
     }
@@ -218,7 +218,10 @@
     name: '旧版个人空间',
     notification: '.be-toast, .vui_toast, .bili-message, .bili-toast, .be-message, .toast-text',
     sidebar: '#fav-createdList-container',
-    sidebarCreate: null,
+    sidebarCreate: '#fav-createdList-container',
+    sidebarCreateForm: {
+      dialog: '.edit-media-list .edit-mask', input: '#media-list-name', confirm: '.submit-btn'
+    },
     item: '.fav-item',
     title: 'a.text',
     itemLink: 'a.text',
@@ -540,13 +543,14 @@
     /**
      * 输入收藏夹名称（完整的事件链）
      * @param {string} name - 收藏夹名称
+     * @param {HTMLInputElement|null} input - 已核对的表单输入框；省略时使用复制弹窗输入框
      * @returns {Promise<boolean>} 是否成功
      */
-    static async inputFavoriteName(name) {
+    static async inputFavoriteName(name, input = null) {
       name = normalizeFavoriteName(name);
       if (!name) return false;
-      const nameInput = Array.from(document.querySelectorAll(SELECTORS.CREATE_FAV_NAME_INPUT)).find(isElementVisible);
-      if (!nameInput) {
+      const nameInput = input || Array.from(document.querySelectorAll(SELECTORS.CREATE_FAV_NAME_INPUT)).find(isElementVisible);
+      if (!nameInput || !isElementVisible(nameInput)) {
         error('找不到名称输入框');
         return false;
       }
@@ -576,13 +580,14 @@
 
     /**
      * 点击创建按钮
+     * @param {Element|null} button - 已核对的表单提交按钮；省略时使用原创建入口
      * @returns {Promise<boolean>} 是否成功
      */
-    static async clickCreateButton() {
-      const createConfirmBtn = (getPageAdapter()?.createConfirm && document.querySelector(getPageAdapter().createConfirm)) ||
+    static async clickCreateButton(button = null) {
+      const createConfirmBtn = button || (getPageAdapter()?.createConfirm && document.querySelector(getPageAdapter().createConfirm)) ||
         findButtonByText(BUTTON_TEXTS.CREATE);
 
-      if (!createConfirmBtn || createConfirmBtn.disabled) {
+      if (!createConfirmBtn || !isElementVisible(createConfirmBtn) || createConfirmBtn.disabled || createConfirmBtn.getAttribute('aria-disabled') === 'true') {
         error('创建按钮不可用');
         return false;
       }
@@ -604,19 +609,26 @@
       favName = normalizeFavoriteName(favName);
       if (!favName) return false;
       if (this.getAllFavorites().some(item => this.getFavoriteName(item) === favName)) return true;
-      const selector = pageAdapter().sidebarCreate;
+      const adapter = pageAdapter(), selector = adapter.sidebarCreate;
       const sidebar = selector && document.querySelector(selector);
       if (!sidebar) return null;
 
       // 文本精确为"新建收藏夹"的叶子元素即入口
       const entry = Array.from(sidebar.querySelectorAll('*')).find(
         el => el.children.length === 0 &&
-              el.textContent.trim() === BUTTON_TEXTS.CREATE_NEW
+              el.textContent.trim() === BUTTON_TEXTS.CREATE_NEW && isElementVisible(el)
       );
       if (!entry) {
         warn('侧边栏未找到"新建收藏夹"入口');
         return null;
       }
+
+      const form = adapter.sidebarCreateForm;
+      if (form && [...document.querySelectorAll(form.dialog)].some(isElementVisible)) {
+        warn('已有收藏夹编辑窗口，请先关闭后重新开始；尚未提交');
+        return false;
+      }
+      if (!guard()) return false;
 
       debug('点击左侧边栏[新建收藏夹]');
       const clickable = entry.closest(
@@ -625,17 +637,25 @@
       clickable.click();
       await delay(CONFIG.DELAY.SHORT);
 
-      // 等待名称输入框（复用与复制对话框一致的创建组件）
-      const input = await waitForElement(SELECTORS.CREATE_FAV_NAME_INPUT, 3000, document, true);
+      // Legacy opens an independent Edit form; its controls differ from the
+      // copy dialog. Scope both controls to that visible form before submitting.
+      const parent = form ? await waitForElement(form.dialog, 3000, document, true) : document;
+      const input = parent && await waitForElement(form?.input || SELECTORS.CREATE_FAV_NAME_INPUT, 3000, parent, true);
       if (!input) {
         warn('点击"新建收藏夹"后未出现名称输入框');
         return false;
       }
 
       // 输入名称并点击创建
-      if (!await this.inputFavoriteName(favName)) return false;
+      if (!await this.inputFavoriteName(favName, input)) return false;
       if (!guard()) return false;
-      if (!await this.clickCreateButton()) return false;
+      let submit = null;
+      if (form) {
+        const controls = [...parent.querySelectorAll(form.confirm)].filter(isElementVisible);
+        if (controls.length !== 1) { error('新建表单的提交按钮未确认，已停止'); return false; }
+        submit = controls[0];
+      }
+      if (!await this.clickCreateButton(submit)) return false;
 
       const confirmed = await this.waitForFavorite(favName);
       if (!confirmed) error(`未确认收藏夹 [${favName}] 创建成功，已停止，请检查页面结果`);
@@ -1098,18 +1118,18 @@
       }
       if (result !== null) return false;
 
-      // 回退：复制对话框内"新建收藏夹"（已验证可用）
-      log('侧边栏入口不可用，回退到复制对话框方式创建');
+      // Only a missing sidebar entry permits the copy-dialog alternative.
+      log('未找到左侧“新建收藏夹”，尝试通过复制弹窗新建（需要可选视频）');
       return await this.createViaCopyDialog(favName);
     }
 
     /**
-     * 通过批量模式复制对话框创建收藏夹（回退方案，已验证可用）
+     * 通过批量模式复制对话框创建收藏夹（需可选视频的备用入口）
      * @param {string} favName - 收藏夹名称
      * @returns {Promise<boolean>}
      */
     async createViaCopyDialog(favName) {
-      // 1. 点击第一个收藏夹（确保有内容可操作）
+      // 1. 打开第一个收藏夹；空收藏夹可能没有可选视频。
       const allFavs = BilibiliAPI.getAllFavorites();
       if (allFavs.length === 0) {
         error('找不到任何收藏夹');
@@ -1122,13 +1142,13 @@
       // 2. 进入批量操作模式
       const batchSuccess = await BilibiliAPI.ensureBatchModeActive();
       if (!batchSuccess) {
-        error('无法进入批量模式');
+        error('当前收藏夹无法进入批量模式。复制弹窗新建需要可选视频；请先在自己的空间手动新建目标收藏夹，再重新开始。');
         return false;
       }
 
       // 3. 全选当前页视频（否则"复制至"按钮不可用，对话框不会弹出）
       if (!BilibiliAPI.clickSelectAll()) {
-        error('无法全选视频，"复制至"将不可用');
+        error('当前页没有可选视频，无法通过复制弹窗新建。请先在自己的空间手动新建目标收藏夹，再重新开始。');
         return false;
       }
       await delay(CONFIG.DELAY.SHORT);
@@ -2662,7 +2682,7 @@
       const busy = this.panel.busy;
       this.selectionTools?.update();
       this.previewButton.disabled = busy || !this.selected().length;
-      this.previewButton.hidden = this.inventoryUI.mode !== 'manage' || busy || !!this.ticket;
+      this.previewButton.hidden = this.inventoryUI.mode !== 'manage' || busy || this.review.childElementCount > 0;
       for (const row of this.rows) row.input.disabled = busy || !!row.reason;
       if (this.confirmButton) this.confirmButton.disabled = busy || !this.agreement?.checked || !this.ticket;
       if (this.agreement) this.agreement.disabled = busy;
@@ -2671,15 +2691,24 @@
     preview() {
       if (this.panel.busy) return;
       this.invalidate();
+      this.results.replaceChildren();
       try {
         const description = descriptions[this.action];
-        if (this.panel.manager.modes?.manage === 'web' && this.selected().some(folder => folder.available === false))
-          throw new Error('失效条目在网页不显示可核对 ID。请在设置中将“删除与取消订阅”改为 API，保存后重新加载；尚未提交。');
         this.ticket = this.engine.prepare(this.action, this.selected());
         const mode = this.panel.manager.modes?.manage;
         this.review.append(element('h3', '', `将${description.verb} ${this.ticket.targets.length} 项${mode ? `（${mode === 'api' ? 'API' : '网页'}）` : ''}`));
         this.review.append(element('p', '', description.detail));
         for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ${target.kind === 'season' ? '合集' : '收藏夹'} · ID ${target.id} · 所有者 ${target.ownerId || '未知'} · ${target.count ?? '未知'} 条${target.available === false ? ' · 内容已失效' : ''}`));
+        if (mode === 'web' && this.ticket.targets.some(target => target.available === false)) {
+          this.engine.invalidate(); this.ticket = null;
+          const message = '网页方式无法核对失效条目的 ID。请在设置中将“删除与取消订阅”改为 API，保存后重新加载并选择目标；尚未提交。';
+          const notice = element('p', 'bf-muted', message); notice.setAttribute('role', 'status');
+          const settings = button('前往设置', () => this.panel.showModeSettings());
+          this.review.append(notice, settings, button('返回选择', () => { this.invalidate(); this.previewButton.focus(); }));
+          this.panel.appendLog(message, this.panel.warnCode);
+          this.updateBusy(); this.review.scrollIntoView?.({ block: 'nearest', behavior: 'instant' }); settings.focus();
+          return;
+        }
         this.agreement = element('input'); this.agreement.type = 'checkbox';
         const label = element('label', 'bf-folder-row'); label.append(this.agreement, element('span', '', description.agreement));
         this.agreement.addEventListener('change', () => this.updateBusy());

@@ -162,14 +162,14 @@ test('both navigation snapshots retain actual sidebar fallback, other-function a
   for (let i = 0; i < 15; i++) await Promise.resolve();
   log('During return navigation countdown'); t.mock.timers.tick(3000); await preparing;
   assert.equal(creations, 1); assert.equal(pending.operationId, operationId);
-  assert.ok(pending.journal.entries.some(entry => entry.message.includes('侧边栏入口不可用')));
+  assert.ok(pending.journal.entries.some(entry => entry.message.includes('未找到左侧“新建收藏夹”')));
   assert.ok(pending.journal.entries.some(entry => entry.message === 'During return navigation countdown'));
   own.panel.destroy();
   const source = mount('90', ['Fictional source']); let copies = 0;
   source.manager.copyFavorite = async () => { copies++; assert.equal(pending, null); return true; };
   await source.manager.crossPageFlow.resumeFlow();
   assert.equal(source.manager.operation.state.status, 'completed'); assert.equal(source.manager.operation.state.operationId, operationId);
-  assert.equal(source.manager.logs.entries.filter(entry => entry.message.includes('侧边栏入口不可用')).length, 1);
+  assert.equal(source.manager.logs.entries.filter(entry => entry.message.includes('未找到左侧“新建收藏夹”')).length, 1);
   assert.ok(source.manager.logs.entries.some(entry => entry.message === 'Other function record'));
   assert.equal(await source.manager.crossPageFlow.resumeFlow(), false); assert.equal(copies, 1);
 });
