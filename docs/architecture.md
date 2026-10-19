@@ -63,7 +63,7 @@ FavoriteManager 持有有界 LogStore；入口在面板挂载前接入同一记�
 ## 独立操作适配层（2.2.2）
 
 - FolderClient：HTTP 列表、统计、创建、复制、删除及退订。type11 是收藏夹，type21 是合集；合集使用独立内容/退订接口。合集内容接口返回完整列表，不能按普通收藏夹20条分页推算。
-- WebFolderClient 与 adapters/nativeControls：网页展开、路由身份读取、视频分页和原生菜单操作。自身不直接发 HTTP；同名条目依次核对路由 ID。失效条目不暴露可核对的网页 ID，因此提示选择 API 管理，不能仅按同名条目匹配。
+- WebFolderClient 与 adapters/nativeControls、nativeBindings：等待侧栏就绪、展开和加载后续列表、读取条目身份、视频分页和原生菜单操作。旧版订阅使用 #fav-list-container 的链接 ID/类型，新版将 FavSidebarItem 的只读数据绑定到实际 DOM 条目；失效条目也可核对。无绑定的普通条目保留路由读取，失效且无绑定则在提交前停止并提示显式选择 API。自身不直接发 HTTP，不按名称或列表顺序猜测身份。新版退订处理原生二次确认，旧版保留即时菜单提交。
 - TransportClient.capture：在确认/扫描开始时固定读写适配器；BatchOperations 继续负责一次性票据、每项重读和停止规则。网页读取/API写入组合也会重新检查当前目标元数据。
 - ApiCopyFlow：先完整读取来源快照，再按所选创建方式准备目标，之后逐批 API 复制。不与 DOM 复制混写，也不在失败后换方式。恢复的旧跨页任务明确保留 DOM 流程。
 - preferences / PanelLayout：校验后的本地界面偏好；sessionStorage 诊断按账号隔离，localStorage 保存尺寸、位置、记录展开和模式。设置作为第四个普通面板，保留拖动和缩放。记录栏采用固定辅助宽度；收起删除该辅助空间，不让任务区域扩张。
