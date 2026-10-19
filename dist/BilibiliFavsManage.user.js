@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.2.9
+// @version      2.2.10
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       leida1024
 // @match        https://space.bilibili.com/*
@@ -208,7 +208,7 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.2.9',
+      VERSION: '2.2.10',
       NAME: 'BiliBili 收藏夹批量管理',
       DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
     }
@@ -2620,6 +2620,19 @@
 .bili-favs-manage-panel .bf-header button { font-size:var(--bf-small); min-height:28px; padding:4px; border-color:transparent; background:transparent; flex-shrink:0; }
 .bili-favs-manage-panel .bf-header button[aria-expanded=true] { color:var(--bf-blue); background:var(--bf-selected); }
 .bili-favs-manage-panel .bf-navigation { display:flex; gap:18px; padding:0 12px; border-bottom:1px solid var(--bf-line); flex-shrink:0; }
+.bili-favs-manage-panel .bf-notice { display:flex; align-items:center; flex:1; min-width:0; gap:2px; margin:0 4px; }
+.bili-favs-manage-panel .bf-notice-window { flex:1; min-width:0; overflow:hidden; }
+.bili-favs-manage-panel .bf-notice button { min-height:24px; padding:2px 4px; font-size:var(--bf-small); border-color:transparent; background:transparent; }
+.bili-favs-manage-panel .bf-notice-text { white-space:nowrap; animation:bf-notice-scroll 18s linear infinite; }
+.bili-favs-manage-panel .bf-notice:hover .bf-notice-text,.bili-favs-manage-panel .bf-notice:focus-within .bf-notice-text,.bili-favs-manage-panel .bf-notice[data-paused=true] .bf-notice-text { animation-play-state:paused; }
+.bili-favs-manage-panel .bf-notice:focus-within .bf-notice-text { transform:none; animation:none; white-space:normal; text-align:left; }
+.bili-favs-manage-panel .bf-help-panel details { border-bottom:1px solid var(--bf-line); padding:8px 0; }
+.bili-favs-manage-panel .bf-help-panel summary { cursor:pointer; font-weight:600; }
+.bili-favs-manage-panel .bf-help-panel h3 { margin-top:12px; }
+.bili-favs-manage-panel a { color:var(--bf-blue); text-decoration:underline; }
+@keyframes bf-notice-scroll { 0%,20% { transform:translateX(0); } 75% { transform:translateX(-40%); } 100% { transform:translateX(0); } }
+@container (max-width:420px) { .bili-favs-manage-panel .bf-notice { display:none; } .bili-favs-manage-panel .bf-navigation { gap:12px; padding:0 8px; } }
+@media (prefers-reduced-motion:reduce) { .bili-favs-manage-panel .bf-notice .bf-notice-text { animation:none; white-space:normal; text-align:left; } }
 .bili-favs-manage-panel .bf-navigation button { border:0; border-bottom:2px solid transparent; border-radius:0; padding:8px 0 6px; background:none; color:var(--bf-muted); }
 .bili-favs-manage-panel .bf-navigation button[aria-pressed=true] { color:var(--bf-blue); font-weight:600; border-bottom-color:var(--bf-blue); }
 .bili-favs-manage-panel .bf-content { grid-column:1; grid-row:1; overflow-y:auto; overflow-x:hidden; padding:8px 12px; min-height:0; scrollbar-width:thin; scrollbar-color:var(--bf-control) transparent; scroll-padding:8px; }
@@ -3156,6 +3169,28 @@
     }
   }
 
+  function helpPanel() {
+    const root = element('section', 'bf-help-panel');
+    root.setAttribute('aria-label', '帮助');
+    root.append(element('h2', '', '使用帮助'));
+    const topics = [
+      ['复制收藏夹', '先登录，再打开他人的收藏夹页面。勾选来源并填写目标名，内容会复制到自己账号，来源保留。同名目标会复用；若有多个同名收藏夹，请先改名。网页创建会先跳转到自己的空间，再返回继续复制。'],
+      ['统计与视频明细', '选择“当前空间”或“我的订阅”，加载列表后勾选收藏夹再统计。只读取选中范围，可查看视频明细并导出。结果显示覆盖页数；“扫描不完整”只代表已读取的部分。'],
+      ['网页操作和 API', '在“设置”选择方式。网页读取会打开收藏夹并逐页查看，请等待完成，期间避免手动切换。API 读取直接请求 B 站接口；权限和接口变化都可能导致失败。保存设置保留已加载的列表，新任务使用新方式。'],
+      ['删除与取消订阅', '删除仅适用于自己创建的非默认、非特殊收藏夹；取消订阅不会删除原作者内容。先选择、预览并核对具体 ID，再勾选确认。网页退订需在自己的收藏夹页面进行；失效条目也需确认身份。'],
+      ['遇到停止或待核对', '“待核对”表示可能已经提交，请先检查 B 站目标结果，避免重复操作。普通停止会说明原因。打开“记录”，选择“排查详情”查看按钮步骤；导出包含全部保留记录，发给他人前请检查内容。']
+    ];
+    for (const [title, text] of topics) {
+      const details = element('details'); details.append(element('summary', '', title), element('p', '', text)); root.append(details);
+    }
+    root.append(element('h3', '', '交流与反馈'), element('p', '', 'QQ 群：524764959（在 QQ 搜索群号加入）'));
+    for (const [label, href] of [['项目说明与入群二维码', 'https://github.com/leida1024/bilibili-favs-manage#qq-group'], ['反馈问题', 'https://github.com/leida1024/bilibili-favs-manage/issues']]) {
+      const link = element('a', '', label); link.href = href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      const line = element('p'); line.append(link); root.append(line);
+    }
+    return root;
+  }
+
   const statusNames = { idle: '准备就绪', running: '进行中', completed: '已完成', failed: '已停止', interrupted: '已中断', unknown: '待核对', waiting: '等待跳转' };
   const logLevels = { info: '信息', warn: '警告', error: '错误', debug: '调试' };
 
@@ -3214,6 +3249,22 @@
       this.dismissButton = button('×', () => { this.onDismiss?.(); this.destroy(); });
       this.dismissButton.setAttribute('aria-label', '关闭'); this.dismissButton.title = '关闭';
       this.header.append(this.logsButton, this.minimizeButton, this.dismissButton);
+      this.notice = element('aside', 'bf-notice');
+      this.notice.setAttribute('aria-label', '交流与帮助');
+      const noticeWindow = element('div', 'bf-notice-window');
+      const noticeText = button('QQ 群 524764959 · 使用帮助与问题反馈 → 帮助', () => this.showView('help'), 'bf-notice-text');
+      noticeWindow.append(noticeText);
+      this.pauseNoticeButton = button('暂停', () => {
+        const paused = this.notice.dataset.paused !== 'true';
+        this.notice.dataset.paused = String(paused);
+        this.pauseNoticeButton.textContent = paused ? '播放' : '暂停';
+        this.pauseNoticeButton.setAttribute('aria-label', paused ? '播放滚动提示' : '暂停滚动提示');
+        this.pauseNoticeButton.setAttribute('aria-pressed', String(paused));
+      });
+      this.pauseNoticeButton.setAttribute('aria-label', '暂停滚动提示');
+      this.pauseNoticeButton.setAttribute('aria-pressed', 'false');
+      this.notice.append(noticeWindow, this.pauseNoticeButton);
+      this.header.insertBefore(this.notice, this.logsButton);
       this.navigation = element('nav', 'bf-navigation');
       this.navigation.setAttribute('aria-label', '管理功能');
       this.viewButtons = new Map();
@@ -3228,6 +3279,8 @@
         this.viewButtons.set('settings', this.modeButton);
         this.navigation.append(this.modeButton);
       }
+      const helpButton = button('帮助', () => this.showView('help'));
+      this.viewButtons.set('help', helpButton); this.navigation.append(helpButton);
       this.content = element('div', 'bf-content');
       this.scope = element('p', 'bf-sr-only');
       this.workspace = element('section', 'bf-workspace');
@@ -3269,6 +3322,7 @@
         this.content.append(this.inventoryPanel.root);
       }
       if (this.manager.modes) { this.createSettingsPanel(); this.content.append(this.settingsRoot); }
+      this.helpRoot = helpPanel(); this.content.append(this.helpRoot);
       this.createDiagnostics();
       this.footer = element('footer', 'bf-footer');
       this.statusBox.append(this.progressDetails);
@@ -3302,7 +3356,7 @@
     }
 
     showView(view) {
-      if (!['copy', 'statistics', 'manage', 'settings'].includes(view) || this.busy || view === this.activeView) return;
+      if (!['copy', 'statistics', 'manage', 'settings', 'help'].includes(view) || this.busy || view === this.activeView) return;
       if ((view === 'statistics' || view === 'manage') && !this.inventoryPanel) return;
       if (view === 'settings' && !this.settingsRoot) return;
       this.viewScroll.set(this.activeView, this.content.scrollTop);
@@ -3317,6 +3371,7 @@
       this.updateModeSummary();
       this.workspace.hidden = view !== 'copy';
       if (this.settingsRoot) this.settingsRoot.hidden = view !== 'settings';
+      this.helpRoot.hidden = view !== 'help';
       if (this.inventoryPanel) {
         this.inventoryPanel.root.hidden = !['statistics', 'manage'].includes(view);
         if (view === 'statistics' || view === 'manage') this.inventoryPanel.setMode(view);
@@ -3325,7 +3380,7 @@
       this.copyActions.hidden = view !== 'copy';
       this.renderOperation(this.operation.state);
       if (this.outputTextBox && this.logsOpen && !this.minimized) this.renderLogs();
-      this.footer.hidden = !!this.minimized || view === 'settings';
+      this.footer.hidden = !!this.minimized || ['settings', 'help'].includes(view);
       for (const [name, control] of this.viewButtons) control.setAttribute('aria-pressed', String(name === view));
     }
 
@@ -3447,7 +3502,7 @@
       this.progressLast.textContent = `最后确认：${state.lastConfirmed || '尚无已确认步骤'}`;
       this.progressLast.hidden = !state.lastConfirmed;
       this.progressMessage.textContent = state.detail;
-      if (this.footer) this.footer.hidden = !!this.minimized;
+      if (this.footer) this.footer.hidden = !!this.minimized || ['settings', 'help'].includes(this.activeView);
     }
 
     async startBatchTransfer() {
@@ -3554,7 +3609,7 @@
       const previousFocus = document.activeElement;
       const close = () => {
         section.remove(); this.exportReview = null;
-        this.content.inert = false; this.navigation.inert = false; this.footer.inert = false; this.header.inert = false; this.diagnostics.inert = false;
+        this.notice.inert = false; this.content.inert = false; this.navigation.inert = false; this.footer.inert = false; this.header.inert = false; this.diagnostics.inert = false;
         previousFocus?.focus();
       };
       section.append(area, button('下载此内容', () => {
@@ -3571,7 +3626,7 @@
         }
       });
       this.floatingPanel.append(section); this.exportReview = section;
-      this.content.inert = true; this.navigation.inert = true; this.footer.inert = true; this.header.inert = true; this.diagnostics.inert = true;
+      this.notice.inert = true; this.content.inert = true; this.navigation.inert = true; this.footer.inert = true; this.header.inert = true; this.diagnostics.inert = true;
       area.focus();
     }
 
@@ -3584,7 +3639,7 @@
       this.copyHelp.textContent = reason || `${name(modes.copy)}复制 · ${name(modes.create)}创建 · 来源保留`;
       this.modeButton.title = `读取/统计：${name(modes.read)}；复制：${name(modes.copy)}；创建：${name(modes.create)}；删除/退订：${name(modes.manage)}`;
       this.modeButton.setAttribute('aria-label', `设置。${this.modeButton.title}`);
-      if (this.logScope) this.logScope.options[0].textContent = ({ copy: '复制功能', statistics: '统计功能', manage: '管理功能', settings: '设置' })[this.activeView];
+      if (this.logScope) this.logScope.options[0].textContent = ({ copy: '复制功能', statistics: '统计功能', manage: '管理功能', settings: '设置', help: '帮助' })[this.activeView];
     }
 
     showModeSettings() { this.showView('settings'); }
@@ -3619,7 +3674,7 @@
       this.minimized = !this.minimized;
       this.floatingPanel.dataset.minimized = String(this.minimized);
       this.content.hidden = this.minimized;
-      this.navigation.hidden = this.minimized; this.footer.hidden = this.minimized || this.activeView === 'settings';
+      this.navigation.hidden = this.minimized; this.notice.hidden = this.minimized; this.footer.hidden = this.minimized || ['settings', 'help'].includes(this.activeView);
       this.diagnostics.hidden = this.minimized || !this.logsOpen;
       this.minimizeButton.textContent = this.minimized ? '□' : '−';
       this.minimizeButton.setAttribute('aria-label', this.minimized ? '恢复面板' : '最小化');
