@@ -100,11 +100,11 @@ test('unavailable subscriptions open a target preview in default web mode and ex
   assert.ok(manager.logs.entries.some(entry => /网页.*失效.*ID/.test(entry.message)));
   [...m.review.querySelectorAll('button')].find(button => button.textContent === '前往设置').click();
   assert.equal(p.activeView, 'settings'); assert.equal(manager.modes.manage, 'web'); assert.equal(reads, 1);
-  manager.modes.manage = 'api'; p.showView('manage'); await ui.load();
-  assert.equal(m.selected().length, 0, 'explicit mode change/reload cannot restore a destructive selection');
-  m.rows[0].input.click(); m.previewButton.click();
-  assert.deepEqual(m.ticket.targets.map(target => target.id), ['100']);
-  assert.equal(m.confirmButton.disabled, true); assert.equal(reads, 2);
+  p.modeChoices.get('manage').value = 'api'; p.saveModesButton.click(); p.showView('manage');
+  assert.equal(m.selected().length, 2, 'saving mode preserves the explicit selection without reloading');
+  assert.equal(m.ticket, null); m.previewButton.click();
+  assert.deepEqual(m.ticket.targets.map(target => target.id), ['100', '101']);
+  assert.equal(m.confirmButton.disabled, true); assert.equal(reads, 1);
 });
 
 test('resize rejects outside coordinates, header buttons do not drag, title has threshold and keyboard alternative', t => {
@@ -266,6 +266,79 @@ test('settings are an independent panel, retain dragging/resizing and persist wi
   assert.equal(p.logScope.closest('label').firstChild.textContent, '范围');
   assert.equal(p.logFilter.closest('label').firstChild.textContent, '内容');
   p.showView('copy'); p.setBusy(true); p.showModeSettings(); assert.equal(p.activeView, 'copy');
+});
+
+test('saving transport settings preserves loaded snapshots, selections, filters and reports without I/O', async t => {
+  realm(t); const manager = new FavoriteManager(); manager.getAllFavoriteNames = () => [];
+  Object.assign(manager.modes, defaultModes); let apiReads = 0, webReads = 0, apiScans = 0, webScans = 0;
+  const targets = [folder('100', { count: 0 }), folder('101', { name: 'Other', count: 0 })];
+  manager.http.folders = async () => { apiReads++; return targets; };
+  manager.web.folders = async () => { webReads++; return targets; };
+  const emptyPage = id => ({ info: { id, media_count: 0 }, medias: [], has_more: false });
+  manager.http.videos = async id => { apiScans++; return emptyPage(id); };
+  manager.web.videos = async id => { webScans++; return emptyPage(id); };
+  const p = new FloatingPanel(manager); p.init(); t.after(() => p.destroy()); p.showView('statistics');
+  const ui = p.inventoryPanel, m = ui.mutations; await ui.load(); ui.rows[0].input.click(); await ui.scan();
+  m.rows[1].input.click(); ui.selectionTools.search.value = 'Source'; m.selectionTools.search.value = 'Other';
+  const report = ui.report, result = ui.result.firstChild, row = ui.rows[0], managed = m.rows[1];
+  p.content.scrollTop = 83; p.showModeSettings();
+  for (const key of [null, 'copy', 'create', 'manage', 'read']) {
+    if (key) p.modeChoices.get(key).value = key === 'read' ? 'web' : 'api';
+    p.saveModesButton.click();
+    assert.equal(ui.rows[0], row); assert.equal(m.rows[1], managed); assert.equal(ui.folders, targets);
+    assert.equal(row.input.checked, true); assert.equal(managed.input.checked, true);
+    assert.equal(ui.selectionTools.search.value, 'Source'); assert.equal(m.selectionTools.search.value, 'Other');
+    assert.equal(ui.report, report); assert.equal(ui.result.firstChild, result);
+    assert.equal(p.viewScroll.get('statistics'), 83); assert.equal(ui.exportButton.disabled, false);
+    assert.equal(apiReads, 1); assert.equal(webReads, 0); assert.equal(apiScans, 1); assert.equal(webScans, 0);
+  }
+  p.showView('manage'); m.previewButton.click();
+  assert.equal(m.ticket.transport.mutate instanceof Function, true);
+  const ticket = m.ticket; p.saveModesButton.click();
+  assert.equal(m.ticket, null); assert.equal(manager.batchOperations.ticket, null);
+  await assert.rejects(manager.batchOperations.execute(ticket, { confirmed: true }), /重新预览/);
+  p.showView('statistics'); await ui.scan(); assert.equal(webScans, 1); assert.equal(apiScans, 1);
+  await ui.load(); assert.equal(webReads, 1); assert.equal(apiReads, 1);
+  assert.equal(ui.report, null); assert.equal(ui.selected().length, 0, 'explicit reload still resets the snapshot');
+  p.showModeSettings(); p.setBusy(true); p.modeChoices.get('read').value = 'api'; p.saveModesButton.click();
+  assert.equal(manager.modes.read, 'web'); p.setBusy(false);
+});
+
+test('duplicate typed identities are visible and selection survives filtering and row order changes', async t => {
+  realm(t); const manager = new FavoriteManager(); manager.getAllFavoriteNames = () => [];
+  Object.assign(manager.modes, { read: 'api', manage: 'api' });
+  const targets = ['subscribed', 'season'].map((kind, i) => folder('100', { kind, ownerId: String(90 + i), name: 'Same name', subscribed: true, count: 0 }));
+  let reads = 0; const writes = [], scans = [];
+  manager.http.folders = async () => ++reads % 2 ? targets : [...targets].reverse();
+  manager.http.videos = async (id, pn, signal, target) => { scans.push(target.kind); return { info: { id, media_count: 0 }, medias: [], has_more: false }; };
+  manager.http.mutate = async (action, target) => { writes.push(`${target.kind}:${target.id}`); return { status: 'confirmed', detail: 'Synthetic confirmation' }; };
+  const p = new FloatingPanel(manager); p.init(); t.after(() => p.destroy()); p.showView('statistics');
+  const ui = p.inventoryPanel; ui.kind.value = 'subscribed'; await ui.load();
+  for (const row of [...ui.rows, ...ui.mutations.rows]) assert.match(row.node.textContent, /同名.*ID 100.*所有者/);
+  ui.rows.find(row => row.folder.kind === 'subscribed').input.click(); await ui.scan();
+  assert.deepEqual(scans, ['subscribed']); p.showView('manage'); const m = ui.mutations;
+  const selected = m.rows.find(row => row.folder.kind === 'season'); selected.input.click();
+  m.list.prepend(selected.node); m.selectionTools.search.value = 'missing'; m.selectionTools.search.dispatchEvent(new window.Event('input'));
+  assert.equal(selected.input.checked, true); assert.equal(selected.node.hidden, true);
+  m.previewButton.click(); assert.deepEqual(m.ticket.targets.map(target => `${target.kind}:${target.id}`), ['season:100']);
+  assert.match(m.review.textContent, /合集.*ID 100.*所有者 91/);
+  m.agreement.checked = true; await m.execute();
+  assert.deepEqual(writes, ['season:100']); assert.equal(reads, 2);
+});
+
+test('copy source collisions are explained and excluded from bulk selection even after refresh or busy transitions', t => {
+  realm(t); let names = ['Same', 'Other'];
+  const manager = { getAllFavoriteNames: () => names };
+  const p = new FloatingPanel(manager); p.init(); t.after(() => p.destroy());
+  p.favCheckboxItemList[0].checkbox.click(); names = ['Same', ' Same ', 'Other']; p.refreshFavorites();
+  for (const item of p.favCheckboxItemList.slice(0, 2)) {
+    assert.equal(item.checkbox.disabled, true); assert.equal(item.checkbox.checked, false);
+    assert.match(item.checkboxContainer.textContent, /同名来源.*改为不同名称/);
+  }
+  p.toggleSelectAll(); assert.deepEqual(p.getSelectedTasks(), [{ source: 'Other', target: 'Other' }]);
+  p.setBusy(true); p.setBusy(false); assert.equal(p.favCheckboxItemList[0].checkbox.disabled, true);
+  names = ['Renamed', 'Same', 'Other']; p.refreshFavorites();
+  assert.equal(p.favCheckboxItemList[0].checkbox.disabled, false);
 });
 
 test('HTTP creation/copy use correct private-folder/resource bodies, unknown creation verification never repeats', async t => {

@@ -1,6 +1,6 @@
 # Local management build
 
-These capabilities are in local build **2.2.5**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
+These capabilities are in local build **2.2.6**, visible in the panel title. Versions use ordinary numeric components. The published Greasy Fork version remains 2.1.2 until a separately reviewed release.
 
 ## Copy and diagnostics
 
@@ -35,7 +35,7 @@ Drag only the title area, resize within the4px inner edge or the visible bottom-
 | Create destinations | Webpage | API / webpage |
 | Delete and unsubscribe | Webpage | API / webpage |
 
-Webpage mode operates native page controls; the website itself still communicates with Bilibili. API mode calls those web interfaces directly. Neither bypasses permissions or platform restrictions. API copy also reads source snapshots through API regardless of the separate statistics reader. Choices are captured for each task; changing settings invalidates old catalogs/confirmation. No uncertain submission switches transports or retries automatically.
+Webpage mode operates native page controls; the website itself still communicates with Bilibili. API mode calls those web interfaces directly. Neither bypasses permissions or platform restrictions. API copy also reads source snapshots through API regardless of the separate statistics reader. Choices are captured for each task; changing settings preserves loaded snapshots and invalidates old management confirmation. No uncertain submission switches transports or retries automatically.
 
 API copy resolves exact sources and existing targets, rejects ambiguous names and self-copy, snapshots complete source video lists, and copies at most20 resources per sequential batch. Missing targets use the selected creator. API-created targets are private by default; API copying is not a local video backup. Webpage creation requires your own space; when copying elsewhere, prepare destinations first or explicitly select API creation. Existing webpage-only cross-space flow still prepares targets in your own space and returns, preserving its consume-before-execute recovery. A resumed webpage task remains webpage execution even if settings changed.
 
@@ -61,7 +61,15 @@ Deletion removes a folder and its saved references; it does not delete uploaded 
 
 Choose **取消订阅** in **管理**, then load the list. Folder subscriptions and seasons are supported. Content availability is separate from subscription membership: an unavailable season remains eligible when its exact ID, type and current-account subscription are confirmed. A missing author is displayed as unknown; conflicting identities, unknown types and unconfirmed subscriptions are excluded. API subscription evidence comes from membership in the complete authenticated collected list, not fav_state alone. Seasons use their own unsubscribe endpoint; folder and season IDs are never interchanged. Review and explicitly confirm exact IDs and known owners.
 
-Unavailable entries can open **预览退订目标**. In webpage management mode, the preview displays the selected names/IDs and the limitation, with **前往设置** and **返回选择** actions. To proceed, choose **设置 → 删除与取消订阅 → API**, save, reload the list and select/preview again. The current webpage exposes a native unsubscribe menu but no stable ID for its many same-name unavailable entries. This informational preview has no executable confirmation; management never matches these targets by name alone or switches to API automatically. Statistics keeps unavailable content disabled.
+Unavailable entries can open **预览退订目标**. In webpage management mode, the preview displays the selected names/IDs and the limitation, with **前往设置** and **返回选择** actions. To proceed with already identified entries, choose **设置 → 删除与取消订阅 → API**, save, return to Management and preview again; the selection stays. If webpage reading did not obtain stable identities, explicitly choose API reading and load the list first. The current webpage exposes a native unsubscribe menu but no stable ID for its many same-name unavailable entries. This informational preview has no executable confirmation; management never matches these targets by name alone or switches to API automatically. Statistics keeps unavailable content disabled.
+
+## Settings and same-name entries
+
+Saving an operation method keeps already loaded lists, independent selections, filters, task scroll and existing statistics/results/export. Those are read snapshots. Future loads/scans/previews use the saved methods; saving performs no requests. Old management confirmation is invalidated, and a new preview/agreement is required. Execution still checks fresh exact identities before each item. Explicit reload, scope changes and mutation attempts retain their existing reset behavior.
+
+Names are display labels. Statistics and management use **type + ID**, and same-name rows visibly include type, ID and owner. Filtering or reordering does not change a selected target. Ordinary same-name entries can still use webpage management when their route IDs are verified; unavailable native rows lack that evidence, so use the explicit API choice. Nothing silently switches to API or guesses by list position.
+
+The copy form currently maps **source name → target name**. Duplicate source names are marked and disabled; duplicate destination names stop before selection/submission, including during cross-page target preparation. API copy also rejects ambiguous names, because choosing API alone does not specify which same-name ID you intend. Use unique names for the relevant source/target; other unambiguous folders can still be copied. A single unique destination can intentionally receive several different sources.
 
 ## Outcomes and limits
 

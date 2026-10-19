@@ -9,7 +9,7 @@ import { BilibiliAPI } from './BilibiliAPI.js';
 import { delay } from '../utils/dom.js';
 import { log, error } from '../utils/logger.js';
 import { CONFIG } from '../config/config.js';
-import { normalizeFavoriteName, normalizeCopyTasks } from '../utils/favoriteNames.js';
+import { normalizeFavoriteName, normalizeCopyTasks, assertUnambiguousFavoriteName } from '../utils/favoriteNames.js';
 import { newOperationId } from '../utils/logStore.js';
 
 export class CrossPageFlowManager {
@@ -90,6 +90,7 @@ export class CrossPageFlowManager {
   async createSingleFavorite(favName) {
     favName = normalizeFavoriteName(favName);
     if (!favName) return false;
+    assertUnambiguousFavoriteName(this.manager.getAllFavoriteNames(), favName);
     if (this.manager.getAllFavoriteNames().map(normalizeFavoriteName).includes(favName)) return true;
     // 优先：左侧边栏原生"新建收藏夹"入口（最简，无需批量模式/复制对话框）
     const result = await BilibiliAPI.createFavoriteViaSidebar(favName);
@@ -201,6 +202,7 @@ export class CrossPageFlowManager {
       // 当前已在「自己页面」，此时 getAllFavoriteNames() = 自己的收藏夹
       // 在此对比目标名称，找出真正缺失（自己还没有）的收藏夹
       const ownNames = this.manager.getAllFavoriteNames().map(normalizeFavoriteName);
+      for (const task of state.tasks) assertUnambiguousFavoriteName(ownNames, task.target);
       const missing = state.tasks
         .map(t => t.target)
         .filter((name, index, self) => self.indexOf(name) === index) // 去重

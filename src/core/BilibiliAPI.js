@@ -9,7 +9,7 @@ import { log, error, warn, debug } from '../utils/logger.js';
 import { CONFIG } from '../config/config.js';
 import { getPageAdapter } from './adapters/index.js';
 import { VuiPageAdapter } from './adapters/VuiPageAdapter.js';
-import { normalizeFavoriteName } from '../utils/favoriteNames.js';
+import { normalizeFavoriteName, assertUnambiguousFavoriteName } from '../utils/favoriteNames.js';
 import { watchCopyConfirmation } from './adapters/copyConfirmation.js';
 
 const pageAdapter = () => getPageAdapter() || VuiPageAdapter;
@@ -150,6 +150,7 @@ export class BilibiliAPI {
     favName = normalizeFavoriteName(favName);
     if (!favName) return false;
     const favList = this.getFavoriteListInDialog(dialog);
+    assertUnambiguousFavoriteName(favList.map(fav => fav.name), favName);
 
     for (const fav of favList) {
       if (fav.name === favName) {
@@ -252,6 +253,7 @@ export class BilibiliAPI {
   static async createFavoriteViaSidebar(favName, guard = () => true) {
     favName = normalizeFavoriteName(favName);
     if (!favName) return false;
+    assertUnambiguousFavoriteName(this.getAllFavorites().map(item => this.getFavoriteName(item)), favName);
     if (this.getAllFavorites().some(item => this.getFavoriteName(item) === favName)) return true;
     const adapter = pageAdapter(), selector = adapter.sidebarCreate;
     const sidebar = selector && document.querySelector(selector);
@@ -404,6 +406,7 @@ export class BilibiliAPI {
     favName = normalizeFavoriteName(favName);
     if (!favName) return false;
     const allFavs = this.getAllFavorites();
+    assertUnambiguousFavoriteName(allFavs.map(fav => this.getFavoriteName(fav)), favName);
 
     for (const favItem of allFavs) {
       const name = this.getFavoriteName(favItem);

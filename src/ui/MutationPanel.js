@@ -2,6 +2,7 @@ import { element, button } from './elements.js';
 import { eligibility } from '../core/BatchOperations.js';
 import { folderRow } from './folderRow.js';
 import { SelectionToolbar } from './SelectionToolbar.js';
+import { duplicateFavoriteNames, normalizeFavoriteName } from '../utils/favoriteNames.js';
 
 const statuses = { confirmed: '已确认', failed: '失败', unknown: '结果未知', not_started: '未提交' };
 const descriptions = {
@@ -46,11 +47,12 @@ export class MutationPanel {
     this.previewButton.textContent = `预览${description.verb}目标`;
     const { actor, pageOwner } = this.engine.context();
     if (!folders.length) this.list.append(element('p', 'bf-empty', '加载列表后，在这里选择要管理的收藏夹。默认不会勾选任何项目。'));
+    const duplicates = duplicateFavoriteNames(folders.map(folder => folder.name));
     for (const folder of folders) {
       const reason = eligibility(this.action, folder, actor, pageOwner);
       const input = element('input'); input.type = 'checkbox';
       input.addEventListener('change', () => { this.invalidate(); this.inventoryUI.updateBusy(); });
-      const node = folderRow(folder, input, reason);
+      const node = folderRow(folder, input, reason, duplicates.has(normalizeFavoriteName(folder.name)));
       this.list.append(node); this.rows.push({ folder, input, reason, node });
     }
     this.updateBusy();
@@ -81,7 +83,7 @@ export class MutationPanel {
       for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ${target.kind === 'season' ? '合集' : '收藏夹'} · ID ${target.id} · 所有者 ${target.ownerId || '未知'} · ${target.count ?? '未知'} 条${target.available === false ? ' · 内容已失效' : ''}`));
       if (mode === 'web' && this.ticket.targets.some(target => target.available === false)) {
         this.engine.invalidate(); this.ticket = null;
-        const message = '网页方式无法核对失效条目的 ID。请在设置中将“删除与取消订阅”改为 API，保存后重新加载并选择目标；尚未提交。';
+        const message = '网页方式无法核对失效条目的 ID。请在设置中将“删除与取消订阅”改为 API，保存后返回管理并重新预览；尚未提交。';
         const notice = element('p', 'bf-muted', message); notice.setAttribute('role', 'status');
         const settings = button('前往设置', () => this.panel.showModeSettings());
         this.review.append(notice, settings, button('返回选择', () => { this.invalidate(); this.previewButton.focus(); }));

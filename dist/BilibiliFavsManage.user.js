@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 收藏夹批量管理
 // @namespace    http://tampermonkey.net/
-// @version      2.2.5
+// @version      2.2.6
 // @description  批量复制 B 站收藏夹（复选框列表 + 跨页面流程 + 过滤"我追的"）
 // @author       leida1024
 // @match        https://space.bilibili.com/*
@@ -207,7 +207,7 @@
 
     // 脚本信息
     SCRIPT: {
-      VERSION: '2.2.5',
+      VERSION: '2.2.6',
       NAME: 'BiliBili 收藏夹批量管理',
       DESCRIPTION: '适配旧版及新版 VUI 收藏夹页面'
     }
@@ -298,6 +298,23 @@
   /** 与页面显示一致地去掉首尾空白，保留名称内部的空格及连续空格。 */
   function normalizeFavoriteName(name) {
     return typeof name === 'string' ? name.trim() : '';
+  }
+
+  /** Display names are not identities; report collisions after the usual normalization. */
+  function duplicateFavoriteNames(names) {
+    const seen = new Set(), duplicates = new Set();
+    for (const value of names) {
+      const name = normalizeFavoriteName(value);
+      if (name && seen.has(name)) duplicates.add(name);
+      seen.add(name);
+    }
+    return duplicates;
+  }
+
+  /** Name-based copy cannot infer an intended ID, regardless of transport. */
+  function assertUnambiguousFavoriteName(names, name) {
+    if (duplicateFavoriteNames(names).has(normalizeFavoriteName(name)))
+      throw new Error(`同名收藏夹 [${normalizeFavoriteName(name)}] 无法按名称确定复制对象，请先将相关收藏夹改为不同名称；不会按顺序选择或自动切换方式。`);
   }
 
   /** 在任何跳转或提交前检查整个任务列表；同时兼容旧版本保存的任务。 */
@@ -506,6 +523,7 @@
       favName = normalizeFavoriteName(favName);
       if (!favName) return false;
       const favList = this.getFavoriteListInDialog(dialog);
+      assertUnambiguousFavoriteName(favList.map(fav => fav.name), favName);
 
       for (const fav of favList) {
         if (fav.name === favName) {
@@ -608,6 +626,7 @@
     static async createFavoriteViaSidebar(favName, guard = () => true) {
       favName = normalizeFavoriteName(favName);
       if (!favName) return false;
+      assertUnambiguousFavoriteName(this.getAllFavorites().map(item => this.getFavoriteName(item)), favName);
       if (this.getAllFavorites().some(item => this.getFavoriteName(item) === favName)) return true;
       const adapter = pageAdapter(), selector = adapter.sidebarCreate;
       const sidebar = selector && document.querySelector(selector);
@@ -760,6 +779,7 @@
       favName = normalizeFavoriteName(favName);
       if (!favName) return false;
       const allFavs = this.getAllFavorites();
+      assertUnambiguousFavoriteName(allFavs.map(fav => this.getFavoriteName(fav)), favName);
 
       for (const favItem of allFavs) {
         const name = this.getFavoriteName(favItem);
@@ -1109,6 +1129,7 @@
     async createSingleFavorite(favName) {
       favName = normalizeFavoriteName(favName);
       if (!favName) return false;
+      assertUnambiguousFavoriteName(this.manager.getAllFavoriteNames(), favName);
       if (this.manager.getAllFavoriteNames().map(normalizeFavoriteName).includes(favName)) return true;
       // 优先：左侧边栏原生"新建收藏夹"入口（最简，无需批量模式/复制对话框）
       const result = await BilibiliAPI.createFavoriteViaSidebar(favName);
@@ -1220,6 +1241,7 @@
         // 当前已在「自己页面」，此时 getAllFavoriteNames() = 自己的收藏夹
         // 在此对比目标名称，找出真正缺失（自己还没有）的收藏夹
         const ownNames = this.manager.getAllFavoriteNames().map(normalizeFavoriteName);
+        for (const task of state.tasks) assertUnambiguousFavoriteName(ownNames, task.target);
         const missing = state.tasks
           .map(t => t.target)
           .filter((name, index, self) => self.indexOf(name) === index) // 去重
@@ -1709,7 +1731,7 @@
       return result;
     }
     async select(folder, signal) {
-      if (folder.available === false) throw new Error('失效条目的网页不提供可核对 ID；请在设置中选择 API 管理后重新加载，未提交');
+      if (folder.available === false) throw new Error('失效条目的网页不提供可核对 ID；请在设置中选择 API 管理后重新预览，未提交');
       const kind = folder.kind === 'created' ? 'created' : 'subscribed';
       const rows = await this.rows(kind, signal);
       let node = rows.find(row => folderKey(this.identities.get(row) || {}) === folderKey(folder));
@@ -1826,7 +1848,7 @@
     require(result) { if (result?.status !== 'confirmed') fail(result?.detail || '结果未识别', result?.status === 'unknown' ? 'unknown' : 'failed'); }
     resolve(rows, name, required = true) {
       const found = rows.filter(row => normalizeFavoriteName(row.name) === name);
-      if (found.length > 1) fail(`同名收藏夹身份不明确：${name}`);
+      assertUnambiguousFavoriteName(rows.map(row => row.name), name);
       if (!found.length && required) fail(`未找到收藏夹：${name}`);
       return found[0];
     }
@@ -2146,6 +2168,10 @@
       if (options.skipCrossPage || options.operationId) return this.batchCopyWeb(copyList, options);
       const modes = validModes(this.modes);
       copyList = normalizeCopyTasks(copyList);
+      if (modes.copy === 'web') {
+        const names = this.getAllFavoriteNames();
+        for (const task of copyList) assertUnambiguousFavoriteName(names, task.source);
+      }
       if (modes.copy === 'web' && modes.create === 'web') return this.batchCopyWeb(copyList, options);
       this.operation.begin(`批量复制（${modes.copy === 'api' ? 'API' : '网页'}）`, copyList.length, { phase: 'copying' });
       this.logs.setContext({ view: 'copy', operationId: this.operation.state.operationId, phase: 'copying' });
@@ -2176,6 +2202,11 @@
         this.operation.begin('批量复制', copyList.length, { operationId: options.operationId, phase: 'copying' });
       this.logs.setContext({ view: 'copy', operationId: this.operation.state.operationId, phase: this.operation.state.phase });
       try {
+      const names = this.getAllFavoriteNames();
+      for (const task of copyList) {
+        assertUnambiguousFavoriteName(names, task.source);
+        if (PageDetector.isOwnPage()) assertUnambiguousFavoriteName(names, task.target);
+      }
       log('开始批量复制，共', copyList.length, '个任务');
 
       // 检测是否需要跨页面创建收藏夹（copying 阶段恢复时跳过，避免重复触发跳转）
@@ -2555,7 +2586,7 @@
   }
 
   /** Quiet list row; exact identifiers remain available without overwhelming selection. */
-  function folderRow(folder, input, reason = '') {
+  function folderRow(folder, input, reason = '', duplicate = false) {
     const row = element('div', 'bf-folder-item');
     const label = element('label', 'bf-folder-row');
     label.append(input, element('span', 'bf-folder-name', folder.name),
@@ -2564,6 +2595,7 @@
     label.title = `${folder.name} · ${identity}`;
     input.setAttribute('aria-label', `${folder.name} · ${identity}${reason ? ` · 不可选：${reason}` : ''}`);
     row.append(label);
+    if (duplicate) row.append(element('span', 'bf-folder-reason', `同名 · ${identity}`));
     if (reason) row.append(element('span', 'bf-folder-reason', `不可选：${reason}`));
     else if (folder.available === false) row.append(element('span', 'bf-folder-reason', '内容已失效，可取消订阅'));
     return row;
@@ -2666,11 +2698,12 @@
       this.previewButton.textContent = `预览${description.verb}目标`;
       const { actor, pageOwner } = this.engine.context();
       if (!folders.length) this.list.append(element('p', 'bf-empty', '加载列表后，在这里选择要管理的收藏夹。默认不会勾选任何项目。'));
+      const duplicates = duplicateFavoriteNames(folders.map(folder => folder.name));
       for (const folder of folders) {
         const reason = eligibility(this.action, folder, actor, pageOwner);
         const input = element('input'); input.type = 'checkbox';
         input.addEventListener('change', () => { this.invalidate(); this.inventoryUI.updateBusy(); });
-        const node = folderRow(folder, input, reason);
+        const node = folderRow(folder, input, reason, duplicates.has(normalizeFavoriteName(folder.name)));
         this.list.append(node); this.rows.push({ folder, input, reason, node });
       }
       this.updateBusy();
@@ -2701,7 +2734,7 @@
         for (const target of this.ticket.targets) this.review.append(element('p', '', `${target.name} · ${target.kind === 'season' ? '合集' : '收藏夹'} · ID ${target.id} · 所有者 ${target.ownerId || '未知'} · ${target.count ?? '未知'} 条${target.available === false ? ' · 内容已失效' : ''}`));
         if (mode === 'web' && this.ticket.targets.some(target => target.available === false)) {
           this.engine.invalidate(); this.ticket = null;
-          const message = '网页方式无法核对失效条目的 ID。请在设置中将“删除与取消订阅”改为 API，保存后重新加载并选择目标；尚未提交。';
+          const message = '网页方式无法核对失效条目的 ID。请在设置中将“删除与取消订阅”改为 API，保存后返回管理并重新预览；尚未提交。';
           const notice = element('p', 'bf-muted', message); notice.setAttribute('role', 'status');
           const settings = button('前往设置', () => this.panel.showModeSettings());
           this.review.append(notice, settings, button('返回选择', () => { this.invalidate(); this.previewButton.focus(); }));
@@ -2873,10 +2906,11 @@
         this.list.replaceChildren();
         this.folders = folders; this.catalogOwner = owner; this.catalogKind = kind;
         this.mutations?.setCatalog(folders, kind);
+        const duplicates = duplicateFavoriteNames(folders.map(folder => folder.name));
         for (const folder of folders) {
           const input = element('input'); input.type = 'checkbox'; input.disabled = folder.kind === 'unsupported';
           input.addEventListener('change', () => this.updateBusy());
-          const node = folderRow(folder, input, folder.kind === 'unsupported' ? '类型未识别' : folder.available === false ? '内容已失效，无法统计' : '');
+          const node = folderRow(folder, input, folder.kind === 'unsupported' ? '类型未识别' : folder.available === false ? '内容已失效，无法统计' : '', duplicates.has(normalizeFavoriteName(folder.name)));
           this.list.append(node); this.rows.push({ input, folder, node });
         }
         if (!folders.length) this.list.append(element('p', 'bf-empty', '这个范围没有可读取的收藏夹。可以更换范围后重新加载。'));
@@ -3044,7 +3078,7 @@
       this.workspace.append(heading);
       this.leftPanel = element('section', 'bf-sources');
       this.selectionTools = new SelectionToolbar({
-        rows: () => this.favCheckboxItemList.map(item => ({ input: item.checkbox, node: item.checkboxContainer, name: item.getLabelValue(), eligible: true })),
+        rows: () => this.favCheckboxItemList.map(item => ({ input: item.checkbox, node: item.checkboxContainer, name: item.getLabelValue(), eligible: !item.ambiguous })),
         busy: () => this.busy, change: () => this.updateSelectionReview()
       });
       this.selectionTools.search.addEventListener('input', () => this.updateSelectionReview());
@@ -3159,8 +3193,16 @@
 
     createFavPanel() {
       const list = element('div', 'fav-panel');
+      const duplicates = duplicateFavoriteNames(this.favorites);
       this.favCheckboxItemList = this.favorites.map(name => {
         const item = new CheckboxItem(name);
+        item.ambiguous = duplicates.has(normalizeFavoriteName(name));
+        if (item.ambiguous) {
+          item.checkbox.disabled = true; item.inputText.disabled = true;
+          const reason = '同名来源：当前复制按名称匹配，请先改为不同名称；API 也不能代替你决定具体对象。';
+          item.checkboxContainer.append(element('span', 'bf-folder-reason', reason));
+          item.checkbox.setAttribute('aria-label', `${name} · 不可选：${reason}`);
+        }
         item.checkboxContainer.addEventListener('input', () => this.updateSelectionReview());
         list.append(item.checkboxContainer);
         return item;
@@ -3176,7 +3218,7 @@
       this.leftPanel.querySelector('.fav-panel').replaceWith(this.createFavPanel());
       for (const item of this.favCheckboxItemList) {
         const old = previous.get(item.getLabelValue());
-        if (old) { item.checkbox.checked = old.checked; item.inputText.value = old.target; }
+        if (old && !item.ambiguous) { item.checkbox.checked = old.checked; item.inputText.value = old.target; }
       }
       this.updateSelectionReview();
       this.showPageTypeIndicator();
@@ -3187,7 +3229,7 @@
     }
 
     getSelectedTasks() {
-      return this.favCheckboxItemList.filter(item => item.checkbox.checked).map(item => ({ source: item.getLabelValue(), target: item.inputText.value }));
+      return this.favCheckboxItemList.filter(item => item.checkbox.checked && !item.ambiguous).map(item => ({ source: item.getLabelValue(), target: item.inputText.value }));
     }
 
     updateSelectionReview() {
@@ -3210,7 +3252,7 @@
       this.dismissButton.disabled = busy;
       if (this.modeButton) this.modeButton.disabled = busy;
       for (const control of this.viewButtons.values()) control.disabled = busy;
-      for (const item of this.favCheckboxItemList) { item.checkbox.disabled = busy; item.inputText.disabled = busy; }
+      for (const item of this.favCheckboxItemList) { item.checkbox.disabled = busy || item.ambiguous; item.inputText.disabled = busy || item.ambiguous; }
       this.startBatchTransferButton.textContent = busy ? '操作中…' : '开始批量复制';
       this.updateSelectionReview();
       this.inventoryPanel?.updateBusy();
@@ -3396,8 +3438,8 @@
       this.saveModesButton = button('保存设置', () => {
         if (this.busy) return;
         for (const [key, control] of this.modeChoices) this.manager.modes[key] = control.value;
-        this.inventoryPanel?.resetCatalog('设置已更换，请重新加载列表。');
-        this.updateModeSummary(); this.layout.save(); this.settingsStatus.textContent = '已保存。新任务使用以上设置。';
+        this.inventoryPanel?.mutations?.invalidate();
+        this.updateModeSummary(); this.layout.save(); this.settingsStatus.textContent = '已保存。已加载的列表和统计结果保留；新任务使用以上设置，管理操作需重新预览。';
         this.logs.add(this.modeButton.title, 'info', { view: 'system', phase: 'settings' }); this.renderLogs();
       }, 'bf-primary');
       controls.append(this.saveModesButton, button('恢复默认位置和大小', () => this.layout.reset()));
