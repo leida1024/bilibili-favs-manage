@@ -2,6 +2,20 @@
 
 修复问题或提交功能前，请先描述可复现的行为。涉及 B 站页面交互时，注明页面版本和测试范围；提交代码时一并更新构建产物。
 
+## 从哪里开始
+
+日常开发以 `develop` 为基线，从它创建功能分支，Pull Request 的目标也选 `develop`：
+
+```bash
+git switch develop
+git pull --ff-only origin develop
+git switch -c fix/short-description
+```
+
+外部贡献者先 fork 仓库，将原仓库配置为 `upstream`，从 `upstream/develop` 创建功能分支，再向原仓库的 `develop` 提交 PR。无需修改自己的 GitHub 默认分支。
+
+`master` 是发布分支，目前没有 `main`；向 `master` 推送可能触发 Greasy Fork 自动同步。不要把日常功能 PR 提交到 `master`。普通开发只需要 Node.js 和 Git，不要求安装 Trellis、AI 工具或登录 B 站；使用 AI 助手时再阅读 `AGENTS.md` 和 `.trellis/README.md`。公共开发说明以本文件和 `docs/architecture.md` 为准，任务规划及验证记录放在 `develop` 的 `.trellis/` 中。
+
 ## 构建与验证
 
 建议使用 Node.js 22 LTS；本次验证环境为 Node.js 22.19。
@@ -14,7 +28,9 @@ npm test
 
 `npm run dev` 监听源码变化并构建。油猴只能安装构建后的单文件 `dist/BilibiliFavsManage.user.js`，不能直接安装包含 ES 模块导入的 `src/main.js`。
 
-每次可交付的产品迭代递增本地开发版本，例如 `2.2.0-dev.1` → `2.2.0-dev.2`，同步更新 `package.json`、锁文件和 `src/config/config.js`。构建使用配置中的运行时版本，并校验它与包版本相等；面板标题、控制台和 userscript 元数据显示相同版本。先构建再测试，因为测试会检查生成的脚本。发布时使用正式版本并更新日志；本地构建不会自动发布至 Greasy Fork。
+每次可交付的产品迭代递增普通数字版本，例如 `2.2.12` → `2.2.13`，同步更新 `package.json`、锁文件根级与根包版本和 `src/config/config.js`。构建使用配置中的运行时版本，并校验它与包版本相等；面板标题、控制台和 userscript 元数据显示相同版本。先构建再测试，因为测试会检查生成的脚本；提交前运行 `git diff --check`。目前没有配置 lint 或类型检查命令。发布时更新日志和验证范围；本地构建不会自动发布至 Greasy Fork。
+
+PR 请说明触发问题的条件、修改后的行为、运行的检查，以及哪些真实页面/沙箱尚未验证。新旧版页面使用各自适配器；分页等共有逻辑优先复用现有模块。测试默认使用虚构数据，不能为了回归测试操作真实收藏夹。
 
 ## 发布与自动同步
 
@@ -34,11 +50,14 @@ https://raw.githubusercontent.com/leida1024/bilibili-favs-manage/master/README.m
 
 README 是 GitHub 与 Greasy Fork 介绍的共同来源，安装、使用、联系方式及开发导航只需在这里维护。介绍内引用 `docs/assets/panel-preview.png` 模拟截图；在 Greasy Fork 的编辑页面移除旧截图附件，避免同时展示过时界面。二维码放在介绍末尾，保持缩略尺寸并链接完整大图。
 
-后续发布：
+后续发布由维护者单独执行：
 
-1. 更新版本号和更新日志，依次执行 `npm run build` 与 `npm test`。
-2. 将源码及 `dist/BilibiliFavsManage.user.js` 一起提交并推送到 `master`。
-3. 检查 GitHub Webhook 的 Recent Deliveries，以及 Greasy Fork 的同步状态和脚本版本。
+1. 在 `develop` 将产品改动与开发工具/记录分开提交。产品包括源码、测试、依赖与构建配置、生成脚本、示例及用户/贡献文档；开发记录和代理配置不进入发布树。
+2. 基于 `master` 创建临时发布分支，按依赖顺序 cherry-pick 经审查的产品提交。不要整体合并或 squash `develop`，也不要只复制 `dist/`；源码、测试和构建产物必须可一起复现。
+3. 检查发布树不存在 `.trellis/`、`.agents/`、`.codex/`、`.claude/` 和 `AGENTS.md`。检查版本和发布文案，依次执行 `npm ci`、`npm run build`、`npm test`、`git diff --check`，并核对旧版/VUI、沙箱及跨页测试边界。产物应与选定源码一致。
+4. 发布审查通过后，将发布分支合入 `master` 并在获得发布授权后推送。检查 GitHub Webhook 的 Recent Deliveries，以及 Greasy Fork 的同步状态、公开页面和脚本版本。将发布修正同步回 `develop`，记录版本及提交对应关系。
+
+这里按提交挑选，是因为本项目约定两个分支的目录范围不同。通常团队使用一致的仓库目录树，通过短期功能分支与 PR 合入主干，必要时创建发布分支；无需为采用某种流程而改名分支。若未来把开发工具也纳入发布分支，或将开发记录移到其他位置，再评估统一合并流程。将 `master` 改名为 `main` 还需同步 Raw 地址、Webhook、文档链接和分支保护，应另作迁移。
 
 Webhook 根据推送中变更的文件分别更新内容：`dist/BilibiliFavsManage.user.js` 变更时同步脚本，`README.md` 变更时同步介绍。只修改文档无需增加脚本版本号；仅更新同名图片时，页面仍引用同一地址，图片缓存可能延迟刷新。用户端仍按脚本管理器的更新检查周期获取新版。GitHub 用户名或仓库名改变后，也要更新 Git 远程地址、README 中的文档链接，以及 Greasy Fork 的代码和附加信息同步地址。
 
@@ -81,7 +100,9 @@ CHANGELOG.md                    版本历史
 
 自动测试覆盖两版收藏列表识别、慢加载、SPA 路由切换、列表刷新时保留选择、全选幂等、隐藏弹窗、重复注入和无关页面不恢复跨页面任务；名称与流程测试覆盖首尾空白、内部连续空格、复用已有目标、异步新建确认、弹窗重渲染、跨页去重、失败停止及状态不重放。
 
-实际 Chrome 验证了旧版收藏页面板启动、创建收藏夹列表识别和打开复制弹窗；未提交真实新建或复制操作。新版完整复制、跨页面创建、空收藏夹和大收藏夹分页仍需在测试账号中手动验证。固定操作延迟不能保证网络慢或网站改版时一定成功。
+最近的新版 VUI 真实账号只读验证包含收藏夹/订阅列表、两个收藏夹逐页统计与 API 的视频标识和时长对照，以及大收藏夹总页数识别。此前仅对明确授权的临时测试夹验证了新建/删除并清理。真实复制、退订、旧版当前页面、油猴 GM 沙箱和自动跨页恢复仍未完整验证；模拟测试或控制台注入不能代替这些验证。详细边界见 [管理功能与验证范围](docs/management.md)。固定操作延迟不能保证网络慢或网站改版时一定成功。
+
+真实写操作必须由账号持有人明确指定测试对象；删除/退订开发先用合成夹具。截图与提交记录只用虚构数据，不提交浏览器配置、令牌、私有收藏名称或真实账号截图。
 
 ## 界面预览
 

@@ -152,7 +152,11 @@ test('community notice opens help without I/O and preserves edits and scroll', t
   assert.match(panel.helpRoot.textContent, /524764959/); assert.match(panel.helpRoot.textContent, /待核对/);
   assert.deepEqual(counts(), { reads: 0, mutations: 0 });
   panel.pauseNoticeButton.click(); assert.equal(panel.notice.dataset.paused, 'true');
-  assert.equal(panel.pauseNoticeButton.getAttribute('aria-label'), '播放滚动提示');
+  assert.equal(panel.pauseNoticeButton.textContent, '继续滚动');
+  assert.equal(panel.pauseNoticeButton.getAttribute('aria-label'), '继续滚动顶部提示');
+  panel.pauseNoticeButton.click(); assert.equal(panel.notice.dataset.paused, 'false');
+  assert.equal(panel.pauseNoticeButton.textContent, '停止滚动');
+  assert.equal(panel.pauseNoticeButton.getAttribute('aria-label'), '停止滚动顶部提示');
   panel.logsButton.click(); assert.equal(panel.footer.hidden, true);
   panel.showView('copy'); assert.equal(panel.content.scrollTop, 77); assert.equal(row.inputText.value, 'Edited target');
   panel.showView('help'); panel.toggleMinimize(); assert.equal(panel.notice.hidden, true);
